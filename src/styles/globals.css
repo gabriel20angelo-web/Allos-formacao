@@ -1,0 +1,207 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+* { box-sizing: border-box; padding: 0; margin: 0; }
+html { scroll-behavior: smooth; scrollbar-width: auto; scrollbar-color: #C84B31 #111; }
+
+/* Safe area for notched phones */
+@supports (padding: env(safe-area-inset-top)) {
+  body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
+}
+
+body {
+  background: #111111;
+  color: #FDFBF7;
+  font-family: var(--font-dm), sans-serif;
+  overflow-x: hidden;
+  line-height: 1.7;
+}
+
+/* Grain texture overlay — granulado elegante */
+body::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.045;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 512 512' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 256px 256px;
+}
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.025;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 300 300' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='g'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='1.2' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23g)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+  background-size: 150px 150px;
+}
+
+/* Scrollbar — dark orange accent */
+::-webkit-scrollbar { width: 8px; }
+::-webkit-scrollbar-track { background: #111; }
+::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #C84B31, #A33D27);
+  border-radius: 4px;
+  border: 2px solid #111;
+}
+::-webkit-scrollbar-thumb:hover { background: #D4592F; }
+
+::selection { background: rgba(200, 75, 49, 0.35); color: #fff; }
+
+/* Skip link */
+.skip-link {
+  position: absolute; top: -40px; left: 0;
+  background: #C84B31; color: white;
+  padding: 8px 16px; z-index: 9999; font-weight: 600; transition: top 0.2s;
+}
+.skip-link:focus { top: 0; }
+
+/* Glass card utility — enhanced */
+.glass-card {
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+.glass-card:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(200, 75, 49, 0.25);
+  box-shadow: 0 8px 32px rgba(200, 75, 49, 0.08);
+}
+
+/* Premium glass card — for featured content */
+.glass-card-premium {
+  background: linear-gradient(135deg, rgba(200, 75, 49, 0.06) 0%, rgba(255, 255, 255, 0.02) 100%);
+  border: 1px solid rgba(200, 75, 49, 0.12);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+}
+
+/* Dark input — enhanced with orange focus */
+.dark-input {
+  background-color: rgba(255, 255, 255, 0.04);
+  border: 1.5px solid rgba(255, 255, 255, 0.08);
+  color: rgba(253, 251, 247, 0.9);
+  transition: all 0.25s ease;
+}
+.dark-input:hover {
+  border-color: rgba(255, 255, 255, 0.15);
+  background-color: rgba(255, 255, 255, 0.06);
+}
+.dark-input:focus {
+  border-color: rgba(200, 75, 49, 0.5);
+  outline: none;
+  box-shadow: 0 0 0 3px rgba(200, 75, 49, 0.12), 0 0 20px rgba(200, 75, 49, 0.06);
+}
+.dark-input::placeholder {
+  color: rgba(253, 251, 247, 0.25);
+}
+
+/* Markdown content styles — dark */
+.prose-allos h1 {
+  font-family: var(--font-fraunces), serif;
+  font-weight: 700;
+  font-size: 1.875rem;
+  line-height: 1.3;
+  margin-bottom: 1rem;
+  color: #FDFBF7;
+}
+.prose-allos h2 {
+  font-family: var(--font-fraunces), serif;
+  font-weight: 600;
+  font-size: 1.5rem;
+  line-height: 1.3;
+  margin-top: 2rem;
+  margin-bottom: 0.75rem;
+  color: #FDFBF7;
+}
+.prose-allos h3 {
+  font-family: var(--font-fraunces), serif;
+  font-weight: 500;
+  font-size: 1.25rem;
+  margin-top: 1.5rem;
+  margin-bottom: 0.5rem;
+  color: rgba(253, 251, 247, 0.9);
+}
+.prose-allos p {
+  margin-bottom: 1rem;
+  color: rgba(253, 251, 247, 0.65);
+}
+.prose-allos ul, .prose-allos ol {
+  margin-bottom: 1rem;
+  padding-left: 1.5rem;
+}
+.prose-allos li {
+  margin-bottom: 0.25rem;
+  color: rgba(253, 251, 247, 0.65);
+}
+.prose-allos a {
+  color: #C84B31;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: rgba(200, 75, 49, 0.4);
+  transition: text-decoration-color 0.2s;
+}
+.prose-allos a:hover {
+  text-decoration-color: #C84B31;
+}
+.prose-allos blockquote {
+  border-left: 3px solid #C84B31;
+  padding-left: 1rem;
+  margin: 1.5rem 0;
+  font-style: italic;
+  color: rgba(253, 251, 247, 0.5);
+}
+.prose-allos code {
+  background: rgba(200, 75, 49, 0.08);
+  padding: 0.125rem 0.375rem;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  color: #D4854A;
+}
+.prose-allos img {
+  border-radius: 12px;
+  margin: 1.5rem 0;
+}
+
+/* Focus visible — orange */
+*:focus-visible {
+  outline: 2px solid #C84B31;
+  outline-offset: 2px;
+}
+
+/* Subtle glow animations */
+@keyframes pulse-glow {
+  0%, 100% { box-shadow: 0 0 20px rgba(200, 75, 49, 0.1); }
+  50% { box-shadow: 0 0 40px rgba(200, 75, 49, 0.2); }
+}
+
+/* Gradient text utility */
+.text-gradient-orange {
+  background: linear-gradient(135deg, #D4854A 0%, #C84B31 50%, #A33D27 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Divider with gradient */
+.divider-gradient {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(200, 75, 49, 0.3), transparent);
+}
+
+/* Section label style (tracking uppercase small) */
+.section-label {
+  font-family: var(--font-dm), sans-serif;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: #C84B31;
+}
