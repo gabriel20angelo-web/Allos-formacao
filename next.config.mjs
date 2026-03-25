@@ -2,6 +2,7 @@
 const nextConfig = {
   assetPrefix: 'https://allos-formacao-production.up.railway.app',
   images: {
+    path: 'https://allos-formacao-production.up.railway.app/_next/image',
     remotePatterns: [
       {
         protocol: "https",
