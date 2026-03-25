@@ -40,7 +40,7 @@ export default function FormacaoPage() {
     async function fetchCourses() {
       try {
         const client = createClient();
-        const { data } = await client
+        const { data, error: fetchError } = await client
           .from("courses")
           .select(`
             *,
@@ -50,8 +50,10 @@ export default function FormacaoPage() {
           .order("created_at", { ascending: false });
 
         if (cancelled) return;
+        if (fetchError) { console.error("Supabase error:", fetchError); setLoading(false); return; }
+        if (!data || data.length === 0) { setLoading(false); return; }
 
-        if (data && data.length > 0) {
+        if (data.length > 0) {
           const courseIds = data.map((c) => c.id);
 
           const [enrollmentsRes, reviewsRes] = await Promise.all([
