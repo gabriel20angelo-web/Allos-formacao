@@ -87,7 +87,7 @@ export default function RegisterForm({ redirectTo }: RegisterFormProps) {
         data: {
           full_name: fullName,
         },
-        emailRedirectTo: `${window.location.origin}/formacao/auth/callback`,
+        emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/formacao/auth/callback`,
       },
     });
 

@@ -94,7 +94,7 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
               return;
             }
             const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: `${window.location.origin}/formacao/auth`,
+              redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/formacao/auth`,
             });
             if (error) {
               toast.error("Erro ao enviar email de recuperação.");
