@@ -6,7 +6,7 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const redirectTo = searchParams.get("redirect") || "/formacao";
-  const baseUrl = process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+  const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
   if (code) {
     const cookieStore = await cookies();

@@ -30,6 +30,7 @@ export async function updateSession(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const pathname = request.nextUrl.pathname;
+  const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
   // Protected routes that require authentication
   const protectedPaths = ["/formacao/admin", "/formacao/curso"];
@@ -37,10 +38,8 @@ export async function updateSession(request: NextRequest) {
 
   // If accessing a protected route without auth, redirect to login
   if (isProtected && !user) {
-    const url = request.nextUrl.clone();
-    url.pathname = "/formacao/auth";
-    url.searchParams.set("redirect", pathname);
-    const redirectResponse = NextResponse.redirect(url);
+    const redirectUrl = new URL(`/formacao/auth?redirect=${encodeURIComponent(pathname)}`, baseUrl);
+    const redirectResponse = NextResponse.redirect(redirectUrl);
     // Preserve any session cookies that were refreshed during this request
     supabaseResponse.cookies.getAll().forEach((cookie) => {
       redirectResponse.cookies.set(cookie.name, cookie.value);
@@ -58,9 +57,8 @@ export async function updateSession(request: NextRequest) {
 
     const allowedRoles = ["admin", "instructor"];
     if (!profile?.role || !allowedRoles.includes(profile.role)) {
-      const url = request.nextUrl.clone();
-      url.pathname = "/formacao";
-      const redirectResponse = NextResponse.redirect(url);
+      const redirectUrl = new URL("/formacao", baseUrl);
+      const redirectResponse = NextResponse.redirect(redirectUrl);
       // Preserve any session cookies that were refreshed during this request
       supabaseResponse.cookies.getAll().forEach((cookie) => {
         redirectResponse.cookies.set(cookie.name, cookie.value);
