@@ -8,6 +8,15 @@ export async function GET(request: NextRequest) {
   const redirectTo = searchParams.get("redirect") || "/formacao";
   const baseUrl = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
+  console.log("[CALLBACK DEBUG]", {
+    requestUrl: request.url,
+    APP_URL: process.env.APP_URL,
+    NEXT_PUBLIC_APP_URL: process.env.NEXT_PUBLIC_APP_URL,
+    baseUrl,
+    redirectTo,
+    code: code ? "present" : "missing",
+  });
+
   if (code) {
     const cookieStore = await cookies();
     const supabase = createServerClient(
