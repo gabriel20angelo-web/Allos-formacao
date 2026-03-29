@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
+export const dynamic = "force-dynamic";
+
 function getSince(period: string): Date {
   const now = new Date()
   switch (period) {
