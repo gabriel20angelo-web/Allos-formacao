@@ -1,8 +1,21 @@
-import { createServerClient, serialize } from "@supabase/ssr";
+import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { type NextRequest } from "next/server";
 
 const BASE_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
+
+const COOKIE_PREFIX = "sb-syiaushvzhgyhvsmoegt-auth-token";
+
+function buildSetCookie(name: string, value: string, options: Record<string, unknown> = {}): string {
+  const parts = [`${name}=${encodeURIComponent(value)}`];
+  parts.push(`Path=${(options.path as string) || "/"}`);
+  if (options.maxAge) parts.push(`Max-Age=${options.maxAge}`);
+  if (options.domain) parts.push(`Domain=${options.domain}`);
+  if (options.httpOnly) parts.push("HttpOnly");
+  if (options.secure !== false) parts.push("Secure");
+  parts.push(`SameSite=${(options.sameSite as string) || "Lax"}`);
+  return parts.join("; ");
+}
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -34,16 +47,15 @@ export async function GET(request: NextRequest) {
     if (!error) {
       const url = `${BASE_URL}${redirectTo}`;
       const headers = new Headers({ Location: url });
+
+      // Set session cookies from Supabase SDK
       for (const c of allCookies) {
-        const parts = [`${c.name}=${encodeURIComponent(c.value)}`];
-        parts.push(`Path=${(c.options.path as string) || "/"}`);
-        if (c.options.maxAge) parts.push(`Max-Age=${c.options.maxAge}`);
-        if (c.options.domain) parts.push(`Domain=${c.options.domain}`);
-        if (c.options.httpOnly) parts.push("HttpOnly");
-        if (c.options.secure !== false) parts.push("Secure");
-        parts.push(`SameSite=${(c.options.sameSite as string) || "Lax"}`);
-        headers.append("Set-Cookie", parts.join("; "));
+        headers.append("Set-Cookie", buildSetCookie(c.name, c.value, c.options));
       }
+
+      // Delete the PKCE code-verifier cookie (prevents client from hanging)
+      headers.append("Set-Cookie", `${COOKIE_PREFIX}-code-verifier=; Path=/; Max-Age=0; Secure; SameSite=Lax`);
+
       return new Response(null, { status: 302, headers });
     }
   }
