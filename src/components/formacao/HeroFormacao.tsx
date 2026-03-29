@@ -190,20 +190,6 @@ export default function HeroFormacao() {
                 Ver cursos
                 <ArrowRight size={16} />
               </motion.a>
-              <motion.a
-                href="#como-funciona"
-                whileHover={{ scale: 1.03 }}
-                whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center gap-2 font-dm font-medium rounded-full transition-all"
-                style={{
-                  color: "rgba(253,251,247,0.7)",
-                  border: "1px solid rgba(253,251,247,0.15)",
-                  padding: "14px 32px",
-                  fontSize: "15px",
-                }}
-              >
-                Como funciona
-              </motion.a>
             </motion.div>
           </div>
 

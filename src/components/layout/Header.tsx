@@ -23,6 +23,7 @@ export default function Header() {
     { label: "Clínica", href: "https://allos.org.br/clinica" },
     { label: "Cursos", href: "/formacao" },
     { label: "Projetos", href: "https://allos.org.br/projetos" },
+    { label: "Certificado", href: "https://allos.org.br/certificado" },
   ];
 
   return (

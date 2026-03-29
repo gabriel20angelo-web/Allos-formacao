@@ -214,6 +214,7 @@ export default function SyncGroupsSection() {
           >
             Participe dos nossos grupos síncronos semanais conduzidos por
             profissionais da Allos. Encontros ao vivo para aprofundar a prática.
+            Certificados são enviados no chat do Google Meet ao final de cada encontro.
           </motion.p>
         </div>
 
