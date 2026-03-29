@@ -11,9 +11,9 @@ import {
   type ReactNode,
 } from "react";
 import { createElement } from "react";
-import { createClient, resetClient } from "@/lib/supabase/client";
+import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types";
-import type { User, Session } from "@supabase/supabase-js";
+import type { User } from "@supabase/supabase-js";
 
 interface AuthContextValue {
   user: User | null;
@@ -33,6 +33,77 @@ interface InitialSession {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+const STORAGE_KEY = "sb-auth-cookies";
+
+/**
+ * Decode a JWT payload without verification.
+ * Safe because the token came from our own server.
+ */
+function decodeJWT(token: string): Record<string, unknown> | null {
+  try {
+    const payload = token.split(".")[1];
+    return JSON.parse(atob(payload));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Build a minimal User object from JWT payload.
+ */
+function userFromJWT(token: string): User | null {
+  const payload = decodeJWT(token);
+  if (!payload?.sub) return null;
+
+  // Check expiration
+  if (payload.exp && (payload.exp as number) * 1000 < Date.now()) {
+    return null; // token expired
+  }
+
+  return {
+    id: payload.sub as string,
+    email: (payload.email as string) || "",
+    user_metadata: (payload.user_metadata as Record<string, unknown>) || {},
+    app_metadata: (payload.app_metadata as Record<string, unknown>) || {},
+    aud: (payload.aud as string) || "authenticated",
+    created_at: "",
+  } as User;
+}
+
+/**
+ * Try to get access_token from localStorage (the sb-auth-cookies store).
+ * The cookies contain chunked session data that includes the tokens.
+ */
+function getTokenFromLocalStorage(): string | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const cookies: { name: string; value: string }[] = JSON.parse(raw);
+
+    // Reassemble chunked cookies into a single string
+    const authCookies = cookies
+      .filter((c) => c.name.includes("-auth-token") && !c.name.includes("code-verifier"))
+      .sort((a, b) => a.name.localeCompare(b.name));
+
+    if (authCookies.length === 0) return null;
+
+    // The cookie value is a base64-encoded JSON with access_token and refresh_token
+    const combined = authCookies.map((c) => c.value).join("");
+    // Try decoding as base64url first, then raw
+    let sessionStr: string;
+    try {
+      sessionStr = atob(combined.replace(/-/g, "+").replace(/_/g, "/"));
+    } catch {
+      sessionStr = combined;
+    }
+    const session = JSON.parse(sessionStr);
+    return session?.access_token || null;
+  } catch {
+    return null;
+  }
+}
+
 export function AuthProvider({
   children,
   initialSession,
@@ -43,10 +114,7 @@ export function AuthProvider({
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
-  const [initCounter, setInitCounter] = useState(0);
-  // Re-create client when initCounter changes (bfcache restore)
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  const supabase = useMemo(() => createClient(), [initCounter]);
+  const supabase = useMemo(() => createClient(), []);
   const currentUserIdRef = useRef<string | null>(null);
 
   const fetchProfile = useCallback(
@@ -65,156 +133,83 @@ export function AuthProvider({
     [supabase]
   );
 
-  /**
-   * Apply a session: update user state, fetch profile, update ref.
-   * Returns the user if successful, null otherwise.
-   */
-  const applySession = useCallback(
-    async (session: Session | null) => {
-      const authUser = session?.user ?? null;
-      currentUserIdRef.current = authUser?.id ?? null;
-      setUser(authUser);
-      if (authUser) {
-        await fetchProfile(authUser.id);
-      } else {
-        setProfile(null);
-      }
-      return authUser;
-    },
-    [fetchProfile]
-  );
-
-  // Re-initialize auth on bfcache restore (F5 / back-forward navigation).
-  // When the browser restores a page from bfcache, the entire JS heap is
-  // reused, so useEffect cleanup never ran and refs keep stale values.
-  // The "pageshow" event with persisted=true detects this case.
-  useEffect(() => {
-    function onPageShow(e: PageTransitionEvent) {
-      if (e.persisted) {
-        resetClient();
-        setLoading(true);
-        setInitCounter((c) => c + 1);
-      }
-    }
-    window.addEventListener("pageshow", onPageShow);
-    return () => window.removeEventListener("pageshow", onPageShow);
-  }, []);
-
   useEffect(() => {
     let cancelled = false;
 
     async function init() {
       try {
-        // Step 1: Use server-provided session FIRST (most reliable).
-        // SSR reads HTTP cookies directly — no document.cookie, no hang risk.
-        if (initialSession?.access_token && !cancelled) {
-          console.log("[AUTH] step1: using SSR initialSession");
-          const { data, error } = await supabase.auth.setSession({
-            access_token: initialSession.access_token,
-            refresh_token: initialSession.refresh_token,
-          });
-          console.log("[AUTH] step1 result:", error ? error.message : "ok", data.session ? "session" : "null");
-          if (!cancelled && data.session) {
-            await applySession(data.session);
-            setLoading(false);
-            return;
+        // Strategy: decode JWT directly — never call supabase.auth.*
+        // (those methods hang in Brave due to @supabase/ssr internals)
+
+        let authUser: User | null = null;
+
+        // 1. Try SSR-provided session (most reliable)
+        if (initialSession?.access_token) {
+          authUser = userFromJWT(initialSession.access_token);
+          console.log("[AUTH] SSR session:", authUser ? authUser.email : "expired/invalid");
+        }
+
+        // 2. Try localStorage
+        if (!authUser) {
+          const lsToken = getTokenFromLocalStorage();
+          if (lsToken) {
+            authUser = userFromJWT(lsToken);
+            console.log("[AUTH] localStorage session:", authUser ? authUser.email : "expired/invalid");
+          } else {
+            console.log("[AUTH] localStorage: empty");
           }
         }
 
-        // Step 2: Try localStorage (via custom cookie handler).
-        // Use Promise.race with timeout to prevent hang.
-        if (!cancelled) {
-          console.log("[AUTH] step2: trying localStorage");
-          const result = await Promise.race([
-            supabase.auth.getSession(),
-            new Promise<null>((r) => setTimeout(() => r(null), 3000)),
-          ]);
-          const localSession = result?.data?.session ?? null;
-          console.log("[AUTH] step2 result:", localSession ? "found" : "null/timeout");
-          if (localSession?.user && !cancelled) {
-            await applySession(localSession);
-            setLoading(false);
-            return;
-          }
-        }
+        if (cancelled) return;
 
-        // Step 3: Fallback — fetch from server endpoint.
-        if (!cancelled) {
-          console.log("[AUTH] step3: trying session endpoint");
-          try {
-            const res = await fetch("/formacao/auth/session", {
-              credentials: "include",
-              cache: "no-store",
-            });
-            if (res.ok) {
-              const json = await res.json();
-              if (json.session?.access_token && !cancelled) {
-                const { data } = await supabase.auth.setSession({
-                  access_token: json.session.access_token,
-                  refresh_token: json.session.refresh_token,
-                });
-                if (!cancelled && data.session) {
-                  console.log("[AUTH] step3 result: ok");
-                  await applySession(data.session);
-                  setLoading(false);
-                  return;
-                }
-              }
-            }
-          } catch {
-            // endpoint not reachable
-          }
+        if (authUser) {
+          currentUserIdRef.current = authUser.id;
+          setUser(authUser);
+          await fetchProfile(authUser.id);
+        } else {
+          console.log("[AUTH] no valid session found");
         }
-
-        console.log("[AUTH] no session found");
-        if (!cancelled) setLoading(false);
       } catch (err) {
         console.error("[AUTH] init error:", err);
+      } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
     init();
 
-    // Listen for auth state changes (token refresh, sign out, etc.)
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, session) => {
-      if (cancelled) return;
-      const newUser = session?.user ?? null;
-      const newUserId = newUser?.id ?? null;
-
-      // Skip if the user hasn't changed
-      if (newUserId === currentUserIdRef.current) return;
-
-      currentUserIdRef.current = newUserId;
-      setUser(newUser);
-      if (newUser) {
-        await fetchProfile(newUser.id);
-      } else {
-        setProfile(null);
+    // Detect bfcache restore
+    function onPageShow(e: PageTransitionEvent) {
+      if (e.persisted) {
+        init();
       }
-      setLoading(false);
-    });
+    }
+    window.addEventListener("pageshow", onPageShow);
 
     return () => {
       cancelled = true;
-      subscription.unsubscribe();
+      window.removeEventListener("pageshow", onPageShow);
     };
-  }, [supabase, fetchProfile, initialSession, applySession, initCounter]);
+  }, [initialSession, fetchProfile]);
 
   const signOut = useCallback(async () => {
     currentUserIdRef.current = null;
-    await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
-    // Also clear localStorage to prevent stale data on next visit
     try {
-      localStorage.removeItem("sb-auth-cookies");
+      localStorage.removeItem(STORAGE_KEY);
+      // Clear HTTP cookies by calling signOut endpoint or just clearing
+      document.cookie.split(";").forEach((c) => {
+        const name = c.trim().split("=")[0];
+        if (name.includes("auth-token")) {
+          document.cookie = `${name}=; path=/; max-age=0; secure; samesite=lax`;
+        }
+      });
     } catch {
       // ignore
     }
-  }, [supabase]);
+    window.location.href = "/formacao/auth";
+  }, []);
 
   const value = useMemo<AuthContextValue>(
     () => ({
