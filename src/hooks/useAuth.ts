@@ -54,6 +54,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         // 1. Try localStorage first (fast, no network)
         const { data: { session: localSession } } = await supabase.auth.getSession();
+        console.log("[AUTH] localStorage session:", localSession ? "found" : "null");
         if (localSession?.user) {
           if (cancelled) return;
           currentUserIdRef.current = localSession.user.id;
@@ -63,15 +64,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // 2. No local session — check server cookies and bridge to localStorage
-        const res = await fetch("/api/auth/session");
-        const { session: serverSession } = await res.json();
+        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        const body = await res.json();
+        console.log("[AUTH] server session:", body.session ? "found" : "null");
         if (cancelled) return;
 
-        if (serverSession?.access_token) {
-          const { data } = await supabase.auth.setSession({
-            access_token: serverSession.access_token,
-            refresh_token: serverSession.refresh_token,
+        if (body.session?.access_token) {
+          const { data, error } = await supabase.auth.setSession({
+            access_token: body.session.access_token,
+            refresh_token: body.session.refresh_token,
           });
+          console.log("[AUTH] setSession:", error ? `error: ${error.message}` : "ok", "user:", data?.user?.email);
           const authUser = data?.user ?? null;
           currentUserIdRef.current = authUser?.id ?? null;
           setUser(authUser);
@@ -79,8 +82,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             await fetchProfile(authUser.id);
           }
         }
-      } catch {
-        // Auth fetch failed — continue with null user
+      } catch (err) {
+        console.error("[AUTH] error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }

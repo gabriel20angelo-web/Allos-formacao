@@ -1,6 +1,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
-import { NextResponse } from "next/server";
+
+export const dynamic = "force-dynamic";
 
 export async function GET() {
   const cookieStore = await cookies();
@@ -24,14 +25,22 @@ export async function GET() {
     data: { session },
   } = await supabase.auth.getSession();
 
+  const headers = {
+    "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+    "Pragma": "no-cache",
+  };
+
   if (!session) {
-    return NextResponse.json({ session: null });
+    return Response.json({ session: null }, { headers });
   }
 
-  return NextResponse.json({
-    session: {
-      access_token: session.access_token,
-      refresh_token: session.refresh_token,
+  return Response.json(
+    {
+      session: {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      },
     },
-  });
+    { headers }
+  );
 }
