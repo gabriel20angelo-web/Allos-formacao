@@ -26,14 +26,26 @@ interface AuthContextValue {
   isAssociado: boolean;
 }
 
+interface InitialSession {
+  access_token: string;
+  refresh_token: string;
+}
+
 const AuthContext = createContext<AuthContextValue | null>(null);
 
-export function AuthProvider({ children }: { children: ReactNode }) {
+export function AuthProvider({
+  children,
+  initialSession,
+}: {
+  children: ReactNode;
+  initialSession?: InitialSession | null;
+}) {
   const [user, setUser] = useState<User | null>(null);
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const supabase = useMemo(() => createClient(), []);
   const currentUserIdRef = useRef<string | null>(null);
+  const initializedRef = useRef(false);
 
   const fetchProfile = useCallback(
     async (userId: string) => {
@@ -48,13 +60,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   );
 
   useEffect(() => {
+    if (initializedRef.current) return;
+    initializedRef.current = true;
     let cancelled = false;
 
-    async function getUser() {
+    async function init() {
       try {
-        // 1. Try localStorage (via custom cookie handler — fast, no network)
+        // 1. Try localStorage first (via custom cookie handler)
         const { data: { session: localSession } } = await supabase.auth.getSession();
-        console.log("[AUTH] localStorage session:", localSession ? "found" : "null");
 
         if (localSession?.user) {
           if (cancelled) return;
@@ -64,19 +77,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // 2. No local session — bridge from server cookies to localStorage
-        const res = await fetch("/formacao/auth/session", { cache: "no-store" });
-        const body = await res.json();
-        console.log("[AUTH] server bridge:", body.session ? "found" : "null");
-        if (cancelled) return;
-
-        if (body.session?.access_token) {
-          await supabase.auth.setSession({
-            access_token: body.session.access_token,
-            refresh_token: body.session.refresh_token,
+        // 2. Use server-provided session (passed from layout as prop)
+        if (initialSession?.access_token) {
+          const { data } = await supabase.auth.setSession({
+            access_token: initialSession.access_token,
+            refresh_token: initialSession.refresh_token,
           });
-          // Session bridged to localStorage — force hard navigation (bypass bfcache)
-          window.location.replace(window.location.pathname + "?_=" + Date.now());
+          if (cancelled) return;
+          const authUser = data?.user ?? null;
+          currentUserIdRef.current = authUser?.id ?? null;
+          setUser(authUser);
+          if (authUser) {
+            await fetchProfile(authUser.id);
+          }
           return;
         }
       } catch (err) {
@@ -85,7 +98,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!cancelled) setLoading(false);
       }
     }
-    getUser();
+    init();
 
     const {
       data: { subscription },
@@ -94,7 +107,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const newUser = session?.user ?? null;
       const newUserId = newUser?.id ?? null;
 
-      // Skip if same user (avoids unnecessary profile re-fetch + re-renders)
       if (newUserId === currentUserIdRef.current) return;
 
       currentUserIdRef.current = newUserId;
@@ -111,7 +123,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile]);
+  }, [supabase, fetchProfile, initialSession]);
 
   const signOut = useCallback(async () => {
     currentUserIdRef.current = null;

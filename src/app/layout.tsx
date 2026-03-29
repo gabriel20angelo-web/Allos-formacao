@@ -2,6 +2,8 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/hooks/useAuth";
+import { createServerClient } from "@supabase/ssr";
+import { cookies } from "next/headers";
 import "@/styles/globals.css";
 
 const playfair = Playfair_Display({
@@ -26,40 +28,53 @@ export const metadata: Metadata = {
     "Plataforma de cursos e formação continuada da Associação Allos. Psicologia, pesquisa e formação de excelência.",
 };
 
+export const dynamic = "force-dynamic";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   viewportFit: "cover",
 };
 
-export default function RootLayout({
+async function getServerSession() {
+  try {
+    const cookieStore = await cookies();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return cookieStore.getAll();
+          },
+          setAll() {},
+        },
+      }
+    );
+    const { data: { session } } = await supabase.auth.getSession();
+    if (session) {
+      return {
+        access_token: session.access_token,
+        refresh_token: session.refresh_token,
+      };
+    }
+  } catch {
+    // Server session read failed — client will handle auth
+  }
+  return null;
+}
+
+export default async function RootLayout({
   children,
 }: {
   children: React.ReactNode;
 }) {
+  const initialSession = await getServerSession();
+
   return (
     <html lang="pt-BR" className={`${playfair.variable} ${inter.variable}`}>
-      <head>
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `
-              // Detect bfcache restoration and force hard reload
-              window.addEventListener('pageshow', function(e) {
-                if (e.persisted) { location.reload(); }
-              });
-              // Detect F5 serving from disk cache (transferSize === 0)
-              try {
-                var nav = performance.getEntriesByType('navigation')[0];
-                if (nav && nav.transferSize === 0 && nav.type === 'reload') {
-                  location.replace(location.pathname + '?_r=' + Date.now());
-                }
-              } catch(e) {}
-            `,
-          }}
-        />
-      </head>
       <body className="font-dm relative z-10 bg-[#111111]">
-        <AuthProvider>
+        <AuthProvider initialSession={initialSession}>
         <a href="#main-content" className="skip-link">
           Pular para conteúdo principal
         </a>
