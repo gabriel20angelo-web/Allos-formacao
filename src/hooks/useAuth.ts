@@ -105,25 +105,15 @@ export function AuthProvider({
 
     async function init() {
       try {
-        // Step 1: Try reading session from localStorage (via custom cookie handler).
-        // This works on F5 refresh and tab reopen because localStorage persists.
-        const {
-          data: { session: localSession },
-        } = await supabase.auth.getSession();
-
-        if (localSession?.user && !cancelled) {
-          await applySession(localSession);
-          setLoading(false);
-          return;
-        }
-
-        // Step 2: Use server-provided session (SSR reads HTTP cookies, passes as prop).
-        // This handles the case where HTTP cookies exist but localStorage was cleared.
+        // Step 1: Use server-provided session FIRST (most reliable).
+        // SSR reads HTTP cookies directly — no document.cookie, no hang risk.
         if (initialSession?.access_token && !cancelled) {
-          const { data } = await supabase.auth.setSession({
+          console.log("[AUTH] step1: using SSR initialSession");
+          const { data, error } = await supabase.auth.setSession({
             access_token: initialSession.access_token,
             refresh_token: initialSession.refresh_token,
           });
+          console.log("[AUTH] step1 result:", error ? error.message : "ok", data.session ? "session" : "null");
           if (!cancelled && data.session) {
             await applySession(data.session);
             setLoading(false);
@@ -131,9 +121,26 @@ export function AuthProvider({
           }
         }
 
-        // Step 3: Fallback - fetch session from server endpoint.
-        // This handles edge cases where neither localStorage nor SSR props worked.
+        // Step 2: Try localStorage (via custom cookie handler).
+        // Use Promise.race with timeout to prevent hang.
         if (!cancelled) {
+          console.log("[AUTH] step2: trying localStorage");
+          const result = await Promise.race([
+            supabase.auth.getSession(),
+            new Promise<null>((r) => setTimeout(() => r(null), 3000)),
+          ]);
+          const localSession = result?.data?.session ?? null;
+          console.log("[AUTH] step2 result:", localSession ? "found" : "null/timeout");
+          if (localSession?.user && !cancelled) {
+            await applySession(localSession);
+            setLoading(false);
+            return;
+          }
+        }
+
+        // Step 3: Fallback — fetch from server endpoint.
+        if (!cancelled) {
+          console.log("[AUTH] step3: trying session endpoint");
           try {
             const res = await fetch("/formacao/auth/session", {
               credentials: "include",
@@ -147,6 +154,7 @@ export function AuthProvider({
                   refresh_token: json.session.refresh_token,
                 });
                 if (!cancelled && data.session) {
+                  console.log("[AUTH] step3 result: ok");
                   await applySession(data.session);
                   setLoading(false);
                   return;
@@ -154,15 +162,12 @@ export function AuthProvider({
               }
             }
           } catch {
-            // Session endpoint not reachable (e.g., /api routes blocked by Cloudflare)
-            // This is expected in some deployment configs
+            // endpoint not reachable
           }
         }
 
-        // No session found anywhere
-        if (!cancelled) {
-          setLoading(false);
-        }
+        console.log("[AUTH] no session found");
+        if (!cancelled) setLoading(false);
       } catch (err) {
         console.error("[AUTH] init error:", err);
         if (!cancelled) setLoading(false);
