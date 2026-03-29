@@ -52,35 +52,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     async function getUser() {
       try {
-        // 1. Try localStorage first (fast, no network)
-        const { data: { session: localSession } } = await supabase.auth.getSession();
-        console.log("[AUTH] localStorage session:", localSession ? "found" : "null");
-        if (localSession?.user) {
-          if (cancelled) return;
-          currentUserIdRef.current = localSession.user.id;
-          setUser(localSession.user);
-          await fetchProfile(localSession.user.id);
-          return;
-        }
-
-        // 2. No local session — check server cookies and bridge to localStorage
-        const res = await fetch("/api/auth/session", { cache: "no-store" });
-        const body = await res.json();
-        console.log("[AUTH] server session:", body.session ? "found" : "null");
+        const result = await Promise.race([
+          supabase.auth.getSession(),
+          new Promise<null>((resolve) => setTimeout(() => resolve(null), 5000)),
+        ]);
         if (cancelled) return;
 
-        if (body.session?.access_token) {
-          const { data, error } = await supabase.auth.setSession({
-            access_token: body.session.access_token,
-            refresh_token: body.session.refresh_token,
-          });
-          console.log("[AUTH] setSession:", error ? `error: ${error.message}` : "ok", "user:", data?.user?.email);
-          const authUser = data?.user ?? null;
-          currentUserIdRef.current = authUser?.id ?? null;
-          setUser(authUser);
-          if (authUser) {
-            await fetchProfile(authUser.id);
-          }
+        const authUser = result?.data?.session?.user ?? null;
+        console.log("[AUTH] getSession:", authUser ? authUser.email : "null", result ? "ok" : "timeout");
+
+        currentUserIdRef.current = authUser?.id ?? null;
+        setUser(authUser);
+        if (authUser) {
+          await fetchProfile(authUser.id);
         }
       } catch (err) {
         console.error("[AUTH] error:", err);
