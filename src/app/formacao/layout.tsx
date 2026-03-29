@@ -3,6 +3,8 @@ import Footer from "@/components/layout/Footer";
 import FloatingQuestionButton from "@/components/ui/FloatingQuestionButton";
 import type { Metadata } from "next";
 
+export const dynamic = "force-dynamic";
+
 export const metadata: Metadata = {
   title: "Cursos — Allos Formação",
   description:
