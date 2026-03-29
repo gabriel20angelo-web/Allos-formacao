@@ -87,13 +87,21 @@ export default function SyncGroupsSection() {
   useEffect(() => {
     async function fetchSchedule() {
       try {
-        const res = await fetch(`/api/certificados/formacao?type=cronograma_publico&_t=${Date.now()}`);
-        if (!res.ok) throw new Error("Failed to fetch");
-        const data = await res.json();
-        if (data.visivel === false) { setVisivel(false); return; }
-        if (data.slots) setSlots(data.slots);
-        if (data.atividades) setAtividades(data.atividades);
-        if (data.duracao_minutos) setDuracao(data.duracao_minutos);
+        const client = (await import("@/lib/supabase/client")).createClient();
+
+        const [slotsRes, atividadesRes] = await Promise.all([
+          client
+            .from("formacao_slots")
+            .select("*, formacao_horarios(hora, ordem)")
+            .eq("ativo", true),
+          client
+            .from("certificado_atividades")
+            .select("id, nome, descricao")
+            .eq("ativo", true),
+        ]);
+
+        if (slotsRes.data) setSlots(slotsRes.data as unknown as Slot[]);
+        if (atividadesRes.data) setAtividades(atividadesRes.data);
       } catch {
         setError(true);
       } finally {
