@@ -65,7 +65,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
 
         // 2. No local session — bridge from server cookies to localStorage
-        const res = await fetch("/api/auth/session", { cache: "no-store" });
+        const res = await fetch("/formacao/auth/session", { cache: "no-store" });
         const body = await res.json();
         console.log("[AUTH] server bridge:", body.session ? "found" : "null");
         if (cancelled) return;
