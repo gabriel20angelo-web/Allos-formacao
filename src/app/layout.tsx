@@ -23,9 +23,9 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://allos.org.br"),
-  title: "Allos Formação — Plataforma de Cursos",
+  title: "Allos Formacao -- Plataforma de Cursos",
   description:
-    "Plataforma de cursos e formação continuada da Associação Allos. Psicologia, pesquisa e formação de excelência.",
+    "Plataforma de cursos e formacao continuada da Associacao Allos. Psicologia, pesquisa e formacao de excelencia.",
 };
 
 export const dynamic = "force-dynamic";
@@ -36,6 +36,11 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
+/**
+ * Read session from HTTP cookies on the server.
+ * This is a fallback for when localStorage was cleared but cookies still exist
+ * (e.g., user cleared browser data but cookies were preserved, or new tab).
+ */
 async function getServerSession() {
   try {
     const cookieStore = await cookies();
@@ -47,11 +52,15 @@ async function getServerSession() {
           getAll() {
             return cookieStore.getAll();
           },
-          setAll() {},
+          setAll() {
+            // read-only in layout
+          },
         },
       }
     );
-    const { data: { session } } = await supabase.auth.getSession();
+    const {
+      data: { session },
+    } = await supabase.auth.getSession();
     if (session) {
       return {
         access_token: session.access_token,
@@ -59,7 +68,7 @@ async function getServerSession() {
       };
     }
   } catch {
-    // Server session read failed — client will handle auth
+    // Server session read failed -- client will handle auth
   }
   return null;
 }
@@ -75,24 +84,26 @@ export default async function RootLayout({
     <html lang="pt-BR" className={`${playfair.variable} ${inter.variable}`}>
       <body className="font-dm relative z-10 bg-[#111111]">
         <AuthProvider initialSession={initialSession}>
-        <a href="#main-content" className="skip-link">
-          Pular para conteúdo principal
-        </a>
-        <main id="main-content" className="relative z-10">{children}</main>
-        <Toaster
-          position="top-right"
-          theme="dark"
-          toastOptions={{
-            style: {
-              fontFamily: "var(--font-dm)",
-              borderRadius: "10px",
-              background: "rgba(30,30,30,0.95)",
-              border: "1px solid rgba(200,75,49,0.15)",
-              color: "#FDFBF7",
-              backdropFilter: "blur(12px)",
-            },
-          }}
-        />
+          <a href="#main-content" className="skip-link">
+            Pular para conteudo principal
+          </a>
+          <main id="main-content" className="relative z-10">
+            {children}
+          </main>
+          <Toaster
+            position="top-right"
+            theme="dark"
+            toastOptions={{
+              style: {
+                fontFamily: "var(--font-dm)",
+                borderRadius: "10px",
+                background: "rgba(30,30,30,0.95)",
+                border: "1px solid rgba(200,75,49,0.15)",
+                color: "#FDFBF7",
+                backdropFilter: "blur(12px)",
+              },
+            }}
+          />
         </AuthProvider>
       </body>
     </html>

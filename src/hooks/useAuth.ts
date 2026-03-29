@@ -13,7 +13,7 @@ import {
 import { createElement } from "react";
 import { createClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types";
-import type { User } from "@supabase/supabase-js";
+import type { User, Session } from "@supabase/supabase-js";
 
 interface AuthContextValue {
   user: User | null;
@@ -49,14 +49,37 @@ export function AuthProvider({
 
   const fetchProfile = useCallback(
     async (userId: string) => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("*")
-        .eq("id", userId)
-        .single();
-      setProfile(data);
+      try {
+        const { data } = await supabase
+          .from("profiles")
+          .select("*")
+          .eq("id", userId)
+          .single();
+        setProfile(data);
+      } catch (err) {
+        console.error("[AUTH] fetchProfile error:", err);
+      }
     },
     [supabase]
+  );
+
+  /**
+   * Apply a session: update user state, fetch profile, update ref.
+   * Returns the user if successful, null otherwise.
+   */
+  const applySession = useCallback(
+    async (session: Session | null) => {
+      const authUser = session?.user ?? null;
+      currentUserIdRef.current = authUser?.id ?? null;
+      setUser(authUser);
+      if (authUser) {
+        await fetchProfile(authUser.id);
+      } else {
+        setProfile(null);
+      }
+      return authUser;
+    },
+    [fetchProfile]
   );
 
   useEffect(() => {
@@ -66,40 +89,73 @@ export function AuthProvider({
 
     async function init() {
       try {
-        // 1. Try localStorage first (via custom cookie handler)
-        const { data: { session: localSession } } = await supabase.auth.getSession();
+        // Step 1: Try reading session from localStorage (via custom cookie handler).
+        // This works on F5 refresh and tab reopen because localStorage persists.
+        const {
+          data: { session: localSession },
+        } = await supabase.auth.getSession();
 
-        if (localSession?.user) {
-          if (cancelled) return;
-          currentUserIdRef.current = localSession.user.id;
-          setUser(localSession.user);
-          await fetchProfile(localSession.user.id);
+        if (localSession?.user && !cancelled) {
+          await applySession(localSession);
+          setLoading(false);
           return;
         }
 
-        // 2. Use server-provided session (passed from layout as prop)
-        if (initialSession?.access_token) {
+        // Step 2: Use server-provided session (SSR reads HTTP cookies, passes as prop).
+        // This handles the case where HTTP cookies exist but localStorage was cleared.
+        if (initialSession?.access_token && !cancelled) {
           const { data } = await supabase.auth.setSession({
             access_token: initialSession.access_token,
             refresh_token: initialSession.refresh_token,
           });
-          if (cancelled) return;
-          const authUser = data?.user ?? null;
-          currentUserIdRef.current = authUser?.id ?? null;
-          setUser(authUser);
-          if (authUser) {
-            await fetchProfile(authUser.id);
+          if (!cancelled && data.session) {
+            await applySession(data.session);
+            setLoading(false);
+            return;
           }
-          return;
+        }
+
+        // Step 3: Fallback - fetch session from server endpoint.
+        // This handles edge cases where neither localStorage nor SSR props worked.
+        if (!cancelled) {
+          try {
+            const res = await fetch("/formacao/auth/session", {
+              credentials: "include",
+              cache: "no-store",
+            });
+            if (res.ok) {
+              const json = await res.json();
+              if (json.session?.access_token && !cancelled) {
+                const { data } = await supabase.auth.setSession({
+                  access_token: json.session.access_token,
+                  refresh_token: json.session.refresh_token,
+                });
+                if (!cancelled && data.session) {
+                  await applySession(data.session);
+                  setLoading(false);
+                  return;
+                }
+              }
+            }
+          } catch {
+            // Session endpoint not reachable (e.g., /api routes blocked by Cloudflare)
+            // This is expected in some deployment configs
+          }
+        }
+
+        // No session found anywhere
+        if (!cancelled) {
+          setLoading(false);
         }
       } catch (err) {
-        console.error("[AUTH] error:", err);
-      } finally {
+        console.error("[AUTH] init error:", err);
         if (!cancelled) setLoading(false);
       }
     }
+
     init();
 
+    // Listen for auth state changes (token refresh, sign out, etc.)
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange(async (_event, session) => {
@@ -107,6 +163,7 @@ export function AuthProvider({
       const newUser = session?.user ?? null;
       const newUserId = newUser?.id ?? null;
 
+      // Skip if the user hasn't changed
       if (newUserId === currentUserIdRef.current) return;
 
       currentUserIdRef.current = newUserId;
@@ -123,13 +180,19 @@ export function AuthProvider({
       cancelled = true;
       subscription.unsubscribe();
     };
-  }, [supabase, fetchProfile, initialSession]);
+  }, [supabase, fetchProfile, initialSession, applySession]);
 
   const signOut = useCallback(async () => {
     currentUserIdRef.current = null;
     await supabase.auth.signOut();
     setUser(null);
     setProfile(null);
+    // Also clear localStorage to prevent stale data on next visit
+    try {
+      localStorage.removeItem("sb-auth-cookies");
+    } catch {
+      // ignore
+    }
   }, [supabase]);
 
   const value = useMemo<AuthContextValue>(
