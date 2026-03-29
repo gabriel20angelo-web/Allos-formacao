@@ -44,20 +44,28 @@ export async function GET(request: NextRequest) {
     );
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
+    console.log("[AUTH CALLBACK] exchangeCodeForSession error:", error);
+    console.log("[AUTH CALLBACK] cookies to set:", allCookies.map(c => ({ name: c.name, valueLen: c.value.length, options: c.options })));
+
     if (!error) {
       const url = `${BASE_URL}${redirectTo}`;
       const headers = new Headers({ Location: url });
 
       // Set session cookies from Supabase SDK
       for (const c of allCookies) {
-        headers.append("Set-Cookie", buildSetCookie(c.name, c.value, c.options));
+        const setCookie = buildSetCookie(c.name, c.value, c.options);
+        console.log("[AUTH CALLBACK] Set-Cookie:", c.name, "len:", setCookie.length);
+        headers.append("Set-Cookie", setCookie);
       }
 
       // Delete the PKCE code-verifier cookie (prevents client from hanging)
       headers.append("Set-Cookie", `${COOKIE_PREFIX}-code-verifier=; Path=/; Max-Age=0; Secure; SameSite=Lax`);
 
+      console.log("[AUTH CALLBACK] Redirecting to:", url);
       return new Response(null, { status: 302, headers });
     }
+
+    console.log("[AUTH CALLBACK] FAILED, redirecting to auth page");
   }
 
   return new Response(null, {
