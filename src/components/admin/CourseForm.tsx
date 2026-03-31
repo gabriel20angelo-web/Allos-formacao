@@ -327,27 +327,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
     }
   }, [title, isEdit]);
 
-  // --- NEW: Publish validation ---
-  function validateForPublish(): boolean {
-    const errors: string[] = [];
-
-    if (!title.trim()) errors.push("Título está vazio");
-    if (!description.trim()) errors.push("Descrição está vazia");
-    if (!thumbnailUrl.trim()) errors.push("URL da thumbnail não está definida");
-    if (sections.length === 0) errors.push("Nenhuma seção criada");
-
-    const hasLesson = sections.some((s) => s.lessons.length > 0);
-    if (!hasLesson) errors.push("Nenhuma aula criada em nenhuma seção");
-
-    if (errors.length > 0) {
-      toast.error(
-        `Não é possível publicar. Corrija: ${errors.join("; ")}.`
-      );
-      return false;
-    }
-    return true;
-  }
-
   async function saveCourse(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
 
@@ -359,11 +338,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
 
     if (!title.trim() || !slug.trim()) {
       if (!silent) toast.error("Título e slug são obrigatórios.");
-      return;
-    }
-
-    // Validate publish requirements
-    if (status === "published" && !validateForPublish()) {
       return;
     }
 
@@ -711,26 +685,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
     return null;
   }
 
-  // --- NEW: handle status change with publish validation ---
   function handleStatusChange(newStatus: string) {
     const typedStatus = newStatus as "draft" | "published" | "archived";
-    if (typedStatus === "published") {
-      // Validate before allowing status change
-      const errors: string[] = [];
-      if (!title.trim()) errors.push("Título está vazio");
-      if (!description.trim()) errors.push("Descrição está vazia");
-      if (!thumbnailUrl.trim()) errors.push("URL da thumbnail não está definida");
-      if (sections.length === 0) errors.push("Nenhuma seção criada");
-      const hasLesson = sections.some((s) => s.lessons.length > 0);
-      if (!hasLesson) errors.push("Nenhuma aula criada em nenhuma seção");
-
-      if (errors.length > 0) {
-        toast.error(
-          `Não é possível publicar. Corrija: ${errors.join("; ")}.`
-        );
-        return;
-      }
-    }
     markDirty();
     setStatus(typedStatus);
   }
