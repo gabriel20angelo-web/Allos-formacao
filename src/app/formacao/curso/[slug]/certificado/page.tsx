@@ -52,6 +52,7 @@ export default function CertificadoPage() {
   const { user, profile } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
+  const [extraHours, setExtraHours] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
@@ -115,6 +116,41 @@ export default function CertificadoPage() {
           toast.error("Passe na prova final antes de emitir o certificado.");
           router.push(`/formacao/curso/${slug}/prova`);
           return;
+        }
+      }
+
+      // Calculate extra hours from completed extra sections
+      const { data: sectionsData } = await client
+        .from("sections")
+        .select("id, is_extra, lessons(id, duration_minutes)")
+        .eq("course_id", courseData.id)
+        .eq("is_extra", true);
+
+      if (sectionsData && sectionsData.length > 0) {
+        const extraLessonIds = sectionsData.flatMap((s) =>
+          (s.lessons as { id: string; duration_minutes: number | null }[])?.map((l) => l.id) || []
+        );
+
+        if (extraLessonIds.length > 0) {
+          const { data: progressData } = await client
+            .from("lesson_progress")
+            .select("lesson_id")
+            .eq("user_id", user.id)
+            .eq("completed", true)
+            .in("lesson_id", extraLessonIds);
+
+          const completedExtraIds = new Set(progressData?.map((p) => p.lesson_id) || []);
+
+          // Sum hours from fully completed extra sections
+          let bonusMinutes = 0;
+          for (const section of sectionsData) {
+            const lessons = (section.lessons as { id: string; duration_minutes: number | null }[]) || [];
+            const allDone = lessons.length > 0 && lessons.every((l) => completedExtraIds.has(l.id));
+            if (allDone) {
+              bonusMinutes += lessons.reduce((sum, l) => sum + (l.duration_minutes || 0), 0);
+            }
+          }
+          setExtraHours(Math.round(bonusMinutes / 60));
         }
       }
 
@@ -218,7 +254,8 @@ export default function CertificadoPage() {
       ctx.stroke();
 
       // Body text
-      const hours = course.certificate_hours || Math.round((course.total_duration_minutes || 0) / 60);
+      const baseHours = course.certificate_hours || Math.round((course.total_duration_minutes || 0) / 60);
+      const hours = baseHours + extraHours;
       const extenso = horasExtenso(hours);
       const dateStr = formatDatePtBR(certificate.issued_at);
 
@@ -305,7 +342,7 @@ export default function CertificadoPage() {
       };
       sigImg.onerror = drawSignatureFallback;
     },
-    [profile, course, certificate]
+    [profile, course, certificate, extraHours]
   );
 
   // Render canvas when certificate exists

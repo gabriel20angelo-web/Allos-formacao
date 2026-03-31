@@ -63,7 +63,7 @@ export default function ContinueStudying() {
       // Get total lessons per course (via sections)
       const { data: sections } = await client
         .from("sections")
-        .select("course_id, lessons(id)")
+        .select("course_id, is_extra, lessons(id)")
         .in("course_id", courseIds);
 
       // Get completed lessons
@@ -78,6 +78,7 @@ export default function ContinueStudying() {
       // Build lesson totals and completed counts per course
       const courseLessons: Record<string, { total: number; completed: number }> = {};
       sections?.forEach((s) => {
+        if (s.is_extra) return;
         const cid = s.course_id;
         if (!courseLessons[cid]) courseLessons[cid] = { total: 0, completed: 0 };
         const lessons = (s.lessons as { id: string }[]) || [];

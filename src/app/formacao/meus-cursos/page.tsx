@@ -82,7 +82,7 @@ export default function MeusCursosPage() {
       const [sectionsRes, progressRes] = await Promise.all([
         client
           .from("sections")
-          .select("course_id, lessons(id)")
+          .select("course_id, is_extra, lessons(id)")
           .in("course_id", courseIds),
         client
           .from("lesson_progress")
@@ -95,6 +95,8 @@ export default function MeusCursosPage() {
 
       const courseLessons: Record<string, { total: number; completed: number }> = {};
       sectionsRes.data?.forEach((s) => {
+        // Only count non-extra sections for progress
+        if (s.is_extra) return;
         const cid = s.course_id;
         if (!courseLessons[cid]) courseLessons[cid] = { total: 0, completed: 0 };
         const lessons = (s.lessons as { id: string }[]) || [];

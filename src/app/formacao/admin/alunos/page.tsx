@@ -134,8 +134,9 @@ export default function AdminAlunosPage() {
     const courseIds = student.enrollments.map((e) => e.course_id);
     const { data: sections } = await client
       .from("sections")
-      .select("id, course_id")
-      .in("course_id", courseIds);
+      .select("id, course_id, is_extra")
+      .in("course_id", courseIds)
+      .eq("is_extra", false);
 
     if (sections && sections.length > 0) {
       const sectionIds = sections.map((s) => s.id);

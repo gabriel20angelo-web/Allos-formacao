@@ -22,6 +22,7 @@ import {
   ChevronUp,
   Eye,
   X,
+  Sparkles,
 } from "lucide-react";
 import type { Course, Section, Lesson, ExamQuestion, ExamOption } from "@/types";
 
@@ -435,6 +436,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               course_id: savedCourseId,
               title: section.title,
               position: si,
+              is_extra: section.is_extra ?? false,
             })
             .select("id")
             .single();
@@ -444,7 +446,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         } else {
           await createClient()
             .from("sections")
-            .update({ title: section.title, position: si })
+            .update({ title: section.title, position: si, is_extra: section.is_extra ?? false })
             .eq("id", sectionId);
         }
 
@@ -510,15 +512,16 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   }
 
   // Section helpers
-  function addSection() {
+  function addSection(isExtra = false) {
     markDirty();
     setSections((prev) => [
       ...prev,
       {
         id: `new-${Date.now()}`,
         course_id: courseId || "",
-        title: `Módulo ${prev.length + 1}`,
+        title: isExtra ? `Módulo Extra ${prev.filter(s => s.is_extra).length + 1}` : `Módulo ${prev.filter(s => !s.is_extra).length + 1}`,
         position: prev.length,
+        is_extra: isExtra,
         created_at: new Date().toISOString(),
         lessons: [],
       },
@@ -960,16 +963,52 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             <div
               key={section.id}
               className="rounded-card p-6"
-              style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+              style={{
+                background: section.is_extra ? "rgba(139,92,246,0.04)" : "rgba(255,255,255,0.04)",
+                border: section.is_extra ? "1px solid rgba(139,92,246,0.15)" : "1px solid rgba(255,255,255,0.08)",
+              }}
             >
               <div className="flex items-center gap-3 mb-4">
                 <GripVertical className="h-5 w-5 text-cream/20" />
+                {section.is_extra && (
+                  <span
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider flex-shrink-0"
+                    style={{ background: "rgba(139,92,246,0.15)", color: "rgb(167,139,250)", border: "1px solid rgba(139,92,246,0.25)" }}
+                  >
+                    <Sparkles className="h-3 w-3" />
+                    Extra
+                  </span>
+                )}
                 <input
                   value={section.title}
                   onChange={(e) => updateSection(si, e.target.value)}
                   className="flex-1 font-semibold text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none py-1"
                   placeholder="Nome da seção"
                 />
+                {/* Toggle extra */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    markDirty();
+                    setSections((prev) => {
+                      const next = [...prev];
+                      next[si] = { ...next[si], is_extra: !next[si].is_extra };
+                      return next;
+                    });
+                  }}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 ${
+                    section.is_extra
+                      ? "text-purple-300 hover:text-purple-200"
+                      : "text-cream/30 hover:text-cream/50"
+                  }`}
+                  style={{
+                    background: section.is_extra ? "rgba(139,92,246,0.12)" : "rgba(255,255,255,0.04)",
+                    border: section.is_extra ? "1px solid rgba(139,92,246,0.2)" : "1px solid rgba(255,255,255,0.06)",
+                  }}
+                  title={section.is_extra ? "Módulo extra: não obrigatório para certificado" : "Tornar módulo extra (opcional)"}
+                >
+                  {section.is_extra ? "Extra ✓" : "Marcar extra"}
+                </button>
                 {/* Delete section with confirmation */}
                 {deleteConfirmId === `section-${section.id}` ? (
                   <div className="flex items-center gap-1.5 text-xs">
@@ -1124,10 +1163,32 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             </div>
           ))}
 
-          <Button variant="secondary" onClick={addSection}>
-            <Plus className="h-4 w-4" />
-            Nova seção
-          </Button>
+          <div className="flex gap-3 flex-wrap">
+            <Button variant="secondary" onClick={() => addSection(false)}>
+              <Plus className="h-4 w-4" />
+              Nova seção
+            </Button>
+            <Button
+              variant="secondary"
+              onClick={() => addSection(true)}
+              className="!border-purple-500/20 !text-purple-300 hover:!bg-purple-500/5"
+            >
+              <Sparkles className="h-4 w-4" />
+              Nova seção extra
+            </Button>
+          </div>
+
+          {sections.some(s => s.is_extra) && (
+            <div
+              className="flex items-start gap-3 p-4 rounded-xl text-sm"
+              style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.12)" }}
+            >
+              <Sparkles className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+              <div className="text-cream/50">
+                <span className="font-semibold text-purple-300">Seções extras</span> não são obrigatórias para conclusão do curso nem para a prova. Se o aluno completá-las, as horas dessas aulas são somadas ao certificado.
+              </div>
+            </div>
+          )}
         </div>
       )}
 

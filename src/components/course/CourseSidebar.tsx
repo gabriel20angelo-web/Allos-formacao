@@ -9,6 +9,7 @@ import {
   ListVideo,
   X,
   Pause,
+  Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Section, Lesson, LessonProgress } from "@/types";
@@ -218,6 +219,20 @@ export default function CourseSidebar({
                     >
                       <span className="text-[10px] font-bold" style={{ color: "#2E9E8F" }}>{sIdx + 1}</span>
                     </div>
+                  ) : section.is_extra ? (
+                    <div
+                      className="w-8 h-8 rounded-lg flex items-center justify-center"
+                      style={{
+                        background: sectionDone ? "rgba(139,92,246,0.15)" : "rgba(139,92,246,0.06)",
+                        border: `1px solid rgba(139,92,246,${sectionDone ? 0.3 : 0.15})`,
+                      }}
+                    >
+                      {sectionDone ? (
+                        <span className="text-[10px] font-bold" style={{ color: "rgb(167,139,250)" }}>✓</span>
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5" style={{ color: "rgba(167,139,250,0.5)" }} />
+                      )}
+                    </div>
                   ) : (
                     <>
                       <svg width={32} height={32} className="-rotate-90">
@@ -242,13 +257,26 @@ export default function CourseSidebar({
                 </div>
 
                 <div className="flex-1 min-w-0">
-                  <h4 className="text-sm font-semibold text-cream leading-snug group-hover:text-cream/90 transition-colors line-clamp-2">
-                    {section.title}
-                  </h4>
+                  <div className="flex items-center gap-2">
+                    <h4 className="text-sm font-semibold text-cream leading-snug group-hover:text-cream/90 transition-colors line-clamp-2">
+                      {section.title}
+                    </h4>
+                    {section.is_extra && (
+                      <span
+                        className="flex items-center gap-0.5 px-1.5 py-0.5 rounded-full text-[9px] font-bold uppercase tracking-wider flex-shrink-0"
+                        style={{ background: "rgba(139,92,246,0.15)", color: "rgb(167,139,250)", border: "1px solid rgba(139,92,246,0.2)" }}
+                      >
+                        <Sparkles className="h-2.5 w-2.5" />
+                        Extra
+                      </span>
+                    )}
+                  </div>
                   <span className="text-xs text-cream/30 mt-0.5 block">
                     {isSync
                       ? `${lessons.length} ${lessons.length === 1 ? "gravação" : "gravações"}`
-                      : `${sectionCompleted}/${lessons.length} concluídas`
+                      : section.is_extra
+                        ? `${sectionCompleted}/${lessons.length} · bônus`
+                        : `${sectionCompleted}/${lessons.length} concluídas`
                     }
                   </span>
                 </div>

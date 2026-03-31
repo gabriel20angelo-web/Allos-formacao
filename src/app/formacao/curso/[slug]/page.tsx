@@ -41,11 +41,23 @@ export default function CoursePage() {
     () => sections.flatMap((s) => s.lessons || []),
     [sections]
   );
+
+  // Required lessons (non-extra sections) for completion
+  const requiredLessons = useMemo(
+    () => sections.filter((s) => !s.is_extra).flatMap((s) => s.lessons || []),
+    [sections]
+  );
+
   const totalLessons = allLessons.length;
   const completedLessons = Object.values(progressMap).filter(
     (p) => p.completed
   ).length;
-  const allComplete = totalLessons > 0 && completedLessons >= totalLessons;
+
+  const requiredTotal = requiredLessons.length;
+  const requiredCompleted = requiredLessons.filter(
+    (l) => progressMap[l.id]?.completed
+  ).length;
+  const allComplete = requiredTotal > 0 && requiredCompleted >= requiredTotal;
 
   const currentIndex = currentLesson
     ? allLessons.findIndex((l) => l.id === currentLesson.id)
@@ -568,7 +580,12 @@ export default function CoursePage() {
                   Parabéns! Curso concluído!
                 </h3>
                 <p className="text-sm text-cream/50 mb-6 max-w-sm mx-auto">
-                  Você completou todas as {totalLessons} aulas deste curso. Seu esforço valeu a pena!
+                  Você completou todas as {requiredTotal} aulas obrigatórias deste curso. Seu esforço valeu a pena!
+                  {totalLessons > requiredTotal && (
+                    <span className="block mt-1 text-purple-300/60">
+                      Ainda há {totalLessons - requiredTotal} aula{totalLessons - requiredTotal !== 1 ? "s" : ""} extra{totalLessons - requiredTotal !== 1 ? "s" : ""} para somar horas ao certificado!
+                    </span>
+                  )}
                 </p>
                 <div className="flex flex-wrap gap-3 justify-center">
                   {course.exam_enabled && (
@@ -608,8 +625,8 @@ export default function CoursePage() {
               <ReviewSection
                 courseId={course.id}
                 progressPercent={
-                  totalLessons > 0
-                    ? (completedLessons / totalLessons) * 100
+                  requiredTotal > 0
+                    ? (requiredCompleted / requiredTotal) * 100
                     : 0
                 }
               />
@@ -631,8 +648,8 @@ export default function CoursePage() {
         sections={sections}
         currentLessonId={currentLesson.id}
         progressMap={progressMap}
-        totalLessons={totalLessons}
-        completedLessons={completedLessons}
+        totalLessons={requiredTotal}
+        completedLessons={requiredCompleted}
         onSelectLesson={setCurrentLesson}
         onToggleComplete={toggleComplete}
         isSync={isSync}

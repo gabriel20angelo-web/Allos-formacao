@@ -62,6 +62,7 @@ export interface Section {
   course_id: string;
   title: string;
   position: number;
+  is_extra: boolean;
   created_at: string;
   // Relations
   lessons?: Lesson[];
