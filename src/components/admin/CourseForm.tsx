@@ -996,14 +996,11 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                       return next;
                     });
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0 ${
-                    section.is_extra
-                      ? "text-purple-300 hover:text-purple-200"
-                      : "text-cream/30 hover:text-cream/50"
-                  }`}
+                  className="px-2.5 py-1 rounded-lg text-[11px] font-medium transition-all flex-shrink-0"
                   style={{
                     background: section.is_extra ? "rgba(139,92,246,0.12)" : "rgba(255,255,255,0.04)",
                     border: section.is_extra ? "1px solid rgba(139,92,246,0.2)" : "1px solid rgba(255,255,255,0.06)",
+                    color: section.is_extra ? "rgb(167,139,250)" : "rgba(253,251,247,0.3)",
                   }}
                   title={section.is_extra ? "Módulo extra: não obrigatório para certificado" : "Tornar módulo extra (opcional)"}
                 >
@@ -1168,14 +1165,19 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               <Plus className="h-4 w-4" />
               Nova seção
             </Button>
-            <Button
-              variant="secondary"
+            <button
+              type="button"
               onClick={() => addSection(true)}
-              className="!border-purple-500/20 !text-purple-300 hover:!bg-purple-500/5"
+              className="flex items-center gap-2 px-4 py-2.5 rounded-[10px] text-sm font-medium transition-all hover:opacity-80"
+              style={{
+                background: "rgba(139,92,246,0.08)",
+                border: "1px solid rgba(139,92,246,0.2)",
+                color: "rgb(167,139,250)",
+              }}
             >
               <Sparkles className="h-4 w-4" />
               Nova seção extra
-            </Button>
+            </button>
           </div>
 
           {sections.some(s => s.is_extra) && (
@@ -1183,9 +1185,9 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               className="flex items-start gap-3 p-4 rounded-xl text-sm"
               style={{ background: "rgba(139,92,246,0.06)", border: "1px solid rgba(139,92,246,0.12)" }}
             >
-              <Sparkles className="h-4 w-4 text-purple-400 mt-0.5 flex-shrink-0" />
+              <Sparkles className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "rgb(167,139,250)" }} />
               <div className="text-cream/50">
-                <span className="font-semibold text-purple-300">Seções extras</span> não são obrigatórias para conclusão do curso nem para a prova. Se o aluno completá-las, as horas dessas aulas são somadas ao certificado.
+                <span className="font-semibold" style={{ color: "rgb(167,139,250)" }}>Seções extras</span> não são obrigatórias para conclusão do curso nem para a prova. Se o aluno completá-las, as horas dessas aulas são somadas ao certificado.
               </div>
             </div>
           )}

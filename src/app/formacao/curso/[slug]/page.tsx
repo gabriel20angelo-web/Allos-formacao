@@ -582,7 +582,7 @@ export default function CoursePage() {
                 <p className="text-sm text-cream/50 mb-6 max-w-sm mx-auto">
                   Você completou todas as {requiredTotal} aulas obrigatórias deste curso. Seu esforço valeu a pena!
                   {totalLessons > requiredTotal && (
-                    <span className="block mt-1 text-purple-300/60">
+                    <span className="block mt-1" style={{ color: "rgba(167,139,250,0.6)" }}>
                       Ainda há {totalLessons - requiredTotal} aula{totalLessons - requiredTotal !== 1 ? "s" : ""} extra{totalLessons - requiredTotal !== 1 ? "s" : ""} para somar horas ao certificado!
                     </span>
                   )}
