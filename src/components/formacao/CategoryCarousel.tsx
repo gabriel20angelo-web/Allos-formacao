@@ -108,7 +108,7 @@ export default function CategoryCarousel({ title, courses, index }: CategoryCaro
         {courses.map((course) => (
           <div
             key={course.id}
-            className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-[240px] lg:w-[260px]"
+            className="flex-shrink-0 w-[220px] sm:w-[250px] md:w-[280px] lg:w-[300px]"
             style={{ scrollSnapAlign: "start" }}
           >
             <CourseCard course={course} />

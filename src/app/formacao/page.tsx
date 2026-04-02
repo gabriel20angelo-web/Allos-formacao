@@ -113,12 +113,13 @@ export default function FormacaoPage() {
       }
     }
 
-    // Courses without category
+    // Courses without a known category go into "Sem categoria"
+    const categorized = new Set(categories);
     const uncategorized = courses.filter(
-      (c) => !c.category && !c.featured
+      (c) => !c.featured && (!c.category || !categorized.has(c.category))
     );
     if (uncategorized.length > 0) {
-      grouped.push({ title: "Outros cursos", courses: uncategorized });
+      grouped.push({ title: "Sem categoria", courses: uncategorized });
     }
 
     return grouped;
@@ -161,7 +162,7 @@ export default function FormacaoPage() {
                     {[0, 1, 2, 3].map((j) => (
                       <div
                         key={j}
-                        className="flex-shrink-0 w-[240px] sm:w-[260px] md:w-[280px] aspect-[3/4] rounded-2xl bg-white/[0.03] animate-pulse"
+                        className="flex-shrink-0 w-[220px] sm:w-[250px] md:w-[280px] lg:w-[300px] aspect-[3/4] rounded-2xl bg-white/[0.03] animate-pulse"
                       />
                     ))}
                   </div>

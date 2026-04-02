@@ -19,7 +19,7 @@ export default function FormacaoLoading() {
           </div>
           <div className="flex gap-4 overflow-hidden">
             {[0, 1, 2, 3, 4].map((j) => (
-              <div key={j} className="flex-shrink-0 w-[200px] sm:w-[220px] md:w-[240px] lg:w-[260px]">
+              <div key={j} className="flex-shrink-0 w-[220px] sm:w-[250px] md:w-[280px] lg:w-[300px]">
                 <CourseCardSkeleton />
               </div>
             ))}
