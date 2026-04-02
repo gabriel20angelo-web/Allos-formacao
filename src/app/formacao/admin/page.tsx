@@ -1186,12 +1186,110 @@ export default function AdminDashboard() {
           transition={{ delay: 0.65, duration: 0.5 }}
           className="mb-8"
         >
-          <div className="flex items-center gap-2 mb-4">
-            <FileText className="h-5 w-5" style={{ color: "#C84B31" }} />
-            <h2 className="font-fraunces font-bold text-lg text-cream">Formação Base</h2>
+          {/* ── Header + Nav + Export ────────────────────────── */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-2">
+            <div className="flex items-center gap-2">
+              <FileText className="h-5 w-5" style={{ color: "#C84B31" }} />
+              <h2 className="font-fraunces font-bold text-lg text-cream">Formação Base</h2>
+            </div>
+            <button
+              onClick={() => {
+                if (!formacaoStats) return;
+                const lines: string[] = [];
+                lines.push("=== RESUMO GERAL ===");
+                lines.push(`Período,${PERIOD_LABELS[dashPeriod]}`);
+                lines.push(`Total Feedbacks,${formacaoStats.totalFeedbacks}`);
+                lines.push(`Nota Média Grupo,${formacaoStats.avgNotaGrupo.toFixed(1)}`);
+                lines.push(`Nota Média Condutor,${formacaoStats.avgNotaCondutor.toFixed(1)}`);
+                lines.push(`Total Relatos,${formacaoStats.totalRelatos}`);
+                lines.push(`Sessões Realizadas,${formacaoStats.totalSessions}`);
+                lines.push(`Participantes Únicos,${formacaoStats.uniqueParticipants}`);
+                lines.push(`Ativos (30d),${formacaoStats.activeStudents}`);
+                lines.push(`Inativos,${formacaoStats.inactiveStudents}`);
+                lines.push(`Taxa de Retenção,${formacaoStats.retentionRate.toFixed(0)}%`);
+                lines.push("");
+                lines.push("=== RANKING CONDUTORES ===");
+                lines.push("Nome,Nota Média,Avaliações");
+                formacaoStats.topCondutores.forEach(c => lines.push(`${c.name},${c.avg.toFixed(1)},${c.count}`));
+                lines.push("");
+                lines.push("=== TOP PARTICIPANTES ===");
+                lines.push("Nome,Horas,Participações");
+                formacaoStats.topParticipantes.forEach(p => lines.push(`${p.nome},${p.horas},${p.count}`));
+                lines.push("");
+                lines.push("=== DISTRIBUIÇÃO POR ATIVIDADE ===");
+                lines.push("Atividade,Quantidade");
+                formacaoStats.activityDist.forEach(a => lines.push(`${a.name},${a.count}`));
+                lines.push("");
+                lines.push("=== GRUPOS POR AVALIAÇÃO ===");
+                lines.push("Grupo,Nota Média,Sessões");
+                formacaoStats.topGroups.forEach(g => lines.push(`${g.name},${g.avgNota.toFixed(1)},${g.count}`));
+                lines.push("");
+                lines.push("=== DISTRIBUIÇÃO NOTAS GRUPO (1-10) ===");
+                lines.push("Nota,Quantidade");
+                formacaoStats.ratingDistribution.forEach(r => lines.push(`${r.rating},${r.count}`));
+                lines.push("");
+                lines.push("=== DISTRIBUIÇÃO NOTAS CONDUTOR (1-10) ===");
+                lines.push("Nota,Quantidade");
+                formacaoStats.conductorRatingDist.forEach(r => lines.push(`${r.rating},${r.count}`));
+                lines.push("");
+                lines.push("=== RETENÇÃO MENSAL ===");
+                lines.push("Mês,Ativos,Inativos");
+                formacaoStats.retentionByMonth.forEach(r => lines.push(`${r.month},${r.active},${r.churned}`));
+                lines.push("");
+                lines.push("=== HEATMAP ENGAJAMENTO ===");
+                lines.push("Dia,Horário,Quantidade");
+                const dias = ["Seg","Ter","Qua","Qui","Sex"];
+                formacaoStats.heatmapData.forEach(h => lines.push(`${dias[h.dia] || h.dia},${h.hora},${h.count}`));
+                const csv = "\uFEFF" + lines.join("\n");
+                const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement("a");
+                a.href = url;
+                a.download = `formacao_dados_${dashPeriod}_${new Date().toISOString().slice(0,10)}.csv`;
+                a.click();
+                URL.revokeObjectURL(url);
+              }}
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-white/[.05]"
+              style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
+            >
+              <BarChart3 className="h-3.5 w-3.5" />
+              Exportar dados (CSV)
+            </button>
+          </div>
+          <p className="font-dm text-xs text-cream/30 mb-4">
+            Dados agregados de feedbacks, condutores, atividades e participantes da formação.
+          </p>
+
+          {/* ── Atalhos de navegação ────────────────────────── */}
+          <div className="flex flex-wrap gap-2 mb-5">
+            <Link href="/formacao/admin/condutores"
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-[rgba(200,75,49,0.08)]"
+              style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}>
+              <Users className="h-3.5 w-3.5" /> Condutores
+            </Link>
+            <Link href="/formacao/admin/atividades"
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-[rgba(200,75,49,0.08)]"
+              style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}>
+              <Activity className="h-3.5 w-3.5" /> Atividades
+            </Link>
+            <Link href="/formacao/admin/envios"
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-[rgba(200,75,49,0.08)]"
+              style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}>
+              <FileText className="h-3.5 w-3.5" /> Envios
+            </Link>
+            <Link href="/formacao/admin/calendario"
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-[rgba(200,75,49,0.08)]"
+              style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}>
+              <Calendar className="h-3.5 w-3.5" /> Calendário
+            </Link>
+            <Link href="/formacao/admin/certificados-formacao"
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-[rgba(200,75,49,0.08)]"
+              style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}>
+              <Award className="h-3.5 w-3.5" /> Certificados
+            </Link>
           </div>
 
-          {/* Period filter bar */}
+          {/* ── Filtro de período ────────────────────────── */}
           <div className="flex flex-wrap gap-2 mb-6">
             {(Object.keys(PERIOD_LABELS) as DashPeriod[]).map(p => (
               <button key={p} onClick={() => { setDashPeriod(p); setSelectedCondutor(null); }}
@@ -1206,7 +1304,11 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* Stats cards row */}
+          {/* ── 1. RESUMO ────────────────────────── */}
+          <div className="mb-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Resumo do Período</h3>
+            <p className="font-dm text-[11px] text-cream/25">Números-chave de feedbacks e avaliações no período selecionado.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               {
@@ -1273,7 +1375,11 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* Two-column grid: Rankings + distributions */}
+          {/* ── 2. RANKINGS ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Rankings</h3>
+            <p className="font-dm text-[11px] text-cream/25">Condutores por nota média, participantes por horas acumuladas e distribuição por atividade. Clique num condutor para ver seus relatos.</p>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             {/* Left column */}
             <div className="space-y-4">
@@ -1491,7 +1597,11 @@ export default function AdminDashboard() {
             </div>
           </div>
 
-          {/* ── A. Session Metrics Row ── */}
+          {/* ── 3. MÉTRICAS DE SESSÃO ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Métricas de Sessão</h3>
+            <p className="font-dm text-[11px] text-cream/25">Quantas sessões foram conduzidas, média de participantes por sessão e frequência dos alunos.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               { label: "Sessões realizadas", value: String(formacaoStats.totalSessions), icon: Calendar, iconColor: "#C84B31", iconBg: "rgba(200,75,49,0.1)" },
@@ -1525,7 +1635,11 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* ── B. Retention & Growth Row ── */}
+          {/* ── 4. RETENÇÃO E CRESCIMENTO ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Retenção e Crescimento</h3>
+            <p className="font-dm text-[11px] text-cream/25">Quantos alunos novos entraram, quantos continuam ativos (últimos 30 dias) e a taxa de retenção geral.</p>
+          </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
             {[
               { label: "Novos no período", value: String(formacaoStats.newStudentsThisPeriod), icon: Plus, iconColor: "#22C55E", iconBg: "rgba(34,197,94,0.1)" },
@@ -1565,7 +1679,11 @@ export default function AdminDashboard() {
             ))}
           </div>
 
-          {/* ── C. Group Rankings (two-column) ── */}
+          {/* ── 5. GRUPOS ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Grupos</h3>
+            <p className="font-dm text-[11px] text-cream/25">Quais grupos (atividades) têm as melhores avaliações e quais têm mais participação.</p>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -1639,7 +1757,11 @@ export default function AdminDashboard() {
             </motion.div>
           </div>
 
-          {/* ── D. Rating Distribution (two-column) ── */}
+          {/* ── 6. DISTRIBUIÇÃO DE NOTAS ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Distribuição de Notas</h3>
+            <p className="font-dm text-[11px] text-cream/25">Histograma de notas (1-10) dadas pelos participantes para grupos e condutores. Útil para identificar padrões de satisfação.</p>
+          </div>
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
             <motion.div
               initial={{ opacity: 0, y: 12 }}
@@ -1721,7 +1843,11 @@ export default function AdminDashboard() {
             </motion.div>
           </div>
 
-          {/* ── E. Heatmap: Engagement by Day × Time ── */}
+          {/* ── 7. ENGAJAMENTO E TENDÊNCIAS ────────────────────────── */}
+          <div className="mb-2 mt-2">
+            <h3 className="font-fraunces font-semibold text-sm text-cream/60">Engajamento e Tendências</h3>
+            <p className="font-dm text-[11px] text-cream/25">Mapa de calor mostrando quando os participantes mais engajam (dia × horário), tendência de retenção mensal e volume de submissões/matrículas ao longo do tempo.</p>
+          </div>
           <motion.div
             initial={{ opacity: 0, y: 12 }}
             animate={{ opacity: 1, y: 0 }}
