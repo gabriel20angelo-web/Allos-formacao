@@ -67,7 +67,7 @@ export default function FloatingQuestionButton() {
   }
 
   return (
-    <div className="fixed bottom-6 right-6 z-[999]" ref={panelRef}>
+    <div className="fixed bottom-20 md:bottom-6 right-6 z-[999]" ref={panelRef}>
       <AnimatePresence>
         {isOpen && (
           <motion.div
@@ -75,7 +75,7 @@ export default function FloatingQuestionButton() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: 20, scale: 0.9 }}
             transition={{ duration: 0.3, ease: [0.22, 1, 0.36, 1] }}
-            className="absolute bottom-20 right-0 w-[340px] rounded-2xl overflow-hidden"
+            className="absolute bottom-20 right-0 w-[340px] max-w-[calc(100vw-48px)] rounded-2xl overflow-hidden"
             style={{
               background: "rgba(22,22,22,0.97)",
               border: "1px solid rgba(255,255,255,0.1)",

@@ -44,6 +44,7 @@ export interface Course {
   whatsapp_number: string | null;
   learning_points: string[] | null;
   course_type: CourseType;
+  display_order?: number;
   featured?: boolean;
   featured_label?: string | null;
   price?: number | null;

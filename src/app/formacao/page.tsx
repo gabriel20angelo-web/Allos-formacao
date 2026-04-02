@@ -37,6 +37,7 @@ export default function FormacaoPage() {
             instructor:profiles!courses_instructor_id_fkey(id, full_name, avatar_url)
           `)
           .eq("status", "published")
+          .order("display_order", { ascending: true })
           .order("created_at", { ascending: false });
 
         if (cancelled) return;

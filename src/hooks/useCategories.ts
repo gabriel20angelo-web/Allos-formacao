@@ -13,7 +13,7 @@ export function useCategories() {
       const { data, error } = await createClient()
         .from("categories")
         .select("name")
-        .order("name");
+        .order("position");
 
       if (!error && data) {
         setCategories(data.map((c) => c.name));

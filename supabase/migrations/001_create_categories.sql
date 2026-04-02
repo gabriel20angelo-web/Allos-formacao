@@ -22,6 +22,17 @@ CREATE POLICY "categories_delete" ON categories FOR DELETE
     EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
   );
 
+-- Apenas admins podem atualizar categorias
+CREATE POLICY "categories_admin_update" ON categories FOR UPDATE
+  USING (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  ) WITH CHECK (
+    EXISTS (SELECT 1 FROM profiles WHERE id = auth.uid() AND role = 'admin')
+  );
+
+-- Coluna de ordenação
+ALTER TABLE categories ADD COLUMN IF NOT EXISTS position INTEGER DEFAULT 0;
+
 -- Seed com categorias padrão
 INSERT INTO categories (name) VALUES
   ('Psicologia Clínica'),
