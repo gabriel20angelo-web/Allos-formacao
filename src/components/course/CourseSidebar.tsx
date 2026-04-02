@@ -464,7 +464,7 @@ export default function CourseSidebar({
 
       {/* Desktop sidebar */}
       <aside
-        className="hidden lg:block w-[340px] xl:w-[400px] flex-shrink-0 h-[calc(100vh-64px)] sticky top-16 overflow-hidden relative z-10"
+        className="hidden lg:block w-[340px] xl:w-[400px] flex-shrink-0 h-screen sticky top-0 overflow-hidden relative z-10"
         style={{
           background: "linear-gradient(180deg, rgba(16,16,16,0.82) 0%, rgba(12,12,12,0.95) 100%)",
           backdropFilter: "blur(20px)",

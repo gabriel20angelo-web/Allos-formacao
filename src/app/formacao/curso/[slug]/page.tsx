@@ -351,7 +351,7 @@ export default function CoursePage() {
   // Loading skeleton with shimmer
   if (loading) {
     return (
-      <div className="relative flex pt-16" style={{ minHeight: "100vh" }}>
+      <div className="relative flex" style={{ minHeight: "100vh" }}>
         <CourseBackground />
         <div className="relative z-10 flex-1 p-6 space-y-4 max-w-4xl mx-auto">
           <div className="aspect-video w-full rounded-[16px] animate-shimmer" style={{
@@ -414,7 +414,7 @@ export default function CoursePage() {
     profile?.role === "admin";
 
   return (
-    <div className="relative flex pt-16" style={{ minHeight: "100vh" }}>
+    <div className="relative flex" style={{ minHeight: "100vh" }}>
       {/* Animated starfield + grain + orbs */}
       <CourseBackground />
 
