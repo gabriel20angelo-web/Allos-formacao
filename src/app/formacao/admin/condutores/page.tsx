@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
@@ -17,9 +18,11 @@ import {
   Trash2,
   MessageCircle,
   UserCircle,
+  Star,
+  BarChart3,
 } from "lucide-react";
 import { toast } from "sonner";
-import type { CertificadoCondutor } from "@/types";
+import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
 
 export default function CondutoresPage() {
   const { isAdmin } = useAuth();
@@ -35,19 +38,33 @@ export default function CondutoresPage() {
   const [editObservacoes, setEditObservacoes] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoCondutor | null>(null);
+  const [submissions, setSubmissions] = useState<CertificadoSubmission[]>([]);
+  const router = useRouter();
 
   useEffect(() => {
     async function fetch() {
       const client = createClient();
-      const { data } = await client
-        .from("certificado_condutores")
-        .select("*")
-        .order("nome");
-      if (data) setCondutores(data);
+      const [condRes, subRes] = await Promise.all([
+        client.from("certificado_condutores").select("*").order("nome"),
+        client.from("certificado_submissions").select("id,condutores,nota_condutor"),
+      ]);
+      if (condRes.data) setCondutores(condRes.data);
+      if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
       setLoading(false);
     }
     fetch().catch(() => setLoading(false));
   }, []);
+
+  const condutorStats = useMemo(() => {
+    const map = new Map<string, { total: number; soma: number }>();
+    submissions.forEach((s) => {
+      (s.condutores || []).forEach((nome) => {
+        const prev = map.get(nome) || { total: 0, soma: 0 };
+        map.set(nome, { total: prev.total + 1, soma: prev.soma + s.nota_condutor });
+      });
+    });
+    return map;
+  }, [submissions]);
 
   const filtered = condutores.filter((c) =>
     c.nome.toLowerCase().includes(search.toLowerCase())
@@ -277,6 +294,17 @@ export default function CondutoresPage() {
                   >
                     {item.ativo ? "Ativo" : "Inativo"}
                   </span>
+                  {(() => {
+                    const s = condutorStats.get(item.nome);
+                    if (!s || s.total === 0) return null;
+                    const media = (s.soma / s.total).toFixed(1);
+                    return (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium font-dm" style={{ background: "rgba(200,75,49,0.08)", color: "#C84B31", border: "1px solid rgba(200,75,49,0.15)" }}>
+                        <Star className="h-2.5 w-2.5" />
+                        {media} ({s.total})
+                      </span>
+                    );
+                  })()}
                 </div>
                 {item.telefone && (
                   <p className="text-[11px] text-cream/30 mt-0.5 font-dm">{item.telefone}</p>
@@ -289,6 +317,14 @@ export default function CondutoresPage() {
               </div>
 
               <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                <button
+                  onClick={() => router.push(`/formacao/admin/condutores/${item.id}`)}
+                  className="p-1.5 rounded-lg text-cream/20 hover:text-[#C84B31] hover:bg-[#C84B31]/10 transition-all"
+                  aria-label="Ver feedbacks"
+                  title="Ver feedbacks"
+                >
+                  <BarChart3 className="h-4 w-4" />
+                </button>
                 {item.telefone && (
                   <a
                     href={`https://wa.me/55${item.telefone.replace(/\D/g, "")}`}
