@@ -12,8 +12,7 @@ import {
   Award,
   User,
   LayoutDashboard,
-  ChevronLeft,
-  ChevronRight,
+  Menu,
   ExternalLink,
   LogOut,
 } from "lucide-react";
@@ -37,11 +36,11 @@ const externalNav = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, profile, isAdmin, isInstructor, signOut } = useAuth();
-  const [collapsed, setCollapsed] = useState(true);
+  const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved !== null) setCollapsed(saved !== "false");
+    if (saved === "true") setCollapsed(true);
   }, []);
 
   function toggle() {
@@ -68,18 +67,15 @@ export default function Sidebar() {
           backdropFilter: "blur(20px)",
         }}
       >
-        {/* Logo */}
-        <Link
-          href="/formacao"
-          className="flex items-center gap-2.5 h-[64px] px-5 flex-shrink-0"
-        >
-          <Image
-            src="/Icone_Allos_Verde.png"
-            alt="Allos"
-            width={28}
-            height={28}
-            className="flex-shrink-0"
-          />
+        {/* Top: hamburger + logo */}
+        <div className="flex items-center h-[64px] px-3 flex-shrink-0 gap-2">
+          <button
+            onClick={toggle}
+            className="w-10 h-10 rounded-xl flex items-center justify-center text-cream/50 hover:text-cream hover:bg-white/[0.06] transition-all flex-shrink-0"
+            aria-label={collapsed ? "Expandir menu" : "Minimizar menu"}
+          >
+            <Menu className="h-5 w-5" />
+          </button>
           <AnimatePresence>
             {!collapsed && (
               <motion.div
@@ -88,16 +84,27 @@ export default function Sidebar() {
                 exit={{ opacity: 0, width: 0 }}
                 className="overflow-hidden whitespace-nowrap"
               >
-                <span className="font-fraunces font-bold text-[15px] text-cream tracking-wide">
-                  Allos
-                </span>
-                <span className="block font-dm text-[8px] tracking-[.28em] text-accent uppercase -mt-0.5">
-                  Cursos
-                </span>
+                <Link href="/formacao" className="flex items-center gap-2">
+                  <Image
+                    src="/Icone_Allos_Verde.png"
+                    alt="Allos"
+                    width={26}
+                    height={26}
+                    className="flex-shrink-0"
+                  />
+                  <div>
+                    <span className="font-fraunces font-bold text-[15px] text-cream tracking-wide">
+                      Allos
+                    </span>
+                    <span className="block font-dm text-[8px] tracking-[.28em] text-accent uppercase -mt-0.5">
+                      Cursos
+                    </span>
+                  </div>
+                </Link>
               </motion.div>
             )}
           </AnimatePresence>
-        </Link>
+        </div>
 
         {/* Main nav */}
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
@@ -284,20 +291,6 @@ export default function Sidebar() {
             </Link>
           )}
 
-          <button
-            onClick={toggle}
-            className="flex items-center gap-3 rounded-xl px-3 py-2.5 w-full text-cream/30 hover:text-cream/60 hover:bg-white/[0.04] transition-all"
-            title={collapsed ? "Expandir menu" : "Minimizar menu"}
-          >
-            {collapsed ? (
-              <ChevronRight className="h-[18px] w-[18px] flex-shrink-0 mx-auto" />
-            ) : (
-              <>
-                <ChevronLeft className="h-[18px] w-[18px] flex-shrink-0" />
-                <span className="font-dm text-xs">Minimizar</span>
-              </>
-            )}
-          </button>
         </div>
       </motion.aside>
 
@@ -359,12 +352,12 @@ export function useSidebarWidth() {
     window.addEventListener("resize", checkMobile);
 
     const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved !== null) setCollapsed(saved !== "false");
+    if (saved === "true") setCollapsed(true);
 
     // Listen for storage changes (same tab)
     const interval = setInterval(() => {
-      const val = localStorage.getItem(STORAGE_KEY);
-      setCollapsed(val !== "false");
+      const current = localStorage.getItem(STORAGE_KEY) === "true";
+      setCollapsed(current);
     }, 200);
 
     return () => {
