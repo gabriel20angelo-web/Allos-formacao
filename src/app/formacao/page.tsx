@@ -38,7 +38,7 @@ export default function FormacaoPage() {
             instructor:profiles!courses_instructor_id_fkey(id, full_name, avatar_url)
           `)
           .eq("status", "published")
-          .neq("is_discontinued", true)
+          .or("is_discontinued.is.null,is_discontinued.eq.false")
           .order("display_order", { ascending: true })
           .order("created_at", { ascending: false });
 
