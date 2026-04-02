@@ -69,8 +69,11 @@ export default function SyncGroupsSection() {
 
   // Ranking
   type RankingPeriod = "week" | "month" | "quarter" | "semester" | "year";
+  type RankingType = "all" | "sync" | "async";
   const RANKING_LABELS: Record<RankingPeriod, string> = { week: "Semana", month: "Mês", quarter: "Trimestre", semester: "Semestre", year: "Ano" };
+  const RANKING_TYPE_LABELS: Record<RankingType, string> = { all: "Geral", sync: "Síncronos", async: "Assíncronos" };
   const [rankingPeriod, setRankingPeriod] = useState<RankingPeriod>("week");
+  const [rankingType, setRankingType] = useState<RankingType>("all");
   const [rankingData, setRankingData] = useState<{ nome: string; horas: number; count: number }[]>([]);
 
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 });
@@ -113,11 +116,11 @@ export default function SyncGroupsSection() {
 
   // Ranking fetch
   useEffect(() => {
-    fetch(`/api/ranking?period=${rankingPeriod}&_t=${Date.now()}`)
+    fetch(`/api/ranking?period=${rankingPeriod}&type=${rankingType}&_t=${Date.now()}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setRankingData(d); })
       .catch(() => setRankingData([]));
-  }, [rankingPeriod]);
+  }, [rankingPeriod, rankingType]);
 
   const schedule = useMemo(() => {
     const items: ScheduleItem[] = [];
@@ -414,12 +417,23 @@ export default function SyncGroupsSection() {
             className="mt-4 rounded-2xl overflow-hidden"
             style={{ border: "1px solid rgba(253,251,247,0.06)", background: "rgba(253,251,247,0.015)" }}
           >
-            <div className="flex items-center gap-3 px-5 py-3" style={{ borderBottom: "1px solid rgba(253,251,247,0.04)" }}>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 px-5 py-3" style={{ borderBottom: "1px solid rgba(253,251,247,0.04)" }}>
               <div className="flex items-center gap-1.5">
                 <Trophy size={13} style={{ color: "#C84B31" }} />
                 <span className="font-dm text-[11px] font-semibold" style={{ color: "rgba(253,251,247,0.5)" }}>Top participantes</span>
               </div>
-              <div className="flex gap-1 ml-auto">
+              <div className="flex gap-1 sm:ml-auto flex-wrap">
+                {(Object.keys(RANKING_TYPE_LABELS) as RankingType[]).map(t => (
+                  <button key={t} onClick={() => setRankingType(t)}
+                    className="font-dm text-[9px] px-2 py-0.5 rounded-full transition-all"
+                    style={{
+                      backgroundColor: rankingType === t ? "rgba(46,158,143,0.12)" : "transparent",
+                      color: rankingType === t ? "#2E9E8F" : "rgba(253,251,247,0.2)",
+                    }}>
+                    {RANKING_TYPE_LABELS[t]}
+                  </button>
+                ))}
+                <span className="w-px h-3 self-center mx-0.5" style={{ background: "rgba(253,251,247,0.08)" }} />
                 {(Object.keys(RANKING_LABELS) as RankingPeriod[]).map(p => (
                   <button key={p} onClick={() => setRankingPeriod(p)}
                     className="font-dm text-[9px] px-2 py-0.5 rounded-full transition-all"

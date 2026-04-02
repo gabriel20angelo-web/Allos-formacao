@@ -19,34 +19,159 @@ function getSince(period: string): Date {
   }
 }
 
+type RankEntry = { nome: string; count: number; horas: number }
+
+async function getSyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
+  const [subsRes, atRes] = await Promise.all([
+    sb.from('certificado_submissions').select('nome_completo, atividade_nome, created_at'),
+    sb.from('certificado_atividades').select('nome, carga_horaria'),
+  ])
+
+  if (subsRes.error || !Array.isArray(subsRes.data)) return []
+
+  const horasMap = new Map<string, number>()
+  if (Array.isArray(atRes.data)) {
+    atRes.data.forEach((a: { nome: string; carga_horaria: number }) =>
+      horasMap.set(a.nome.toLowerCase(), a.carga_horaria)
+    )
+  }
+
+  const filtered = subsRes.data.filter((s: { created_at: string }) => new Date(s.created_at) >= since)
+  const map = new Map<string, { count: number; horas: number }>()
+
+  filtered.forEach((s: { nome_completo: string; atividade_nome: string }) => {
+    const nome = s.nome_completo.trim()
+    const e = map.get(nome) || { count: 0, horas: 0 }
+    e.count++
+    e.horas += horasMap.get(s.atividade_nome?.toLowerCase()) || 2
+    map.set(nome, e)
+  })
+
+  return Array.from(map.entries()).map(([nome, d]) => ({ nome, count: d.count, horas: d.horas }))
+}
+
+async function getAsyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
+  // Get completed lesson progress since the period
+  const { data: progressData, error: progressError } = await sb
+    .from('lesson_progress')
+    .select('user_id, lesson_id, completed_at')
+    .eq('completed', true)
+    .gte('completed_at', since.toISOString())
+
+  if (progressError || !progressData || progressData.length === 0) return []
+
+  // Get lesson durations
+  const lessonIds = Array.from(new Set(progressData.map((p) => p.lesson_id)))
+  const { data: lessonsData } = await sb
+    .from('lessons')
+    .select('id, duration_minutes, section_id')
+    .in('id', lessonIds)
+
+  if (!lessonsData || lessonsData.length === 0) return []
+
+  // Get sections to find which course they belong to, filter out sync courses
+  const sectionIds = Array.from(new Set(lessonsData.map((l) => l.section_id)))
+  const { data: sectionsData } = await sb
+    .from('sections')
+    .select('id, course_id')
+    .in('id', sectionIds)
+
+  if (!sectionsData) return []
+
+  const courseIds = Array.from(new Set(sectionsData.map((s) => s.course_id)))
+  const { data: coursesData } = await sb
+    .from('courses')
+    .select('id, course_type')
+    .in('id', courseIds)
+    .neq('course_type', 'sync')
+
+  if (!coursesData) return []
+
+  // Build lookup maps
+  const validCourseIds = new Set(coursesData.map((c) => c.id))
+  const sectionToCourse = new Map(sectionsData.map((s) => [s.id, s.course_id]))
+  const lessonMap = new Map(lessonsData.map((l) => [l.id, l]))
+
+  // Filter lessons that belong to non-sync courses
+  const validLessonIds = new Set(
+    lessonsData
+      .filter((l) => {
+        const courseId = sectionToCourse.get(l.section_id)
+        return courseId && validCourseIds.has(courseId)
+      })
+      .map((l) => l.id)
+  )
+
+  // Get user profiles for names
+  const userIds = Array.from(new Set(progressData.map((p) => p.user_id)))
+  const { data: profiles } = await sb
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', userIds)
+
+  const nameMap = new Map((profiles || []).map((p) => [p.id, p.full_name]))
+
+  // Aggregate per user
+  const map = new Map<string, { count: number; horas: number }>()
+
+  progressData.forEach((p) => {
+    if (!validLessonIds.has(p.lesson_id)) return
+    const nome = nameMap.get(p.user_id)
+    if (!nome) return
+
+    const lesson = lessonMap.get(p.lesson_id)
+    const minutes = lesson?.duration_minutes || 0
+
+    const e = map.get(nome) || { count: 0, horas: 0 }
+    e.count++
+    e.horas += Math.round(minutes / 60 * 10) / 10 // round to 1 decimal
+    map.set(nome, e)
+  })
+
+  return Array.from(map.entries()).map(([nome, d]) => ({
+    nome,
+    count: d.count,
+    horas: Math.round(d.horas),
+  }))
+}
+
 export async function GET(req: NextRequest) {
   try {
     const period = req.nextUrl.searchParams.get('period') || 'week'
+    const type = req.nextUrl.searchParams.get('type') || 'all'
     const sb = await createServiceRoleClient()
+    const since = getSince(period)
 
-    const [subsRes, atRes] = await Promise.all([
-      sb.from('certificado_submissions').select('nome_completo, atividade_nome, created_at'),
-      sb.from('certificado_atividades').select('nome, carga_horaria'),
+    if (type === 'sync') {
+      const ranked = (await getSyncRanking(sb, since))
+        .sort((a, b) => b.horas - a.horas || b.count - a.count)
+        .slice(0, 5)
+      return NextResponse.json(ranked)
+    }
+
+    if (type === 'async') {
+      const ranked = (await getAsyncRanking(sb, since))
+        .sort((a, b) => b.horas - a.horas || b.count - a.count)
+        .slice(0, 5)
+      return NextResponse.json(ranked)
+    }
+
+    // type === 'all': combine both
+    const [syncData, asyncData] = await Promise.all([
+      getSyncRanking(sb, since),
+      getAsyncRanking(sb, since),
     ])
 
-    if (subsRes.error || !Array.isArray(subsRes.data)) return NextResponse.json([])
+    const combined = new Map<string, { count: number; horas: number }>()
 
-    const since = getSince(period)
-    const horasMap = new Map<string, number>()
-    if (Array.isArray(atRes.data)) atRes.data.forEach((a: { nome: string; carga_horaria: number }) => horasMap.set(a.nome.toLowerCase(), a.carga_horaria))
+    for (const entry of [...syncData, ...asyncData]) {
+      const e = combined.get(entry.nome) || { count: 0, horas: 0 }
+      e.count += entry.count
+      e.horas += entry.horas
+      combined.set(entry.nome, e)
+    }
 
-    const filtered = subsRes.data.filter((s: { created_at: string }) => new Date(s.created_at) >= since)
-    const map = new Map<string, { count: number; horas: number }>()
-
-    filtered.forEach((s: { nome_completo: string; atividade_nome: string }) => {
-      const nome = s.nome_completo.trim()
-      const e = map.get(nome) || { count: 0, horas: 0 }
-      e.count++
-      e.horas += horasMap.get(s.atividade_nome?.toLowerCase()) || 2
-      map.set(nome, e)
-    })
-
-    const ranked = Array.from(map.entries())
+    const ranked = Array.from(combined.entries())
       .map(([nome, d]) => ({ nome, count: d.count, horas: d.horas }))
       .sort((a, b) => b.horas - a.horas || b.count - a.count)
       .slice(0, 5)
