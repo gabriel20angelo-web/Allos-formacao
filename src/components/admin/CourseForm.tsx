@@ -64,6 +64,11 @@ const SYNC_STEPS: { id: Step; label: string }[] = [
   { id: "content", label: "Conteúdo" },
 ];
 
+const COLLECTION_STEPS: { id: Step; label: string }[] = [
+  { id: "info", label: "Informações" },
+  { id: "content", label: "Conteúdo" },
+];
+
 // Helper: extract YouTube video ID from URL
 function extractYouTubeId(url: string): string | null {
   const patterns = [
@@ -187,9 +192,11 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const [instructorId, setInstructorId] = useState("");
   const [status, setStatus] = useState<"draft" | "published" | "archived">("draft");
   const [whatsappNumber, setWhatsappNumber] = useState("");
-  const [courseType, setCourseType] = useState<"async" | "sync">("async");
+  const [courseType, setCourseType] = useState<"async" | "sync" | "collection">("async");
+  const [certLessonsRequired, setCertLessonsRequired] = useState<number | null>(null);
+  const [certHoursValue, setCertHoursValue] = useState<number | null>(null);
   const [defaultLessonThumbnail, setDefaultLessonThumbnail] = useState("");
-  const STEPS = courseType === "sync" ? SYNC_STEPS : ALL_STEPS;
+  const STEPS = courseType === "collection" ? COLLECTION_STEPS : courseType === "sync" ? SYNC_STEPS : ALL_STEPS;
   const [learningPoints, setLearningPoints] = useState<string[]>([""]);
 
   // Content
@@ -329,6 +336,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       setCertificateBodyText(course.certificate_body_text || "");
       setWhatsappNumber(course.whatsapp_number || "");
       setCourseType(course.course_type || "async");
+      setCertLessonsRequired(course.cert_lessons_required ?? null);
+      setCertHoursValue(course.cert_hours_value ?? null);
       setDefaultLessonThumbnail(course.default_lesson_thumbnail_url || "");
       setLearningPoints(course.learning_points || [""]);
 
@@ -404,6 +413,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       certificate_body_text: certificateBodyText || null,
       whatsapp_number: whatsappNumber || null,
       course_type: courseType,
+      cert_lessons_required: courseType === "collection" ? (certLessonsRequired || null) : null,
+      cert_hours_value: courseType === "collection" ? (certHoursValue || null) : null,
       default_lesson_thumbnail_url: defaultLessonThumbnail || null,
       learning_points: learningPoints.filter((p) => p.trim()),
     };
@@ -969,18 +980,57 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             label="Tipo do curso"
             value={courseType}
             onChange={(e) => {
-              const val = e.target.value as "async" | "sync";
+              const val = e.target.value as "async" | "sync" | "collection";
               setCourseType(val);
               markDirty();
-              if (val === "sync" && ["exam", "certificate"].includes(step)) {
+              if ((val === "sync" || val === "collection") && ["exam", "certificate"].includes(step)) {
                 setStep("content");
               }
             }}
             options={[
               { value: "async", label: "Gravado (assíncrono)" },
               { value: "sync", label: "Ao vivo + Gravação (síncrono)" },
+              { value: "collection", label: "Coleção (certificado por volume)" },
             ]}
           />
+
+          {courseType === "collection" && (
+            <div
+              className="p-5 rounded-[12px] space-y-4"
+              style={{ background: "rgba(46,158,143,0.04)", border: "1px solid rgba(46,158,143,0.15)" }}
+            >
+              <p className="text-sm font-medium text-teal">Configuração da coleção</p>
+              <p className="text-xs text-cream/35">
+                O aluno ganha um certificado a cada X aulas assistidas. É acumulativo: assistiu mais X, ganha outro.
+              </p>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-xs text-cream/50 block mb-1.5">Aulas para certificado</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={certLessonsRequired ?? ""}
+                    onChange={(e) => { setCertLessonsRequired(parseInt(e.target.value) || null); markDirty(); }}
+                    placeholder="Ex: 10"
+                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                  />
+                </div>
+                <div>
+                  <label className="text-xs text-cream/50 block mb-1.5">Horas por certificado</label>
+                  <input
+                    type="number"
+                    min="1"
+                    value={certHoursValue ?? ""}
+                    onChange={(e) => { setCertHoursValue(parseInt(e.target.value) || null); markDirty(); }}
+                    placeholder="Ex: 20"
+                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none"
+                    style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
 
           <Input
             label="WhatsApp de contato"

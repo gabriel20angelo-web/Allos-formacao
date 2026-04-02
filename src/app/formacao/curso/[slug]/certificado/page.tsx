@@ -71,12 +71,74 @@ export default function CertificadoPage() {
         .eq("slug", slug)
         .single();
 
-      if (!courseData || !courseData.certificate_enabled || courseData.course_type === "sync") {
+      if (!courseData || courseData.course_type === "sync") {
+        router.push(`/formacao/curso/${slug}`);
+        return;
+      }
+
+      const isCollection = courseData.course_type === "collection";
+
+      // Collections don't need certificate_enabled flag — they have their own cert logic
+      if (!isCollection && !courseData.certificate_enabled) {
         router.push(`/formacao/curso/${slug}`);
         return;
       }
       setCourse(courseData);
 
+      if (isCollection) {
+        // Collection certificate logic: count completed lessons and existing certificates
+        const certReq = courseData.cert_lessons_required || 10;
+
+        // Get all lesson IDs for this course
+        const { data: sectionsData } = await client
+          .from("sections")
+          .select("id, lessons(id)")
+          .eq("course_id", courseData.id);
+
+        const allLessonIds = (sectionsData || []).flatMap(
+          (s) => ((s.lessons as { id: string }[]) || []).map((l) => l.id)
+        );
+
+        // Count completed lessons
+        const { data: progressData } = await client
+          .from("lesson_progress")
+          .select("lesson_id")
+          .eq("user_id", user.id)
+          .eq("completed", true)
+          .in("lesson_id", allLessonIds.length > 0 ? allLessonIds : ["_none_"]);
+
+        const completedCount = progressData?.length || 0;
+
+        // Count existing certificates for this collection
+        const { data: existingCerts } = await client
+          .from("certificates")
+          .select("id, certificate_code, issued_at")
+          .eq("course_id", courseData.id)
+          .eq("user_id", user.id)
+          .order("issued_at", { ascending: false });
+
+        const issuedCount = existingCerts?.length || 0;
+        const certsEarned = Math.floor(completedCount / certReq);
+        const available = certsEarned - issuedCount;
+
+        if (available <= 0) {
+          const remaining = certReq - (completedCount % certReq);
+          toast.error(`Assista mais ${remaining} aula${remaining !== 1 ? "s" : ""} para o próximo certificado.`);
+          router.push(`/formacao/curso/${slug}`);
+          return;
+        }
+
+        // Show the most recent certificate if exists, otherwise allow generation
+        if (existingCerts && existingCerts.length > 0) {
+          // Set the latest cert for display, but allow generating new ones
+          setCertificate(existingCerts[0]);
+        }
+
+        setLoading(false);
+        return;
+      }
+
+      // Standard async course logic
       const { data: existing } = await client
         .from("certificates")
         .select("*")
@@ -254,8 +316,10 @@ export default function CertificadoPage() {
       ctx.stroke();
 
       // Body text
-      const baseHours = course.certificate_hours || Math.round((course.total_duration_minutes || 0) / 60);
-      const hours = baseHours + extraHours;
+      const baseHours = course.course_type === "collection"
+        ? (course.cert_hours_value || 20)
+        : (course.certificate_hours || Math.round((course.total_duration_minutes || 0) / 60));
+      const hours = course.course_type === "collection" ? baseHours : baseHours + extraHours;
       const extenso = horasExtenso(hours);
       const dateStr = formatDatePtBR(certificate.issued_at);
 
@@ -402,7 +466,8 @@ export default function CertificadoPage() {
     );
   }
 
-  // Not yet generated
+  // Not yet generated (or collection with available certs to generate)
+  const isCollection = course?.course_type === "collection";
   if (!certificate) {
     return (
       <div className="max-w-lg mx-auto px-6 py-20 text-center">
@@ -419,9 +484,10 @@ export default function CertificadoPage() {
           Emitir certificado
         </h1>
         <p className="text-cream/45 mb-8">
-          Parabéns pela conclusão do curso{" "}
-          <span className="font-medium text-cream">{course?.title}</span>!
-          Clique abaixo para gerar seu certificado.
+          {isCollection
+            ? <>Você atingiu o número de aulas necessário em <span className="font-medium text-cream">{course?.title}</span>! Clique abaixo para gerar seu certificado de {course?.cert_hours_value || 20} horas.</>
+            : <>Parabéns pela conclusão do curso <span className="font-medium text-cream">{course?.title}</span>! Clique abaixo para gerar seu certificado.</>
+          }
         </p>
         <Button size="lg" loading={generating} onClick={generateCertificate}>
           <Award className="h-5 w-5" />

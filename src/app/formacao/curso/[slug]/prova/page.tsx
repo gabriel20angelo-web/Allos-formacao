@@ -41,7 +41,7 @@ export default function ProvaPage() {
         .eq("slug", slug)
         .single();
 
-      if (!course || !course.exam_enabled || course.course_type === "sync") {
+      if (!course || !course.exam_enabled || course.course_type === "sync" || course.course_type === "collection") {
         router.push(`/formacao/curso/${slug}`);
         return;
       }

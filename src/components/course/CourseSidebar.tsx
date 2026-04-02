@@ -24,6 +24,8 @@ interface CourseSidebarProps {
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (lessonId: string) => void;
   isSync?: boolean;
+  isCollection?: boolean;
+  certLessonsRequired?: number;
 }
 
 /* Circular progress ring */
@@ -81,6 +83,8 @@ export default function CourseSidebar({
   onSelectLesson,
   onToggleComplete,
   isSync,
+  isCollection,
+  certLessonsRequired,
 }: CourseSidebarProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [expandedSections, setExpandedSections] = useState<Set<string>>(
@@ -138,7 +142,30 @@ export default function CourseSidebar({
     <div className="flex flex-col h-full">
       {/* ─── Progress header with ring (or sync header) ─── */}
       <div className="p-5 relative overflow-hidden">
-        {isSync ? (
+        {isCollection ? (
+          <>
+            <div
+              className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none blur-2xl"
+              style={{ background: `rgba(200,75,49,${0.04 + (completedLessons / (certLessonsRequired || 10)) * 0.08})` }}
+            />
+            <div className="relative z-10 flex items-center gap-4">
+              <ProgressRing percent={certLessonsRequired ? ((completedLessons % certLessonsRequired) / certLessonsRequired) * 100 : 0} size={64} />
+              <div className="flex-1 min-w-0">
+                <p className="font-dm font-semibold text-[15px] text-cream">
+                  {completedLessons} aula{completedLessons !== 1 ? "s" : ""} concluída{completedLessons !== 1 ? "s" : ""}
+                </p>
+                <p className="text-[13px] text-cream/35 mt-0.5">
+                  {certLessonsRequired
+                    ? `${certLessonsRequired - (completedLessons % certLessonsRequired)} para o próximo certificado`
+                    : `${totalLessons} aulas disponíveis`}
+                </p>
+                <p className="text-xs font-medium mt-1.5" style={{ color: "#C84B31" }}>
+                  Coleção
+                </p>
+              </div>
+            </div>
+          </>
+        ) : isSync ? (
           <>
             <div
               className="absolute -top-6 -right-6 w-28 h-28 rounded-full pointer-events-none blur-2xl"
@@ -425,7 +452,7 @@ export default function CourseSidebar({
         }}
       >
         <ListVideo className="h-5 w-5" />
-        <span className="tabular-nums">{isSync ? `${totalLessons} aulas` : `${completedLessons}/${totalLessons}`}</span>
+        <span className="tabular-nums">{isSync || isCollection ? `${completedLessons}/${totalLessons}` : `${completedLessons}/${totalLessons}`}</span>
       </motion.button>
 
       {/* Mobile drawer */}

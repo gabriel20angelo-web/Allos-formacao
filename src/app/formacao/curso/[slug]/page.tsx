@@ -322,13 +322,14 @@ export default function CoursePage() {
   );
 
   const isSync = course?.course_type === "sync";
+  const isCollection = course?.course_type === "collection";
 
   useEffect(() => {
     async function checkCompletion() {
       if (!allComplete || !enrollment || !course || !user) return;
       if (enrollment.status === "completed") return;
-      // Sync courses don't auto-complete — completion is managed differently
-      if (course.course_type === "sync") return;
+      // Sync and collection courses don't auto-complete
+      if (course.course_type === "sync" || course.course_type === "collection") return;
 
       const client = createClient();
       await client
@@ -544,8 +545,64 @@ export default function CoursePage() {
             />
           </div>
 
-          {/* Completion celebration (hidden for sync courses) */}
-          {allComplete && !isSync && (
+          {/* Collection certificate progress */}
+          {isCollection && course.cert_lessons_required && (
+            (() => {
+              const req = course.cert_lessons_required!;
+              const lessonsInNextCert = completedLessons % req;
+              const certsEarned = Math.floor(completedLessons / req);
+              const canCertify = certsEarned > 0;
+              return (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  className="mt-4 p-5 rounded-[16px] relative overflow-hidden"
+                  style={{
+                    background: canCertify
+                      ? "linear-gradient(135deg, rgba(46,158,143,0.1), rgba(200,75,49,0.05))"
+                      : "rgba(255,255,255,0.02)",
+                    border: canCertify
+                      ? "1px solid rgba(46,158,143,0.2)"
+                      : "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <div className="flex flex-col sm:flex-row sm:items-center gap-4">
+                    <div className="flex-1">
+                      <p className="font-dm text-sm font-medium text-cream mb-1">
+                        {completedLessons} aula{completedLessons !== 1 ? "s" : ""} concluída{completedLessons !== 1 ? "s" : ""}
+                      </p>
+                      <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div
+                          className="h-full rounded-full transition-all duration-500"
+                          style={{
+                            width: `${(lessonsInNextCert / req) * 100}%`,
+                            background: "linear-gradient(90deg, #2E9E8F, #C84B31)",
+                          }}
+                        />
+                      </div>
+                      <p className="font-dm text-xs text-cream/40 mt-1.5">
+                        {canCertify
+                          ? `${certsEarned} certificado${certsEarned > 1 ? "s" : ""} disponível${certsEarned > 1 ? "is" : ""} · ${req - lessonsInNextCert} aula${req - lessonsInNextCert !== 1 ? "s" : ""} para o próximo`
+                          : `${req - lessonsInNextCert} aula${req - lessonsInNextCert !== 1 ? "s" : ""} para o primeiro certificado`
+                        }
+                      </p>
+                    </div>
+                    {canCertify && (
+                      <Button
+                        onClick={() => router.push(`/formacao/curso/${course.slug}/certificado`)}
+                      >
+                        <Award className="h-4 w-4" />
+                        Emitir certificado
+                      </Button>
+                    )}
+                  </div>
+                </motion.div>
+              );
+            })()
+          )}
+
+          {/* Completion celebration (hidden for sync and collection courses) */}
+          {allComplete && !isSync && !isCollection && (
             <motion.div
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -648,11 +705,13 @@ export default function CoursePage() {
         sections={sections}
         currentLessonId={currentLesson.id}
         progressMap={progressMap}
-        totalLessons={requiredTotal}
-        completedLessons={requiredCompleted}
+        totalLessons={isCollection ? totalLessons : requiredTotal}
+        completedLessons={isCollection ? completedLessons : requiredCompleted}
         onSelectLesson={setCurrentLesson}
         onToggleComplete={toggleComplete}
         isSync={isSync}
+        isCollection={isCollection}
+        certLessonsRequired={course?.cert_lessons_required ?? undefined}
       />
     </div>
   );

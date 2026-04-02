@@ -4,7 +4,7 @@ export type CourseStatus = "draft" | "published" | "archived";
 
 export type VideoSource = "youtube" | "google_drive" | "other";
 
-export type CourseType = "async" | "sync";
+export type CourseType = "async" | "sync" | "collection";
 
 export type EnrollmentStatus = "active" | "completed" | "cancelled";
 
@@ -44,6 +44,8 @@ export interface Course {
   whatsapp_number: string | null;
   learning_points: string[] | null;
   course_type: CourseType;
+  cert_lessons_required?: number | null;
+  cert_hours_value?: number | null;
   display_order?: number;
   featured?: boolean;
   featured_label?: string | null;
