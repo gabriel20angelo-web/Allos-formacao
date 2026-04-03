@@ -1,10 +1,9 @@
 "use client";
 
 import { useState, useRef, useCallback } from "react";
-import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { toast } from "sonner";
-import { Upload, Link as LinkIcon, X, Loader2, Image as ImageIcon } from "lucide-react";
+import { Upload, Link as LinkIcon, X, Loader2, ImageOff } from "lucide-react";
 
 interface ImageUploadProps {
   label?: string;
@@ -12,7 +11,6 @@ interface ImageUploadProps {
   onChange: (url: string) => void;
   bucket?: string;
   folder?: string;
-  /** Aspect ratio hint for the preview, e.g. "9/13" or "16/9" */
   aspectHint?: string;
   placeholder?: string;
 }
@@ -29,6 +27,7 @@ export default function ImageUpload({
   const [mode, setMode] = useState<"url" | "upload">("url");
   const [uploading, setUploading] = useState(false);
   const [dragOver, setDragOver] = useState(false);
+  const [previewError, setPreviewError] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
   const handleFileUpload = useCallback(
@@ -44,6 +43,7 @@ export default function ImageUpload({
       }
 
       setUploading(true);
+      setPreviewError(false);
       try {
         const client = createClient();
         const ext = file.name.split(".").pop() || "jpg";
@@ -84,8 +84,22 @@ export default function ImageUpload({
     [handleFileUpload]
   );
 
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback(() => {
+    setDragOver(false);
+  }, []);
+
   return (
-    <div className="flex flex-col gap-1.5">
+    <div
+      className="flex flex-col gap-1.5"
+      onDragOver={handleDragOver}
+      onDragLeave={handleDragLeave}
+      onDrop={handleDrop}
+    >
       {label && (
         <label className="text-sm font-medium text-cream/70">{label}</label>
       )}
@@ -118,12 +132,25 @@ export default function ImageUpload({
         </button>
       </div>
 
-      {mode === "url" ? (
-        /* URL input */
+      {/* Drag overlay */}
+      {dragOver && (
+        <div
+          className="flex flex-col items-center justify-center gap-2 p-6 rounded-xl"
+          style={{
+            background: "rgba(200,75,49,0.06)",
+            border: "1.5px dashed rgba(200,75,49,0.4)",
+          }}
+        >
+          <Upload className="h-6 w-6 text-accent" />
+          <span className="text-xs text-accent">Solte a imagem aqui</span>
+        </div>
+      )}
+
+      {!dragOver && mode === "url" && (
         <input
           type="text"
           value={value}
-          onChange={(e) => onChange(e.target.value)}
+          onChange={(e) => { onChange(e.target.value); setPreviewError(false); }}
           placeholder={placeholder}
           className="w-full px-4 py-2.5 rounded-[10px] text-cream placeholder:text-cream/25 transition-all duration-250 ease-out"
           style={{
@@ -142,27 +169,15 @@ export default function ImageUpload({
             e.currentTarget.style.boxShadow = "none";
           }}
         />
-      ) : (
-        /* Upload dropzone */
+      )}
+
+      {!dragOver && mode === "upload" && (
         <div
-          onDragOver={(e) => {
-            e.preventDefault();
-            setDragOver(true);
-          }}
-          onDragLeave={() => setDragOver(false)}
-          onDrop={handleDrop}
           onClick={() => !uploading && fileRef.current?.click()}
-          className={`
-            relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl cursor-pointer transition-all
-            ${dragOver ? "ring-2 ring-accent/50" : ""}
-          `}
+          className="relative flex flex-col items-center justify-center gap-2 p-6 rounded-xl cursor-pointer transition-all"
           style={{
-            background: dragOver
-              ? "rgba(200,75,49,0.06)"
-              : "rgba(255,255,255,0.03)",
-            border: `1.5px dashed ${
-              dragOver ? "rgba(200,75,49,0.4)" : "rgba(255,255,255,0.12)"
-            }`,
+            background: "rgba(255,255,255,0.03)",
+            border: "1.5px dashed rgba(255,255,255,0.12)",
           }}
         >
           {uploading ? (
@@ -174,7 +189,7 @@ export default function ImageUpload({
             <>
               <Upload className="h-6 w-6 text-cream/30" />
               <span className="text-xs text-cream/50 text-center">
-                Arraste uma imagem ou clique para selecionar
+                Clique para selecionar ou arraste uma imagem
               </span>
               <span className="text-[10px] text-cream/25">
                 PNG, JPG, WebP — máx. 10MB
@@ -196,28 +211,38 @@ export default function ImageUpload({
         </div>
       )}
 
-      {/* Preview */}
+      {/* Preview — uses native <img> to avoid next/image domain issues */}
       {value && (
         <div className="relative mt-2 group">
-          <div
-            className="relative rounded-xl overflow-hidden"
-            style={{ aspectRatio: aspectHint || "16/9", maxHeight: "200px" }}
-          >
-            <Image
-              src={value}
-              alt="Preview"
-              fill
-              className="object-cover"
-              sizes="400px"
-              onError={(e) => {
-                (e.target as HTMLImageElement).style.display = "none";
+          {!previewError ? (
+            <div
+              className="relative rounded-xl overflow-hidden bg-black/20"
+              style={{ aspectRatio: aspectHint || "16/9", maxHeight: "220px" }}
+            >
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={value}
+                alt="Preview"
+                className="w-full h-full object-cover"
+                onError={() => setPreviewError(true)}
+              />
+            </div>
+          ) : (
+            <div
+              className="flex items-center gap-3 px-4 py-3 rounded-xl"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
               }}
-            />
-          </div>
+            >
+              <ImageOff className="h-5 w-5 text-cream/25 flex-shrink-0" />
+              <span className="text-xs text-cream/40 truncate">{value}</span>
+            </div>
+          )}
           {/* Remove button */}
           <button
             type="button"
-            onClick={() => onChange("")}
+            onClick={() => { onChange(""); setPreviewError(false); }}
             className="absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center bg-black/60 text-white/70 hover:text-white hover:bg-red-600/80 transition-all opacity-0 group-hover:opacity-100"
           >
             <X className="h-3.5 w-3.5" />
