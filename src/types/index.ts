@@ -47,6 +47,7 @@ export interface Course {
   is_discontinued?: boolean;
   cert_lessons_required?: number | null;
   cert_hours_value?: number | null;
+  is_structured?: boolean;
   display_order?: number;
   featured?: boolean;
   featured_label?: string | null;

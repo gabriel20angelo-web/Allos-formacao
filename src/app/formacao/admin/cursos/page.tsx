@@ -25,6 +25,7 @@ import {
   EyeOff,
   Sparkles,
   Trash2,
+  GraduationCap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
@@ -259,6 +260,24 @@ export default function AdminCursosPage() {
       )
     );
     toast.success(newFeatured ? "Curso marcado como destaque!" : "Destaque removido.");
+  }
+
+  async function toggleStructured(course: EnrichedCourse) {
+    const newVal = !course.is_structured;
+    const { error } = await createClient()
+      .from("courses")
+      .update({ is_structured: newVal })
+      .eq("id", course.id);
+
+    if (error) {
+      toast.error("Erro ao atualizar curso.");
+      return;
+    }
+
+    setCourses((prev) =>
+      prev.map((c) => (c.id === course.id ? { ...c, is_structured: newVal } : c))
+    );
+    toast.success(newVal ? "Marcado como curso estruturado." : "Removido dos cursos estruturados.");
   }
 
   async function updateFeaturedLabel(courseId: string, label: string) {
@@ -689,6 +708,14 @@ export default function AdminCursosPage() {
                                 Síncrono
                               </span>
                             )}
+                            {course.is_structured && (
+                              <span
+                                className="flex-shrink-0 text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full"
+                                style={{ background: "rgba(200,75,49,0.12)", color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}
+                              >
+                                Curso
+                              </span>
+                            )}
                             {warnings.length > 0 && (
                               <div className="relative group flex-shrink-0">
                                 <div
@@ -786,6 +813,18 @@ export default function AdminCursosPage() {
                             ) : (
                               <Eye className="h-4 w-4" />
                             )}
+                          </button>
+                        )}
+
+                        {/* Structured toggle */}
+                        {course.status === "published" && (
+                          <button
+                            onClick={() => toggleStructured(course)}
+                            className="p-2 transition-colors rounded-lg hover:bg-white/[.03]"
+                            style={{ color: course.is_structured ? "#C84B31" : "rgba(253,251,247,0.2)" }}
+                            title={course.is_structured ? "Remover dos cursos estruturados" : "Marcar como curso estruturado"}
+                          >
+                            <GraduationCap className="h-4 w-4" />
                           </button>
                         )}
 

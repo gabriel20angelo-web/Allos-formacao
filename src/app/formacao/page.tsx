@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
-import { BookOpen, Bell, Mail, Archive } from "lucide-react";
+import { BookOpen, Bell, Mail, Archive, GraduationCap, Sparkles, Star, Users, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -13,6 +13,7 @@ import SyncGroupsSection from "@/components/formacao/SyncGroupsSection";
 import CategoryCarousel from "@/components/formacao/CategoryCarousel";
 import CourseBackground from "@/components/course/CourseBackground";
 import { toast } from "sonner";
+import { formatDuration } from "@/lib/utils/format";
 import type { Course } from "@/types";
 
 
@@ -98,19 +99,30 @@ export default function FormacaoPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Group courses by category
+  // Separate structured courses from the rest
+  const structuredCourses = useMemo(
+    () => courses.filter((c) => c.is_structured),
+    [courses]
+  );
+
+  const regularCourses = useMemo(
+    () => courses.filter((c) => !c.is_structured),
+    [courses]
+  );
+
+  // Featured courses (from all courses, not just regular)
+  const featuredCourses = useMemo(
+    () => courses.filter((c) => c.featured),
+    [courses]
+  );
+
+  // Group regular courses by category (excluding featured)
   const coursesByCategory = useMemo(() => {
     const grouped: { title: string; courses: Course[] }[] = [];
 
-    // Featured courses first
-    const featured = courses.filter((c) => c.featured);
-    if (featured.length > 0) {
-      grouped.push({ title: "Em destaque", courses: featured });
-    }
-
     // Group by each known category
     for (const cat of categories) {
-      const catCourses = courses.filter((c) => c.category === cat);
+      const catCourses = regularCourses.filter((c) => c.category === cat);
       if (catCourses.length > 0) {
         grouped.push({ title: cat, courses: catCourses });
       }
@@ -118,15 +130,15 @@ export default function FormacaoPage() {
 
     // Courses without a known category go into "Sem categoria"
     const categorized = new Set(categories);
-    const uncategorized = courses.filter(
-      (c) => !c.featured && (!c.category || !categorized.has(c.category))
+    const uncategorized = regularCourses.filter(
+      (c) => !c.category || !categorized.has(c.category)
     );
     if (uncategorized.length > 0) {
       grouped.push({ title: "Sem categoria", courses: uncategorized });
     }
 
     return grouped;
-  }, [courses, categories]);
+  }, [regularCourses, categories]);
 
   async function handleNotifySubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -153,6 +165,262 @@ export default function FormacaoPage() {
       <div className="relative z-10">
         <HeroFormacao />
 
+        {/* Featured courses - premium gold section */}
+        {!loading && featuredCourses.length > 0 && (
+          <section className="pt-10 sm:pt-14 pb-6">
+            <div className="max-w-[1000px] mx-auto px-5 sm:px-6 md:px-8">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="text-center mb-8"
+              >
+                <div className="flex items-center justify-center gap-2 mb-2">
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                  <h2 className="font-fraunces font-bold text-lg sm:text-xl text-cream tracking-tight">
+                    Em destaque
+                  </h2>
+                  <Sparkles className="h-4 w-4 text-amber-400" />
+                </div>
+              </motion.div>
+
+              <div
+                className={`grid gap-5 sm:gap-6 ${
+                  featuredCourses.length === 1
+                    ? "grid-cols-1 max-w-[360px] mx-auto"
+                    : featuredCourses.length === 2
+                    ? "grid-cols-1 sm:grid-cols-2 max-w-[680px] mx-auto"
+                    : "grid-cols-1 sm:grid-cols-2 lg:grid-cols-3"
+                }`}
+              >
+                {featuredCourses.map((course, i) => (
+                  <motion.div
+                    key={course.id}
+                    initial={{ opacity: 0, y: 16 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.1, duration: 0.5 }}
+                  >
+                    <Link href={`/formacao/curso/${course.slug}`}>
+                      <div
+                        className="group relative aspect-[9/13] rounded-2xl overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03]"
+                        style={{
+                          border: "1px solid rgba(212,175,55,0.25)",
+                          boxShadow: "0 0 30px rgba(212,175,55,0.08), 0 0 60px rgba(212,175,55,0.04)",
+                        }}
+                      >
+                        {/* Image */}
+                        {course.thumbnail_url ? (
+                          <img
+                            src={course.thumbnail_url}
+                            alt={course.title}
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                          />
+                        ) : (
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background: "linear-gradient(135deg, #1a1508 0%, #0F0F0F 100%)",
+                            }}
+                          />
+                        )}
+
+                        {/* Gradient overlay */}
+                        <div
+                          className="absolute inset-0 transition-opacity duration-300"
+                          style={{
+                            background: "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.8) 100%)",
+                          }}
+                        />
+
+                        {/* Gold shimmer on top edge */}
+                        <div
+                          className="absolute top-0 left-0 right-0 h-[1px]"
+                          style={{
+                            background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.5) 30%, rgba(255,215,0,0.7) 50%, rgba(212,175,55,0.5) 70%, transparent 100%)",
+                          }}
+                        />
+
+                        {/* Featured label */}
+                        {course.featured_label && (
+                          <div className="absolute top-3 left-3 z-10">
+                            <span
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                              style={{
+                                background: "linear-gradient(135deg, rgba(212,175,55,0.2), rgba(184,134,11,0.15))",
+                                color: "#d4af37",
+                                border: "1px solid rgba(212,175,55,0.3)",
+                                backdropFilter: "blur(8px)",
+                              }}
+                            >
+                              <Sparkles className="h-2.5 w-2.5" />
+                              {course.featured_label}
+                            </span>
+                          </div>
+                        )}
+
+                        {/* Bottom content */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
+                          <h3 className="font-fraunces font-bold text-base sm:text-lg text-cream leading-tight line-clamp-2 mb-1.5">
+                            {course.title}
+                          </h3>
+                          {course.instructor && (
+                            <p className="text-xs text-cream/50 font-dm mb-3">
+                              {course.instructor.full_name}
+                            </p>
+                          )}
+
+                          {/* Meta row */}
+                          <div className="flex items-center gap-3 text-[11px] text-amber-200/40 mb-3">
+                            {course.average_rating !== undefined && course.average_rating > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Star className="h-3 w-3 fill-amber-400 text-amber-400" />
+                                <span className="text-amber-200/70 font-medium">
+                                  {course.average_rating.toFixed(1)}
+                                </span>
+                              </span>
+                            )}
+                            {course.enrollments_count !== undefined && course.enrollments_count > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {course.enrollments_count}
+                              </span>
+                            )}
+                            {course.total_duration_minutes && course.total_duration_minutes > 0 && (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3 w-3" />
+                                {formatDuration(course.total_duration_minutes)}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Gold CTA */}
+                          <span
+                            className="inline-flex items-center justify-center w-full py-2.5 rounded-xl text-xs font-dm font-semibold transition-all opacity-0 group-hover:opacity-100 duration-300"
+                            style={{
+                              background: "linear-gradient(135deg, #d4af37, #b8860b)",
+                              color: "#1a1508",
+                              boxShadow: "0 4px 20px rgba(212,175,55,0.3)",
+                            }}
+                          >
+                            {course.is_free ? "Começar grátis →" : "Ver curso →"}
+                          </span>
+                        </div>
+
+                        {/* Hover gold border glow */}
+                        <div
+                          className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                          style={{
+                            border: "1.5px solid rgba(212,175,55,0.4)",
+                            boxShadow: "inset 0 0 30px rgba(212,175,55,0.06), 0 0 40px rgba(212,175,55,0.12)",
+                          }}
+                        />
+                      </div>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Divider */}
+            <div className="max-w-[1200px] mx-auto px-6 mt-10">
+              <div
+                className="h-[1px]"
+                style={{
+                  background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.15) 30%, rgba(212,175,55,0.25) 50%, rgba(212,175,55,0.15) 70%, transparent 100%)",
+                }}
+              />
+            </div>
+          </section>
+        )}
+
+        {/* Structured courses section */}
+        {!loading && structuredCourses.length > 0 && (
+          <section className="pt-10 sm:pt-14 pb-4">
+            <div className="px-5 sm:px-6 md:px-8 max-w-[1400px] mx-auto">
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.5 }}
+                className="mb-6"
+              >
+                <div className="flex items-center gap-2.5 mb-1.5">
+                  <div
+                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    style={{
+                      background: "linear-gradient(135deg, rgba(200,75,49,0.15), rgba(163,61,39,0.08))",
+                      border: "1px solid rgba(200,75,49,0.2)",
+                    }}
+                  >
+                    <GraduationCap className="h-3.5 w-3.5 text-accent" />
+                  </div>
+                  <h2 className="font-fraunces font-bold text-lg text-cream tracking-tight">
+                    Cursos
+                  </h2>
+                </div>
+                <p className="text-xs text-cream/35 font-dm ml-[38px]">
+                  Conteúdos estruturados com começo, meio e fim
+                </p>
+              </motion.div>
+
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+                {structuredCourses.map((course, i) => (
+                  <motion.div
+                    key={course.id}
+                    initial={{ opacity: 0, y: 10 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: i * 0.06, duration: 0.4 }}
+                  >
+                    <Link href={`/formacao/curso/${course.slug}`}>
+                      <div
+                        className="group relative aspect-[9/13] rounded-2xl overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-[1.03]"
+                        style={{
+                          border: "1px solid rgba(200,75,49,0.15)",
+                        }}
+                      >
+                        {course.thumbnail_url ? (
+                          <img
+                            src={course.thumbnail_url}
+                            alt={course.title}
+                            className="absolute inset-0 w-full h-full object-cover"
+                          />
+                        ) : (
+                          <div
+                            className="absolute inset-0"
+                            style={{
+                              background: "linear-gradient(135deg, rgba(200,75,49,0.12), rgba(30,28,26,0.95))",
+                            }}
+                          />
+                        )}
+                        <div
+                          className="absolute inset-0"
+                          style={{
+                            background: "linear-gradient(to top, rgba(10,9,8,0.85) 0%, rgba(10,9,8,0.3) 50%, transparent 100%)",
+                          }}
+                        />
+                        <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
+                          <p className="font-fraunces font-bold text-sm text-cream leading-tight line-clamp-2">
+                            {course.title}
+                          </p>
+                          {course.instructor && (
+                            <p className="text-[11px] text-cream/40 mt-1 font-dm">
+                              {course.instructor.full_name}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </Link>
+                  </motion.div>
+                ))}
+              </div>
+            </div>
+
+            {/* Divider between sections */}
+            <div className="max-w-[1200px] mx-auto px-6 mt-10">
+              <div className="divider-gradient" />
+            </div>
+          </section>
+        )}
+
         {/* Category carousels */}
         <section className="py-10 sm:py-14">
           {loading ? (
@@ -173,14 +441,38 @@ export default function FormacaoPage() {
               ))}
             </div>
           ) : coursesByCategory.length > 0 ? (
-            coursesByCategory.map((group, i) => (
-              <CategoryCarousel
-                key={group.title}
-                title={group.title}
-                courses={group.courses}
-                index={i}
-              />
-            ))
+            <>
+              {/* Section header for recordings */}
+              {structuredCourses.length > 0 && (
+                <div className="px-5 sm:px-6 md:px-8 max-w-[1400px] mx-auto mb-6">
+                  <div className="flex items-center gap-2.5 mb-1.5">
+                    <div
+                      className="w-7 h-7 rounded-lg flex items-center justify-center"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.08)",
+                      }}
+                    >
+                      <BookOpen className="h-3.5 w-3.5 text-cream/40" />
+                    </div>
+                    <h2 className="font-fraunces font-bold text-lg text-cream/70 tracking-tight">
+                      Gravações de encontros
+                    </h2>
+                  </div>
+                  <p className="text-xs text-cream/25 font-dm ml-[38px]">
+                    Encontros gravados organizados por tema
+                  </p>
+                </div>
+              )}
+              {coursesByCategory.map((group, i) => (
+                <CategoryCarousel
+                  key={group.title}
+                  title={group.title}
+                  courses={group.courses}
+                  index={i}
+                />
+              ))}
+            </>
           ) : (
             // Empty state
             <motion.div
