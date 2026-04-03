@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
-import { FileText, Download, MessageSquare } from "lucide-react";
+import { FileText, Download, MessageSquare, StickyNote, Info } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatFileSize } from "@/lib/utils/format";
 import { createClient } from "@/lib/supabase/client";
@@ -16,7 +16,7 @@ interface CourseContentTabsProps {
   courseId: string;
 }
 
-type Tab = "description" | "files" | "comments";
+type Tab = "description" | "files" | "comments" | "notes";
 
 const FILE_ICONS: Record<string, string> = {
   "application/pdf": "PDF",
@@ -34,6 +34,9 @@ export default function CourseContentTabs({
 }: CourseContentTabsProps) {
   const [activeTab, setActiveTab] = useState<Tab>("description");
   const [commentCount, setCommentCount] = useState<number | null>(null);
+  const [noteText, setNoteText] = useState("");
+  const [noteSaved, setNoteSaved] = useState(false);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Fetch comment count
   useEffect(() => {
@@ -47,6 +50,42 @@ export default function CourseContentTabs({
     }
     fetchCount();
   }, [lesson.id]);
+
+  // Load note from localStorage when lesson changes
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(`allos_note_${lesson.id}`);
+      setNoteText(saved || "");
+    } catch {
+      setNoteText("");
+    }
+    setNoteSaved(false);
+  }, [lesson.id]);
+
+  // Auto-save note with debounce
+  const handleNoteChange = useCallback(
+    (value: string) => {
+      setNoteText(value);
+      setNoteSaved(false);
+      if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
+      saveTimeoutRef.current = setTimeout(() => {
+        try {
+          if (value.trim()) {
+            localStorage.setItem(`allos_note_${lesson.id}`, value);
+          } else {
+            localStorage.removeItem(`allos_note_${lesson.id}`);
+          }
+          setNoteSaved(true);
+        } catch {
+          // localStorage full or unavailable
+        }
+      }, 500);
+    },
+    [lesson.id]
+  );
+
+  // Check if this lesson has a note
+  const hasNote = noteText.trim().length > 0;
 
   const hasDescription = !!lesson.description;
   const fileCount = lesson.attachments?.length || 0;
@@ -67,6 +106,11 @@ export default function CourseContentTabs({
       id: "comments",
       label: `Comentários${commentCount !== null ? ` (${commentCount})` : ""}`,
       icon: <MessageSquare className="h-4 w-4" />,
+    },
+    {
+      id: "notes",
+      label: `Anotações${hasNote ? " ●" : ""}`,
+      icon: <StickyNote className="h-4 w-4" />,
     },
   ];
 
@@ -186,6 +230,46 @@ export default function CourseContentTabs({
               lessonId={lesson.id}
               onCountChange={(count) => setCommentCount(count)}
             />
+          )}
+
+          {activeTab === "notes" && (
+            <div>
+              <div
+                className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-4"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <Info className="h-3.5 w-3.5 text-cream/30 mt-0.5 flex-shrink-0" />
+                <p className="font-dm text-[11px] text-cream/30 leading-relaxed">
+                  Suas anotações ficam salvas apenas neste navegador (armazenamento local). Se você limpar os dados do navegador, cookies ou trocar de dispositivo, elas serão perdidas.
+                </p>
+              </div>
+              <textarea
+                value={noteText}
+                onChange={(e) => handleNoteChange(e.target.value)}
+                placeholder="Escreva suas anotações sobre esta aula..."
+                className="w-full min-h-[180px] p-4 rounded-xl text-sm text-cream placeholder-cream/20 font-dm leading-relaxed resize-y outline-none transition-all"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1.5px solid rgba(255,255,255,0.08)",
+                }}
+                onFocus={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(200,75,49,0.3)";
+                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(200,75,49,0.06)";
+                }}
+                onBlur={(e) => {
+                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                  e.currentTarget.style.boxShadow = "none";
+                }}
+              />
+              <div className="flex items-center justify-end mt-2">
+                <span className="font-dm text-[11px] text-cream/25">
+                  {noteSaved ? "Salvo" : noteText.trim() ? "Salvando..." : ""}
+                </span>
+              </div>
+            </div>
           )}
         </motion.div>
       </AnimatePresence>
