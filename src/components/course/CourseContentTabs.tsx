@@ -4,10 +4,11 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
 import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
-import { FileText, Download, MessageSquare, StickyNote, Info } from "lucide-react";
+import { FileText, Download, MessageSquare, StickyNote, Cloud } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { formatFileSize } from "@/lib/utils/format";
 import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
 import CommentSection from "@/components/community/CommentSection";
 import type { Lesson } from "@/types";
 
@@ -32,11 +33,14 @@ export default function CourseContentTabs({
   lesson,
   courseId,
 }: CourseContentTabsProps) {
+  const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("description");
   const [commentCount, setCommentCount] = useState<number | null>(null);
   const [noteText, setNoteText] = useState("");
-  const [noteSaved, setNoteSaved] = useState(false);
+  const [noteStatus, setNoteStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const [noteLoading, setNoteLoading] = useState(false);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const noteIdRef = useRef<string | null>(null);
 
   // Fetch comment count
   useEffect(() => {
@@ -51,40 +55,71 @@ export default function CourseContentTabs({
     fetchCount();
   }, [lesson.id]);
 
-  // Load note from localStorage when lesson changes
+  // Load note from Supabase when lesson changes
   useEffect(() => {
-    try {
-      const saved = localStorage.getItem(`allos_note_${lesson.id}`);
-      setNoteText(saved || "");
-    } catch {
-      setNoteText("");
-    }
-    setNoteSaved(false);
-  }, [lesson.id]);
+    if (!user) { setNoteText(""); return; }
+    let cancelled = false;
+    setNoteLoading(true);
+    setNoteStatus("idle");
+    noteIdRef.current = null;
+
+    (async () => {
+      const client = createClient();
+      const { data } = await client
+        .from("lesson_notes")
+        .select("id, content")
+        .eq("user_id", user.id)
+        .eq("lesson_id", lesson.id)
+        .single();
+      if (cancelled) return;
+      setNoteText(data?.content || "");
+      noteIdRef.current = data?.id || null;
+      setNoteLoading(false);
+    })();
+
+    return () => { cancelled = true; };
+  }, [lesson.id, user]);
 
   // Auto-save note with debounce
   const handleNoteChange = useCallback(
     (value: string) => {
       setNoteText(value);
-      setNoteSaved(false);
+      setNoteStatus("saving");
       if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
-      saveTimeoutRef.current = setTimeout(() => {
-        try {
-          if (value.trim()) {
-            localStorage.setItem(`allos_note_${lesson.id}`, value);
+      saveTimeoutRef.current = setTimeout(async () => {
+        if (!user) return;
+        const client = createClient();
+
+        if (value.trim()) {
+          if (noteIdRef.current) {
+            // Update existing
+            await client
+              .from("lesson_notes")
+              .update({ content: value, updated_at: new Date().toISOString() })
+              .eq("id", noteIdRef.current);
           } else {
-            localStorage.removeItem(`allos_note_${lesson.id}`);
+            // Insert new
+            const { data } = await client
+              .from("lesson_notes")
+              .upsert(
+                { user_id: user.id, lesson_id: lesson.id, content: value },
+                { onConflict: "user_id,lesson_id" }
+              )
+              .select("id")
+              .single();
+            if (data) noteIdRef.current = data.id;
           }
-          setNoteSaved(true);
-        } catch {
-          // localStorage full or unavailable
+        } else if (noteIdRef.current) {
+          // Delete empty note
+          await client.from("lesson_notes").delete().eq("id", noteIdRef.current);
+          noteIdRef.current = null;
         }
-      }, 500);
+        setNoteStatus("saved");
+      }, 800);
     },
-    [lesson.id]
+    [lesson.id, user]
   );
 
-  // Check if this lesson has a note
   const hasNote = noteText.trim().length > 0;
 
   const hasDescription = !!lesson.description;
@@ -234,41 +269,40 @@ export default function CourseContentTabs({
 
           {activeTab === "notes" && (
             <div>
-              <div
-                className="flex items-start gap-2 px-3 py-2.5 rounded-lg mb-4"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
-              >
-                <Info className="h-3.5 w-3.5 text-cream/30 mt-0.5 flex-shrink-0" />
-                <p className="font-dm text-[11px] text-cream/30 leading-relaxed">
-                  Suas anotações ficam salvas apenas neste navegador (armazenamento local). Se você limpar os dados do navegador, cookies ou trocar de dispositivo, elas serão perdidas.
+              {!user ? (
+                <p className="text-cream/40 text-sm italic py-4">
+                  Faça login para usar as anotações.
                 </p>
-              </div>
-              <textarea
-                value={noteText}
-                onChange={(e) => handleNoteChange(e.target.value)}
-                placeholder="Escreva suas anotações sobre esta aula..."
-                className="w-full min-h-[180px] p-4 rounded-xl text-sm text-cream placeholder-cream/20 font-dm leading-relaxed resize-y outline-none transition-all"
-                style={{
-                  background: "rgba(255,255,255,0.03)",
-                  border: "1.5px solid rgba(255,255,255,0.08)",
-                }}
-                onFocus={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(200,75,49,0.3)";
-                  e.currentTarget.style.boxShadow = "0 0 0 3px rgba(200,75,49,0.06)";
-                }}
-                onBlur={(e) => {
-                  e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
-                  e.currentTarget.style.boxShadow = "none";
-                }}
-              />
-              <div className="flex items-center justify-end mt-2">
-                <span className="font-dm text-[11px] text-cream/25">
-                  {noteSaved ? "Salvo" : noteText.trim() ? "Salvando..." : ""}
-                </span>
-              </div>
+              ) : noteLoading ? (
+                <div className="h-[180px] rounded-xl animate-pulse" style={{ background: "rgba(255,255,255,0.03)" }} />
+              ) : (
+                <>
+                  <textarea
+                    value={noteText}
+                    onChange={(e) => handleNoteChange(e.target.value)}
+                    placeholder="Escreva suas anotações sobre esta aula..."
+                    className="w-full min-h-[180px] p-4 rounded-xl text-sm text-cream placeholder-cream/20 font-dm leading-relaxed resize-y outline-none transition-all"
+                    style={{
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1.5px solid rgba(255,255,255,0.08)",
+                    }}
+                    onFocus={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(200,75,49,0.3)";
+                      e.currentTarget.style.boxShadow = "0 0 0 3px rgba(200,75,49,0.06)";
+                    }}
+                    onBlur={(e) => {
+                      e.currentTarget.style.borderColor = "rgba(255,255,255,0.08)";
+                      e.currentTarget.style.boxShadow = "none";
+                    }}
+                  />
+                  <div className="flex items-center justify-end gap-1.5 mt-2">
+                    {noteStatus === "saved" && <Cloud className="h-3 w-3 text-teal/50" />}
+                    <span className="font-dm text-[11px] text-cream/25">
+                      {noteStatus === "saving" ? "Salvando..." : noteStatus === "saved" ? "Salvo na nuvem" : ""}
+                    </span>
+                  </div>
+                </>
+              )}
             </div>
           )}
         </motion.div>
