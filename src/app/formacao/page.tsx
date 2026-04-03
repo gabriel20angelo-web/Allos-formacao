@@ -333,80 +333,148 @@ export default function FormacaoPage() {
           </section>
         )}
 
-        {/* Structured courses section */}
+        {/* Structured courses section — premium highlight */}
         {!loading && structuredCourses.length > 0 && (
-          <section className="pt-10 sm:pt-14 pb-4">
-            <div className="px-5 sm:px-6 md:px-8 max-w-[1400px] mx-auto">
+          <section className="pt-10 sm:pt-14 pb-4 relative">
+            {/* Subtle premium background glow */}
+            <div
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: "radial-gradient(ellipse 80% 60% at 50% 20%, rgba(212,175,55,0.04) 0%, transparent 70%)",
+              }}
+            />
+
+            <div className="relative px-5 sm:px-6 md:px-8 max-w-[1400px] mx-auto">
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="mb-6"
+                className="mb-8"
               >
-                <div className="flex items-center gap-2.5 mb-1.5">
+                <div className="flex items-center gap-3 mb-2">
                   <div
-                    className="w-7 h-7 rounded-lg flex items-center justify-center"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center"
                     style={{
-                      background: "linear-gradient(135deg, rgba(200,75,49,0.15), rgba(163,61,39,0.08))",
-                      border: "1px solid rgba(200,75,49,0.2)",
+                      background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(184,134,11,0.08))",
+                      border: "1px solid rgba(212,175,55,0.25)",
                     }}
                   >
-                    <GraduationCap className="h-3.5 w-3.5 text-accent" />
+                    <GraduationCap className="h-4 w-4 text-amber-400" />
                   </div>
-                  <h2 className="font-fraunces font-bold text-lg text-cream tracking-tight">
+                  <h2
+                    className="font-fraunces font-bold text-xl sm:text-2xl tracking-tight"
+                    style={{
+                      background: "linear-gradient(135deg, #FDFBF7 0%, #d4af37 100%)",
+                      WebkitBackgroundClip: "text",
+                      WebkitTextFillColor: "transparent",
+                    }}
+                  >
                     Cursos
                   </h2>
                 </div>
-                <p className="text-xs text-cream/35 font-dm ml-[38px]">
+                <p className="text-sm text-cream/45 font-dm ml-[44px]">
                   Conteúdos estruturados com começo, meio e fim
                 </p>
+                {/* Gold accent line */}
+                <div
+                  className="mt-4 ml-[44px] h-[1px] w-32"
+                  style={{
+                    background: "linear-gradient(90deg, rgba(212,175,55,0.4) 0%, transparent 100%)",
+                  }}
+                />
               </motion.div>
 
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3 sm:gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-5">
                 {structuredCourses.map((course, i) => (
                   <motion.div
                     key={course.id}
-                    initial={{ opacity: 0, y: 10 }}
+                    initial={{ opacity: 0, y: 14 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: i * 0.06, duration: 0.4 }}
+                    transition={{ delay: i * 0.08, duration: 0.5 }}
                   >
                     <Link href={`/formacao/curso/${course.slug}`}>
                       <div
-                        className="group relative aspect-[9/13] rounded-2xl overflow-hidden cursor-pointer transition-transform duration-300 hover:scale-[1.03]"
+                        className="group relative aspect-[3/4] rounded-2xl overflow-hidden cursor-pointer transition-all duration-500 hover:scale-[1.03]"
                         style={{
-                          border: "1px solid rgba(200,75,49,0.15)",
+                          border: "1px solid rgba(212,175,55,0.18)",
+                          boxShadow: "0 0 24px rgba(212,175,55,0.05), 0 0 48px rgba(212,175,55,0.03)",
                         }}
                       >
                         {course.thumbnail_url ? (
                           <img
                             src={course.thumbnail_url}
                             alt={course.title}
-                            className="absolute inset-0 w-full h-full object-cover"
+                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
                           />
                         ) : (
                           <div
                             className="absolute inset-0"
                             style={{
-                              background: "linear-gradient(135deg, rgba(200,75,49,0.12), rgba(30,28,26,0.95))",
+                              background: "linear-gradient(135deg, #1a1508 0%, #0F0F0F 100%)",
                             }}
                           />
                         )}
+
+                        {/* Gradient overlay */}
                         <div
-                          className="absolute inset-0"
+                          className="absolute inset-0 transition-opacity duration-300"
                           style={{
-                            background: "linear-gradient(to top, rgba(10,9,8,0.85) 0%, rgba(10,9,8,0.3) 50%, transparent 100%)",
+                            background: "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.15) 40%, rgba(0,0,0,0.82) 100%)",
                           }}
                         />
-                        <div className="absolute bottom-0 left-0 right-0 p-3 sm:p-4">
-                          <p className="font-fraunces font-bold text-sm text-cream leading-tight line-clamp-2">
+
+                        {/* Top gold shimmer line */}
+                        <div
+                          className="absolute top-0 left-0 right-0 h-[1px]"
+                          style={{
+                            background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.35) 30%, rgba(255,215,0,0.5) 50%, rgba(212,175,55,0.35) 70%, transparent 100%)",
+                          }}
+                        />
+
+                        {/* Structured badge */}
+                        <div className="absolute top-3 left-3 z-10">
+                          <span
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[9px] font-bold uppercase tracking-wider"
+                            style={{
+                              background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(184,134,11,0.1))",
+                              color: "#d4af37",
+                              border: "1px solid rgba(212,175,55,0.25)",
+                              backdropFilter: "blur(8px)",
+                            }}
+                          >
+                            <GraduationCap className="h-2.5 w-2.5" />
+                            Curso
+                          </span>
+                        </div>
+
+                        {/* Bottom content */}
+                        <div className="absolute bottom-0 left-0 right-0 p-4 sm:p-5">
+                          <p className="font-fraunces font-bold text-base sm:text-lg text-cream leading-tight line-clamp-2 mb-1">
                             {course.title}
                           </p>
                           {course.instructor && (
-                            <p className="text-[11px] text-cream/40 mt-1 font-dm">
+                            <p className="text-[11px] text-amber-200/40 mt-1 font-dm">
                               {course.instructor.full_name}
                             </p>
                           )}
+
+                          {/* Duration info */}
+                          {course.total_duration_minutes && course.total_duration_minutes > 0 && (
+                            <div className="flex items-center gap-1 mt-2 text-[10px] text-amber-200/30">
+                              <Clock className="h-2.5 w-2.5" />
+                              {formatDuration(course.total_duration_minutes)}
+                            </div>
+                          )}
                         </div>
+
+                        {/* Hover gold border glow */}
+                        <div
+                          className="absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity duration-500 pointer-events-none"
+                          style={{
+                            border: "1.5px solid rgba(212,175,55,0.35)",
+                            boxShadow: "inset 0 0 20px rgba(212,175,55,0.05), 0 0 30px rgba(212,175,55,0.1)",
+                          }}
+                        />
                       </div>
                     </Link>
                   </motion.div>
@@ -414,9 +482,14 @@ export default function FormacaoPage() {
               </div>
             </div>
 
-            {/* Divider between sections */}
+            {/* Gold-tinted divider */}
             <div className="max-w-[1200px] mx-auto px-6 mt-10">
-              <div className="divider-gradient" />
+              <div
+                className="h-[1px]"
+                style={{
+                  background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.12) 30%, rgba(212,175,55,0.2) 50%, rgba(212,175,55,0.12) 70%, transparent 100%)",
+                }}
+              />
             </div>
           </section>
         )}

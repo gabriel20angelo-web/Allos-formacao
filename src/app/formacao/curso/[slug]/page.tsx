@@ -22,6 +22,8 @@ import {
   CheckCircle2,
   Clock,
   Lock,
+  Sparkles,
+  GraduationCap,
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment } from "@/types";
 import { formatDuration } from "@/lib/utils/format";
@@ -209,6 +211,7 @@ export default function CourseOverviewPage() {
   const longDescription = course.long_description || "";
   const isDescriptionLong = description.length > 200;
   const isEnrolled = !!enrollment;
+  const isPremium = course.featured || course.is_structured;
 
   return (
     <div className="relative min-h-screen">
@@ -231,7 +234,9 @@ export default function CourseOverviewPage() {
             <div
               className="absolute inset-0"
               style={{
-                background: "linear-gradient(135deg, #1C1414 0%, #2a1a1a 50%, #0F0F0F 100%)",
+                background: isPremium
+                  ? "linear-gradient(135deg, #1a1508 0%, #1C1414 50%, #0F0F0F 100%)"
+                  : "linear-gradient(135deg, #1C1414 0%, #2a1a1a 50%, #0F0F0F 100%)",
               }}
             />
           )}
@@ -252,6 +257,32 @@ export default function CourseOverviewPage() {
             }}
           />
 
+          {/* Premium gold ambient glow */}
+          {isPremium && (
+            <>
+              <div
+                className="absolute inset-0 pointer-events-none"
+                style={{
+                  background: "radial-gradient(ellipse 50% 60% at 15% 80%, rgba(212,175,55,0.08) 0%, transparent 70%)",
+                }}
+              />
+              {/* Top gold shimmer line */}
+              <div
+                className="absolute top-0 left-0 right-0 h-[2px] z-20"
+                style={{
+                  background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.4) 20%, rgba(255,215,0,0.6) 50%, rgba(212,175,55,0.4) 80%, transparent 100%)",
+                }}
+              />
+              {/* Bottom gold accent */}
+              <div
+                className="absolute bottom-0 left-0 right-0 h-[1px] z-20"
+                style={{
+                  background: "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.2) 30%, rgba(212,175,55,0.15) 70%, transparent 100%)",
+                }}
+              />
+            </>
+          )}
+
           {/* Content overlay */}
           <div className="absolute inset-0 flex flex-col justify-center px-6 sm:px-10 md:px-16 max-w-3xl">
             {/* Back button */}
@@ -269,12 +300,49 @@ export default function CourseOverviewPage() {
               </Link>
             </motion.div>
 
+            {/* Premium badge */}
+            {isPremium && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05 }}
+                className="mb-4"
+              >
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
+                  style={{
+                    background: "linear-gradient(135deg, rgba(212,175,55,0.15), rgba(184,134,11,0.1))",
+                    color: "#d4af37",
+                    border: "1px solid rgba(212,175,55,0.3)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  {course.featured ? (
+                    <>
+                      <Sparkles className="h-3 w-3" />
+                      {course.featured_label || "Em destaque"}
+                    </>
+                  ) : (
+                    <>
+                      <GraduationCap className="h-3 w-3" />
+                      Curso estruturado
+                    </>
+                  )}
+                </span>
+              </motion.div>
+            )}
+
             {/* Course title */}
             <motion.h1
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.1 }}
-              className="font-fraunces font-bold text-2xl sm:text-3xl md:text-4xl text-white leading-tight mb-4"
+              className="font-fraunces font-bold text-2xl sm:text-3xl md:text-4xl leading-tight mb-4"
+              style={isPremium ? {
+                background: "linear-gradient(135deg, #FDFBF7 30%, #d4af37 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              } : { color: "white" }}
             >
               {course.title}
             </motion.h1>
@@ -308,17 +376,19 @@ export default function CourseOverviewPage() {
               transition={{ duration: 0.5, delay: 0.3 }}
               className="flex items-center gap-3 mb-6"
             >
-              <span className="font-dm text-sm text-white/60">
+              <span className={`font-dm text-sm ${isPremium ? "text-amber-200/60" : "text-white/60"}`}>
                 {totalLessons} conteúdo{totalLessons !== 1 ? "s" : ""}
                 {isEnrolled && ` — ${progressPercent}%`}
               </span>
               {isEnrolled && (
-                <div className="w-32 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.15)" }}>
+                <div className="w-32 h-1.5 rounded-full overflow-hidden" style={{ background: isPremium ? "rgba(212,175,55,0.15)" : "rgba(255,255,255,0.15)" }}>
                   <div
                     className="h-full rounded-full transition-all duration-700"
                     style={{
                       width: `${progressPercent}%`,
-                      background: "linear-gradient(90deg, #2E9E8F, #3ECFBE)",
+                      background: isPremium
+                        ? "linear-gradient(90deg, #d4af37, #f0d060)"
+                        : "linear-gradient(90deg, #2E9E8F, #3ECFBE)",
                     }}
                   />
                 </div>
@@ -332,15 +402,30 @@ export default function CourseOverviewPage() {
               transition={{ duration: 0.5, delay: 0.4 }}
               className="flex items-center gap-5"
             >
-              <Button onClick={handleAssistir} size="md">
-                <Play className="h-4 w-4" />
-                Assistir
-              </Button>
+              {isPremium ? (
+                <button
+                  onClick={handleAssistir}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:scale-[1.03] active:scale-[0.97]"
+                  style={{
+                    background: "linear-gradient(135deg, #d4af37, #b8860b)",
+                    color: "#1a1508",
+                    boxShadow: "0 4px 20px rgba(212,175,55,0.3)",
+                  }}
+                >
+                  <Play className="h-4 w-4" />
+                  Assistir
+                </button>
+              ) : (
+                <Button onClick={handleAssistir} size="md">
+                  <Play className="h-4 w-4" />
+                  Assistir
+                </Button>
+              )}
 
               {course.certificate_enabled && isEnrolled && (
                 <Link
                   href={`/formacao/curso/${slug}/certificado`}
-                  className="flex flex-col items-center gap-1 text-white/50 hover:text-white/80 transition-colors"
+                  className={`flex flex-col items-center gap-1 transition-colors ${isPremium ? "text-amber-400/50 hover:text-amber-400/80" : "text-white/50 hover:text-white/80"}`}
                 >
                   <Award className="h-6 w-6" />
                   <span className="font-dm text-xs">Certificado</span>
@@ -353,7 +438,7 @@ export default function CourseOverviewPage() {
         {/* ─── Tabs + Content ─── */}
         <div className="max-w-4xl mx-auto px-5 sm:px-8 py-8">
           {/* Tabs */}
-          <div className="flex gap-6 border-b mb-8" style={{ borderColor: "rgba(255,255,255,0.08)" }}>
+          <div className="flex gap-6 border-b mb-8" style={{ borderColor: isPremium ? "rgba(212,175,55,0.1)" : "rgba(255,255,255,0.08)" }}>
             <button
               onClick={() => setActiveTab("conteudos")}
               className={`pb-3 font-dm font-semibold text-sm transition-colors relative ${
@@ -362,7 +447,7 @@ export default function CourseOverviewPage() {
             >
               Conteúdos
               {activeTab === "conteudos" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: "#2E9E8F" }} />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: isPremium ? "#d4af37" : "#2E9E8F" }} />
               )}
             </button>
             <button
@@ -373,7 +458,7 @@ export default function CourseOverviewPage() {
             >
               Sobre
               {activeTab === "sobre" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: "#2E9E8F" }} />
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: isPremium ? "#d4af37" : "#2E9E8F" }} />
               )}
             </button>
           </div>
