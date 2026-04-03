@@ -545,6 +545,7 @@ export default function CalendarioPage() {
   }
 
   async function updateSlot(id: string, fields: Partial<FormacaoSlot>) {
+    const currentSlot = slots.find((s) => s.id === id);
     const supabase = createClient();
     const { data, error } = await supabase
       .from("formacao_slots")
@@ -554,6 +555,25 @@ export default function CalendarioPage() {
       .single();
     if (error || !data) { toast.error("Erro ao atualizar slot."); return; }
     setSlots((prev) => prev.map((s) => (s.id === id ? data : s)));
+
+    // Log status change (fire-and-forget)
+    if (fields.status && currentSlot && fields.status !== currentSlot.status) {
+      const condutorIds = alocacoes
+        .filter((a) => a.slot_id === id)
+        .map((a) => a.condutor_id);
+      fetch("/api/certificados/formacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "log_status_change",
+          slot_id: id,
+          status_anterior: currentSlot.status,
+          status_novo: fields.status,
+          atividade_nome: data.atividade_nome,
+          condutor_ids: condutorIds,
+        }),
+      }).catch(() => {});
+    }
   }
 
   async function deleteSlot(id: string) {
@@ -589,16 +609,61 @@ export default function CalendarioPage() {
   // ─── Nova Semana ──────────────────────────────────────────────────────────
   async function handleNovaSemana() {
     const supabase = createClient();
-    const activeSlotIds = slots.filter((s) => s.ativo).map((s) => s.id);
-    if (activeSlotIds.length === 0) { toast.error("Nenhum slot ativo."); setResetModalOpen(false); return; }
+    const activeSlots = slots.filter((s) => s.ativo);
+    if (activeSlots.length === 0) { toast.error("Nenhum slot ativo."); setResetModalOpen(false); return; }
+
+    // 1. Build snapshot data from current state
+    const now = new Date();
+    const day = now.getDay(); // 0=Sun, 1=Mon...
+    const diffToMon = day === 0 ? -6 : 1 - day;
+    const monday = new Date(now);
+    monday.setDate(now.getDate() + diffToMon);
+    const friday = new Date(monday);
+    friday.setDate(monday.getDate() + 4);
+    const fmt = (d: Date) => d.toISOString().split("T")[0];
+
+    const snapshotSlots = activeSlots.map((s) => ({
+      slot_id: s.id,
+      dia_semana: s.dia_semana,
+      horario_hora: s.formacao_horarios?.hora || "",
+      atividade_nome: s.atividade_nome,
+      status: s.status,
+      meet_link: s.meet_link,
+      condutores: alocacoes
+        .filter((a) => a.slot_id === s.id)
+        .map((a) => ({
+          id: a.condutor_id,
+          nome: a.certificado_condutores?.nome || "",
+        })),
+    }));
+
+    // 2. Save snapshot via API (before reset)
+    try {
+      const res = await fetch("/api/certificados/formacao", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          action: "create_snapshot",
+          semana_inicio: fmt(monday),
+          semana_fim: fmt(friday),
+          slots: snapshotSlots,
+        }),
+      });
+      if (!res.ok) throw new Error("Snapshot failed");
+    } catch {
+      toast.error("Erro ao salvar snapshot da semana. Reset cancelado.");
+      return;
+    }
+
+    // 3. Reset statuses
     const { error } = await supabase
       .from("formacao_slots")
       .update({ status: "pendente" })
-      .in("id", activeSlotIds);
+      .in("id", activeSlots.map((s) => s.id));
     if (error) { toast.error("Erro ao resetar semana."); return; }
     setSlots((prev) => prev.map((s) => (s.ativo ? { ...s, status: "pendente" } : s)));
     setResetModalOpen(false);
-    toast.success("Nova semana iniciada! Todos os status foram resetados.");
+    toast.success("Semana salva e nova semana iniciada!");
   }
 
   // ─── Horario CRUD ─────────────────────────────────────────────────────────

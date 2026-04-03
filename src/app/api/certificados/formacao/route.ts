@@ -98,6 +98,29 @@ export async function GET(req: NextRequest) {
       );
     }
 
+    if (type === "snapshots") {
+      const { data, error } = await sb
+        .from("formacao_snapshots")
+        .select("*, formacao_snapshot_slots(*)")
+        .order("semana_inicio", { ascending: false });
+      if (error) throw error;
+      return NextResponse.json(data, { headers: corsHeaders });
+    }
+
+    if (type === "slot_logs") {
+      let query = sb
+        .from("formacao_slot_logs")
+        .select("*")
+        .order("changed_at", { ascending: false });
+      const from = req.nextUrl.searchParams.get("from");
+      const to = req.nextUrl.searchParams.get("to");
+      if (from) query = query.gte("changed_at", from);
+      if (to) query = query.lte("changed_at", to);
+      const { data, error } = await query;
+      if (error) throw error;
+      return NextResponse.json(data, { headers: corsHeaders });
+    }
+
     if (type === "cronograma_publico") {
       const { data: config } = await sb
         .from("formacao_cronograma")
@@ -341,6 +364,52 @@ export async function POST(req: NextRequest) {
         });
         if (error) throw error;
       }
+      return NextResponse.json({ success: true }, { headers: corsHeaders });
+    }
+
+    // --- Snapshots & Logs ---
+
+    if (action === "create_snapshot") {
+      const { data: snapshot, error: snapErr } = await sb
+        .from("formacao_snapshots")
+        .insert({
+          semana_inicio: body.semana_inicio,
+          semana_fim: body.semana_fim,
+        })
+        .select()
+        .single();
+      if (snapErr) throw snapErr;
+
+      const slotRows = (body.slots || []).map((s: Record<string, unknown>) => ({
+        snapshot_id: snapshot.id,
+        slot_id: s.slot_id,
+        dia_semana: s.dia_semana,
+        horario_hora: s.horario_hora,
+        atividade_nome: s.atividade_nome,
+        status: s.status,
+        meet_link: s.meet_link,
+        condutores: s.condutores,
+      }));
+
+      if (slotRows.length > 0) {
+        const { error: slotsErr } = await sb
+          .from("formacao_snapshot_slots")
+          .insert(slotRows);
+        if (slotsErr) throw slotsErr;
+      }
+
+      return NextResponse.json(snapshot, { headers: corsHeaders });
+    }
+
+    if (action === "log_status_change") {
+      const { error } = await sb.from("formacao_slot_logs").insert({
+        slot_id: body.slot_id,
+        status_anterior: body.status_anterior || null,
+        status_novo: body.status_novo,
+        atividade_nome: body.atividade_nome || null,
+        condutor_ids: body.condutor_ids || [],
+      });
+      if (error) throw error;
       return NextResponse.json({ success: true }, { headers: corsHeaders });
     }
 

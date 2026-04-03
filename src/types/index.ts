@@ -276,3 +276,37 @@ export interface CertificadoEvento {
   ativo: boolean;
   created_at: string;
 }
+
+// ─── Formação Statistics ─────────────────
+
+export interface FormacaoSnapshot {
+  id: string;
+  semana_inicio: string;
+  semana_fim: string;
+  created_at: string;
+  observacoes: string | null;
+  formacao_snapshot_slots?: FormacaoSnapshotSlot[];
+}
+
+export interface FormacaoSnapshotSlot {
+  id: string;
+  snapshot_id: string;
+  slot_id: string;
+  dia_semana: number;
+  horario_hora: string;
+  atividade_nome: string | null;
+  status: string;
+  meet_link: string | null;
+  condutores: { id: string; nome: string }[];
+  created_at: string;
+}
+
+export interface FormacaoSlotLog {
+  id: string;
+  slot_id: string;
+  status_anterior: string | null;
+  status_novo: string;
+  atividade_nome: string | null;
+  condutor_ids: string[];
+  changed_at: string;
+}
