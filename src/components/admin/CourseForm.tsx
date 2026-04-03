@@ -239,6 +239,9 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const [lastAutoSaved, setLastAutoSaved] = useState<Date | null>(null);
   const [isAutoSaving, setIsAutoSaving] = useState(false);
   const autoSaveTimer = useRef<NodeJS.Timeout | null>(null);
+  const saveCourseRef = useRef<(opts?: { silent?: boolean }) => Promise<void>>();
+  // Guard to prevent concurrent saves
+  const isSavingRef = useRef(false);
 
   // --- NEW: beforeunload warning ---
   useEffect(() => {
@@ -259,6 +262,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   }, [initialLoadDone]);
 
   // --- Autosave effect (only for existing courses) ---
+  // Uses saveCourseRef to always call the latest version of saveCourse,
+  // and re-triggers on sections/questions changes to avoid stale closures
   useEffect(() => {
     if (!isEdit || !isDirty || !initialLoadDone) return;
 
@@ -268,7 +273,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
     }
 
     autoSaveTimer.current = setTimeout(() => {
-      saveCourse({ silent: true });
+      saveCourseRef.current?.({ silent: true });
     }, 30_000);
 
     return () => {
@@ -277,7 +282,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDirty, isEdit, initialLoadDone]);
+  }, [isDirty, isEdit, initialLoadDone, sections, questions]);
 
   // --- Cleanup autosave timer on unmount ---
   useEffect(() => {
@@ -385,6 +390,10 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   async function saveCourse(options?: { silent?: boolean }) {
     const silent = options?.silent ?? false;
 
+    // Prevent concurrent saves — skip if already saving
+    if (isSavingRef.current) return;
+    isSavingRef.current = true;
+
     // Cancel pending autosave when saving manually
     if (!silent && autoSaveTimer.current) {
       clearTimeout(autoSaveTimer.current);
@@ -393,6 +402,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
 
     if (!title.trim() || !slug.trim()) {
       if (!silent) toast.error("Título e slug são obrigatórios.");
+      isSavingRef.current = false;
       return;
     }
 
@@ -402,182 +412,225 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       setSaving(true);
     }
 
-    const courseData = {
-      title,
-      slug,
-      description: description || null,
-      long_description: longDescription || null,
-      category: category || null,
-      thumbnail_url: thumbnailUrl || null,
-      is_free: isFree,
-      price_cents: isFree ? null : priceCents,
-      instructor_id: instructorId,
-      status,
-      exam_enabled: examEnabled,
-      exam_passing_score: examPassingScore,
-      certificate_enabled: certificateEnabled,
-      certificate_hours: certificateHours,
-      certificate_body_text: certificateBodyText || null,
-      whatsapp_number: whatsappNumber || null,
-      course_type: courseType,
-      is_discontinued: isDiscontinued,
-      cert_lessons_required: courseType === "collection" ? (certLessonsRequired || null) : null,
-      cert_hours_value: courseType === "collection" ? (certHoursValue || null) : null,
-      default_lesson_thumbnail_url: defaultLessonThumbnail || null,
-      learning_points: learningPoints.filter((p) => p.trim()),
-    };
+    try {
+      const courseData = {
+        title,
+        slug,
+        description: description || null,
+        long_description: longDescription || null,
+        category: category || null,
+        thumbnail_url: thumbnailUrl || null,
+        is_free: isFree,
+        price_cents: isFree ? null : priceCents,
+        instructor_id: instructorId,
+        status,
+        exam_enabled: examEnabled,
+        exam_passing_score: examPassingScore,
+        certificate_enabled: certificateEnabled,
+        certificate_hours: certificateHours,
+        certificate_body_text: certificateBodyText || null,
+        whatsapp_number: whatsappNumber || null,
+        course_type: courseType,
+        is_discontinued: isDiscontinued,
+        cert_lessons_required: courseType === "collection" ? (certLessonsRequired || null) : null,
+        cert_hours_value: courseType === "collection" ? (certHoursValue || null) : null,
+        default_lesson_thumbnail_url: defaultLessonThumbnail || null,
+        learning_points: learningPoints.filter((p) => p.trim()),
+      };
 
-    let savedCourseId = courseId;
+      let savedCourseId = courseId;
 
-    if (isEdit) {
-      const { error } = await createClient()
-        .from("courses")
-        .update(courseData)
-        .eq("id", courseId);
+      if (isEdit) {
+        const { error } = await createClient()
+          .from("courses")
+          .update(courseData)
+          .eq("id", courseId);
 
-      if (error) {
-        if (!silent) toast.error("Erro ao atualizar curso.");
-        if (silent) setIsAutoSaving(false); else setSaving(false);
-        return;
-      }
-    } else {
-      const { data, error } = await createClient()
-        .from("courses")
-        .insert(courseData)
-        .select("id")
-        .single();
-
-      if (error || !data) {
-        if (!silent) toast.error("Erro ao criar curso.");
-        if (silent) setIsAutoSaving(false); else setSaving(false);
-        return;
-      }
-      savedCourseId = data.id;
-    }
-
-    // Save sections and lessons
-    if (savedCourseId) {
-      // Delete removed lessons from DB first
-      if (deletedLessonIds.length > 0) {
-        await createClient()
-          .from("lessons")
-          .delete()
-          .in("id", deletedLessonIds);
-        setDeletedLessonIds([]);
-      }
-
-      // Delete removed sections from DB (cascade should handle lessons, but we already deleted them)
-      if (deletedSectionIds.length > 0) {
-        await createClient()
-          .from("sections")
-          .delete()
-          .in("id", deletedSectionIds);
-        setDeletedSectionIds([]);
-      }
-
-      // Track updated sections to sync local state with real IDs
-      const updatedSections = [...sections];
-
-      for (let si = 0; si < updatedSections.length; si++) {
-        const section = updatedSections[si];
-        let sectionId = section.id;
-
-        if (section.id.startsWith("new-")) {
-          const { data, error } = await createClient()
-            .from("sections")
-            .insert({
-              course_id: savedCourseId,
-              title: section.title,
-              position: si,
-              is_extra: section.is_extra ?? false,
-            })
-            .select("id")
-            .single();
-
-          if (error || !data) continue;
-          sectionId = data.id;
-          // Update local state with real ID
-          updatedSections[si] = { ...section, id: sectionId };
-        } else {
-          await createClient()
-            .from("sections")
-            .update({ title: section.title, position: si, is_extra: section.is_extra ?? false })
-            .eq("id", sectionId);
+        if (error) {
+          if (!silent) toast.error("Erro ao atualizar curso.");
+          return;
         }
+      } else {
+        const { data, error } = await createClient()
+          .from("courses")
+          .insert(courseData)
+          .select("id")
+          .single();
 
-        // Save lessons
-        const updatedLessons = [...section.lessons];
-        for (let li = 0; li < updatedLessons.length; li++) {
-          const lesson = updatedLessons[li];
+        if (error || !data) {
+          if (!silent) toast.error("Erro ao criar curso.");
+          return;
+        }
+        savedCourseId = data.id;
+      }
 
-          const lessonData = {
-            section_id: sectionId,
-            title: lesson.title,
-            description: lesson.description || null,
-            video_url: lesson.video_url || null,
-            video_source: lesson.video_url
-              ? detectVideoSource(lesson.video_url)
-              : null,
-            thumbnail_url: lesson.thumbnail_url || null,
-            duration_minutes: lesson.duration_minutes || null,
-            position: li,
-            is_preview: lesson.is_preview,
-          };
+      // Save sections and lessons
+      if (savedCourseId) {
+        // Collect IDs of sections/lessons that should exist after save
+        const localSectionIds = new Set<string>();
+        const localLessonIds = new Set<string>();
 
-          if (lesson.id.startsWith("new-")) {
-            const { data } = await createClient()
-              .from("lessons")
-              .insert(lessonData)
+        // Map old new-xxx IDs → real DB IDs (for functional setState at the end)
+        const idMap = new Map<string, string>();
+
+        for (let si = 0; si < sections.length; si++) {
+          const section = sections[si];
+          let sectionId = section.id;
+
+          if (section.id.startsWith("new-")) {
+            const { data, error } = await createClient()
+              .from("sections")
+              .insert({
+                course_id: savedCourseId,
+                title: section.title,
+                position: si,
+                is_extra: section.is_extra ?? false,
+              })
               .select("id")
               .single();
-            if (data) {
-              // Update local state with real ID
-              updatedLessons[li] = { ...lesson, id: data.id };
-            }
+
+            if (error || !data) continue;
+            idMap.set(section.id, data.id);
+            sectionId = data.id;
           } else {
             await createClient()
-              .from("lessons")
-              .update(lessonData)
-              .eq("id", lesson.id);
+              .from("sections")
+              .update({ title: section.title, position: si, is_extra: section.is_extra ?? false })
+              .eq("id", sectionId);
+          }
+
+          localSectionIds.add(sectionId);
+
+          // Save lessons
+          for (let li = 0; li < section.lessons.length; li++) {
+            const lesson = section.lessons[li];
+
+            const lessonData = {
+              section_id: sectionId,
+              title: lesson.title,
+              description: lesson.description || null,
+              video_url: lesson.video_url || null,
+              video_source: lesson.video_url
+                ? detectVideoSource(lesson.video_url)
+                : null,
+              thumbnail_url: lesson.thumbnail_url || null,
+              duration_minutes: lesson.duration_minutes || null,
+              position: li,
+              is_preview: lesson.is_preview,
+            };
+
+            if (lesson.id.startsWith("new-")) {
+              const { data } = await createClient()
+                .from("lessons")
+                .insert(lessonData)
+                .select("id")
+                .single();
+              if (data) {
+                idMap.set(lesson.id, data.id);
+                localLessonIds.add(data.id);
+              }
+            } else {
+              await createClient()
+                .from("lessons")
+                .update(lessonData)
+                .eq("id", lesson.id);
+              localLessonIds.add(lesson.id);
+            }
           }
         }
-        updatedSections[si] = { ...updatedSections[si], lessons: updatedLessons };
-      }
 
-      // Sync local state with real IDs to prevent re-insertion on next save
-      setSections(updatedSections);
-
-      // Save exam questions
-      if (examEnabled) {
-        // Delete existing then reinsert for simplicity
-        await createClient()
-          .from("exam_questions")
-          .delete()
+        // Reconcile: delete sections/lessons in DB that are NOT in local state
+        // This handles orphans from any source (explicit deletes, past bugs, etc.)
+        const { data: dbSections } = await createClient()
+          .from("sections")
+          .select("id, lessons(id)")
           .eq("course_id", savedCourseId);
 
-        for (let qi = 0; qi < questions.length; qi++) {
-          const q = questions[qi];
-          await createClient().from("exam_questions").insert({
-            course_id: savedCourseId,
-            question_text: q.question_text,
-            options: q.options,
-            position: qi,
-          });
+        if (dbSections) {
+          const orphanLessonIds: string[] = [];
+          const orphanSectionIds: string[] = [];
+
+          for (const dbSection of dbSections) {
+            if (!localSectionIds.has(dbSection.id)) {
+              orphanSectionIds.push(dbSection.id);
+            } else {
+              // Check for orphan lessons within kept sections
+              for (const dbLesson of (dbSection.lessons || [])) {
+                if (!localLessonIds.has(dbLesson.id)) {
+                  orphanLessonIds.push(dbLesson.id);
+                }
+              }
+            }
+          }
+
+          if (orphanLessonIds.length > 0) {
+            await createClient()
+              .from("lessons")
+              .delete()
+              .in("id", orphanLessonIds);
+          }
+          if (orphanSectionIds.length > 0) {
+            await createClient()
+              .from("sections")
+              .delete()
+              .in("id", orphanSectionIds);
+          }
+        }
+
+        // Clear tracked deletes (reconciliation handles everything now)
+        setDeletedSectionIds([]);
+        setDeletedLessonIds([]);
+
+        // Update local state IDs using functional setState to preserve
+        // any concurrent edits the user made while save was running
+        if (idMap.size > 0) {
+          setSections((prev) =>
+            prev.map((s) => ({
+              ...s,
+              id: idMap.get(s.id) || s.id,
+              lessons: s.lessons.map((l) => ({
+                ...l,
+                id: idMap.get(l.id) || l.id,
+              })),
+            }))
+          );
+        }
+
+        // Save exam questions
+        if (examEnabled) {
+          await createClient()
+            .from("exam_questions")
+            .delete()
+            .eq("course_id", savedCourseId);
+
+          for (let qi = 0; qi < questions.length; qi++) {
+            const q = questions[qi];
+            await createClient().from("exam_questions").insert({
+              course_id: savedCourseId,
+              question_text: q.question_text,
+              options: q.options,
+              position: qi,
+            });
+          }
         }
       }
-    }
 
-    setIsDirty(false);
+      setIsDirty(false);
 
-    if (silent) {
-      setLastAutoSaved(new Date());
-      setIsAutoSaving(false);
-    } else {
-      toast.success(isEdit ? "Curso atualizado!" : "Curso criado!");
-      router.push("/formacao/admin/cursos");
-      setSaving(false);
+      if (silent) {
+        setLastAutoSaved(new Date());
+      } else {
+        toast.success(isEdit ? "Curso atualizado!" : "Curso criado!");
+        router.push("/formacao/admin/cursos");
+      }
+    } finally {
+      isSavingRef.current = false;
+      if (silent) setIsAutoSaving(false); else setSaving(false);
     }
   }
+
+  // Keep ref always pointing to latest saveCourse
+  saveCourseRef.current = saveCourse;
 
   // Section helpers
   function addSection(isExtra = false) {
