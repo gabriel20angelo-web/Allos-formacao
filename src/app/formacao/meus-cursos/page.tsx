@@ -299,7 +299,7 @@ export default function MeusCursosPage() {
                           <h3 className="font-fraunces font-bold text-base text-cream line-clamp-1 mb-1 group-hover:text-teal-light transition-colors">
                             {item.course.title}
                           </h3>
-                          {item.course.instructor && (
+                          {item.course.instructor && item.course.show_instructor && (
                             <p className="text-xs text-cream/35 mb-3">
                               {item.course.instructor.full_name}
                             </p>

@@ -263,7 +263,7 @@ export default function FormacaoPage() {
                           <h3 className="font-fraunces font-bold text-base sm:text-lg text-cream leading-tight line-clamp-2 mb-1.5">
                             {course.title}
                           </h3>
-                          {course.instructor && (
+                          {course.instructor && course.show_instructor && (
                             <p className="text-xs text-cream/50 font-dm mb-3">
                               {course.instructor.full_name}
                             </p>
@@ -452,7 +452,7 @@ export default function FormacaoPage() {
                           <p className="font-fraunces font-bold text-base sm:text-lg text-cream leading-tight line-clamp-2 mb-1">
                             {course.title}
                           </p>
-                          {course.instructor && (
+                          {course.instructor && course.show_instructor && (
                             <p className="text-[11px] text-amber-200/40 mt-1 font-dm">
                               {course.instructor.full_name}
                             </p>

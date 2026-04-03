@@ -51,6 +51,7 @@ export interface Course {
   display_order?: number;
   featured?: boolean;
   featured_label?: string | null;
+  show_instructor?: boolean;
   price?: number | null;
   created_at: string;
   updated_at: string;

@@ -197,6 +197,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const [certLessonsRequired, setCertLessonsRequired] = useState<number | null>(null);
   const [certHoursValue, setCertHoursValue] = useState<number | null>(null);
   const [isDiscontinued, setIsDiscontinued] = useState(false);
+  const [showInstructor, setShowInstructor] = useState(false);
   const [defaultLessonThumbnail, setDefaultLessonThumbnail] = useState("");
   const STEPS = courseType === "collection" ? COLLECTION_STEPS : courseType === "sync" ? SYNC_STEPS : ALL_STEPS;
   const [learningPoints, setLearningPoints] = useState<string[]>([""]);
@@ -320,6 +321,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       setCertLessonsRequired(course.cert_lessons_required ?? null);
       setCertHoursValue(course.cert_hours_value ?? null);
       setIsDiscontinued(course.is_discontinued ?? false);
+      setShowInstructor(course.show_instructor ?? false);
       setDefaultLessonThumbnail(course.default_lesson_thumbnail_url || "");
       setLearningPoints(course.learning_points || [""]);
 
@@ -402,6 +404,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         whatsapp_number: whatsappNumber || null,
         course_type: courseType,
         is_discontinued: isDiscontinued,
+        show_instructor: showInstructor,
         cert_lessons_required: courseType === "collection" ? (certLessonsRequired || null) : null,
         cert_hours_value: courseType === "collection" ? (certHoursValue || null) : null,
         default_lesson_thumbnail_url: defaultLessonThumbnail || null,
@@ -1054,6 +1057,26 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               placeholder="Selecione um professor"
             />
           )}
+
+          {/* Show instructor toggle */}
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => { setShowInstructor(!showInstructor); markDirty(); }}
+              className="relative w-10 h-5 rounded-full transition-colors"
+              style={{
+                background: showInstructor ? "rgba(46,158,143,0.6)" : "rgba(255,255,255,0.1)",
+              }}
+            >
+              <div
+                className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+                style={{ left: showInstructor ? "22px" : "2px" }}
+              />
+            </button>
+            <label className="text-sm text-cream/60">
+              Exibir nome do professor nos cards
+            </label>
+          </div>
 
           <Select
             label="Status"

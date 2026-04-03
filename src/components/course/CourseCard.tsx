@@ -72,7 +72,7 @@ export default function CourseCard({ course, isInstructor }: CourseCardProps) {
             {course.title}
           </h3>
 
-          {course.instructor && (
+          {course.instructor && course.show_instructor && (
             <p className="font-dm text-xs text-white/60 mb-3">
               {course.instructor.full_name}
             </p>
@@ -156,7 +156,7 @@ export default function CourseCard({ course, isInstructor }: CourseCardProps) {
           <h3 className="font-fraunces font-bold text-white text-base leading-tight line-clamp-2 drop-shadow-lg">
             {course.title}
           </h3>
-          {course.instructor && (
+          {course.instructor && course.show_instructor && (
             <p className="font-dm text-xs text-white/60 mt-1.5">
               {course.instructor.full_name}
             </p>
