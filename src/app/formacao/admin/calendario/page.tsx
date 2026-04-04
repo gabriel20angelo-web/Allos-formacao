@@ -242,8 +242,15 @@ export default function CalendarioPage() {
   useEffect(() => {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
-    img.src = "/Icone_Allos_Verde.png";
+    img.src = "/Logo_Allos_Light.png";
     img.onload = () => { logoRef.current = img; };
+    img.onerror = () => {
+      // Fallback to icon
+      const fallback = new window.Image();
+      fallback.crossOrigin = "anonymous";
+      fallback.src = "/Icone_Allos_Verde.png";
+      fallback.onload = () => { logoRef.current = fallback; };
+    };
   }, []);
 
   // ─── Config upsert ────────────────────────────────────────────────────────
@@ -275,7 +282,8 @@ export default function CalendarioPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    const activeH = horarios.filter((h) => h.ativo).sort((a, b) => a.ordem - b.ordem);
+    // Use ALL horarios (already filtered by ativo=true in the query)
+    const activeH = horarios.sort((a, b) => a.ordem - b.ordem);
     const activeSlots = slots.filter((s) => s.ativo && s.atividade_nome);
 
     // Build data per day
@@ -292,157 +300,152 @@ export default function CalendarioPage() {
     });
 
     const W = 900;
-    const margin = 50;
+    const margin = 60;
     const innerW = W - margin * 2;
-    const logoH = 160;
-    const barH = 48;
-    const dayLabelW = 140;
-    const lineH = 34;
-    const dayPadY = 18;
+    const logoAreaH = 180;
+    const barH = 52;
+    const dayLabelW = 150;
+    const lineH = 36;
+    const dayPadY = 20;
 
     // Calculate content height
     let totalItemRows = 0;
     dayData.forEach((d) => { totalItemRows += d.items.length; });
-    const contentH = dayData.length * (dayPadY * 2) + totalItemRows * lineH;
-    const footerH = 80;
-    const H = logoH + barH + contentH + footerH;
+    const contentH = dayData.length > 0
+      ? dayData.length * (dayPadY * 2) + totalItemRows * lineH
+      : 100;
+    const footerH = 90;
+    const H = logoAreaH + barH + contentH + footerH;
 
     canvas.width = W;
     canvas.height = H;
 
-    // ── Background: rich teal gradient ──
-    const bgGrad = ctx.createRadialGradient(W * 0.3, H * 0.2, 0, W * 0.5, H * 0.5, W);
-    bgGrad.addColorStop(0, "#2a6b6b");
-    bgGrad.addColorStop(0.4, "#1f5555");
-    bgGrad.addColorStop(1, "#143838");
+    // ── Background: teal gradient matching Allos identity ──
+    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+    bgGrad.addColorStop(0, "#2D9E8F");
+    bgGrad.addColorStop(0.3, "#268A7D");
+    bgGrad.addColorStop(0.7, "#1E7268");
+    bgGrad.addColorStop(1, "#185C54");
     ctx.fillStyle = bgGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // Texture: scattered subtle light dots
-    for (let i = 0; i < 4000; i++) {
+    // Subtle texture overlay
+    for (let i = 0; i < 3000; i++) {
       const x = Math.random() * W;
       const y = Math.random() * H;
-      const a = Math.random() * 0.04;
-      ctx.fillStyle = `rgba(255,255,255,${a})`;
+      const a = Math.random() * 0.03;
+      ctx.fillStyle = `rgba(0,0,0,${a})`;
       ctx.beginPath();
-      ctx.arc(x, y, Math.random() * 1.2, 0, Math.PI * 2);
+      ctx.arc(x, y, Math.random() * 1.5, 0, Math.PI * 2);
       ctx.fill();
     }
 
-    // Vignette overlay
-    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.25, W / 2, H / 2, W * 0.75);
+    // Vignette
+    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
     vigGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vigGrad.addColorStop(1, "rgba(0,0,0,0.25)");
+    vigGrad.addColorStop(1, "rgba(0,0,0,0.2)");
     ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, W, H);
 
-    // ── Logo area ──
-    // Draw logo from image if loaded
+    // ── Logo ──
     if (logoRef.current) {
-      const logoSize = 70;
-      ctx.drawImage(logoRef.current, (W - logoSize) / 2, 30, logoSize, logoSize);
-    } else {
-      // Fallback: decorative circles (Allos logo style)
-      const cx = W / 2;
-      ctx.strokeStyle = "rgba(253,251,247,0.6)";
-      ctx.lineWidth = 1.5;
-      ctx.setLineDash([6, 4]);
-      ctx.beginPath(); ctx.arc(cx, 65, 30, 0, Math.PI * 2); ctx.stroke();
-      ctx.setLineDash([]);
-      ctx.lineWidth = 2;
-      ctx.beginPath(); ctx.arc(cx, 65, 16, 0, Math.PI * 2); ctx.stroke();
-      ctx.fillStyle = "#FDFBF7";
-      ctx.beginPath(); ctx.arc(cx, 65, 5, 0, Math.PI * 2); ctx.fill();
+      const img = logoRef.current;
+      const maxLogoW = 280;
+      const ratio = img.width / img.height;
+      const logoW = Math.min(maxLogoW, img.width);
+      const logoHt = logoW / ratio;
+      ctx.drawImage(img, (W - logoW) / 2, 30, logoW, logoHt);
     }
 
-    // "ASSOCIAÇÃO" text under logo
-    ctx.textAlign = "center";
-    ctx.font = '600 14px "Helvetica Neue", Arial, sans-serif';
-    ctx.fillStyle = "rgba(253,251,247,0.7)";
-    ctx.letterSpacing = "6px";
-    ctx.fillText("— ASSOCIAÇÃO —", W / 2, 125);
-    ctx.letterSpacing = "0px";
-
     // ── "QUADRO DE HORÁRIOS" dark bar ──
-    const barY = logoH;
-    ctx.fillStyle = "rgba(15,15,15,0.75)";
+    const barY = logoAreaH;
+    ctx.fillStyle = "rgba(10,10,10,0.8)";
     ctx.fillRect(margin, barY, innerW, barH);
 
-    ctx.font = 'bold 18px "Helvetica Neue", Arial, sans-serif';
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = 'bold 20px "Helvetica Neue", Arial, sans-serif';
     ctx.fillStyle = "#FDFBF7";
-    ctx.letterSpacing = "5px";
-    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, barY + 30);
-    ctx.letterSpacing = "0px";
+    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, barY + barH / 2);
 
     // ── Day rows ──
-    let curY = logoH + barH;
-    dayData.forEach((day, dayIdx) => {
-      const rowH = dayPadY * 2 + day.items.length * lineH;
+    let curY = logoAreaH + barH;
 
-      // Alternating row backgrounds
-      ctx.fillStyle = dayIdx % 2 === 0 ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.08)";
-      ctx.fillRect(margin, curY, innerW, rowH);
+    if (dayData.length === 0) {
+      // Empty state
+      const emptyH = 100;
+      ctx.fillStyle = "rgba(0,0,0,0.12)";
+      ctx.fillRect(margin, curY, innerW, emptyH);
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.font = '18px "Helvetica Neue", Arial, sans-serif';
+      ctx.fillStyle = "rgba(253,251,247,0.4)";
+      ctx.fillText("Nenhum grupo cadastrado no calendário", W / 2, curY + emptyH / 2);
+      curY += emptyH;
+    } else {
+      dayData.forEach((day, dayIdx) => {
+        const rowH = dayPadY * 2 + day.items.length * lineH;
 
-      // Separator line
-      ctx.strokeStyle = "rgba(253,251,247,0.1)";
+        // Alternating row backgrounds
+        ctx.fillStyle = dayIdx % 2 === 0 ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.08)";
+        ctx.fillRect(margin, curY, innerW, rowH);
+
+        // Top separator
+        ctx.strokeStyle = "rgba(253,251,247,0.12)";
+        ctx.lineWidth = 0.5;
+        ctx.beginPath();
+        ctx.moveTo(margin, curY);
+        ctx.lineTo(margin + innerW, curY);
+        ctx.stroke();
+
+        // Vertical separator
+        ctx.strokeStyle = "rgba(253,251,247,0.1)";
+        ctx.beginPath();
+        ctx.moveTo(margin + dayLabelW, curY + 8);
+        ctx.lineTo(margin + dayLabelW, curY + rowH - 8);
+        ctx.stroke();
+
+        // Day label
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.font = 'bold 17px "Helvetica Neue", Arial, sans-serif';
+        ctx.fillStyle = "#FDFBF7";
+        ctx.fillText(day.dia.toUpperCase(), margin + dayLabelW / 2, curY + rowH / 2);
+
+        // Items
+        ctx.textAlign = "left";
+        ctx.textBaseline = "alphabetic";
+        day.items.forEach((item, itemIdx) => {
+          const itemY = curY + dayPadY + itemIdx * lineH + 24;
+          // Bullet
+          ctx.fillStyle = "rgba(253,251,247,0.5)";
+          ctx.beginPath();
+          ctx.arc(margin + dayLabelW + 22, itemY - 5, 3.5, 0, Math.PI * 2);
+          ctx.fill();
+          // Text
+          ctx.font = '16px "Helvetica Neue", Arial, sans-serif';
+          ctx.fillStyle = "rgba(253,251,247,0.92)";
+          ctx.fillText(item, margin + dayLabelW + 36, itemY);
+        });
+
+        curY += rowH;
+      });
+
+      // Bottom border
+      ctx.strokeStyle = "rgba(253,251,247,0.12)";
       ctx.lineWidth = 0.5;
       ctx.beginPath();
       ctx.moveTo(margin, curY);
       ctx.lineTo(margin + innerW, curY);
       ctx.stroke();
-
-      // Vertical separator between day label and items
-      ctx.strokeStyle = "rgba(253,251,247,0.08)";
-      ctx.beginPath();
-      ctx.moveTo(margin + dayLabelW, curY + 6);
-      ctx.lineTo(margin + dayLabelW, curY + rowH - 6);
-      ctx.stroke();
-
-      // Day label (bold, centered vertically)
-      ctx.textAlign = "center";
-      ctx.font = 'bold 16px "Helvetica Neue", Arial, sans-serif';
-      ctx.fillStyle = "#FDFBF7";
-      ctx.fillText(day.dia.toUpperCase(), margin + dayLabelW / 2, curY + rowH / 2 + 6);
-
-      // Items with bullet points
-      ctx.textAlign = "left";
-      ctx.font = '16px "Helvetica Neue", Arial, sans-serif';
-      ctx.fillStyle = "rgba(253,251,247,0.9)";
-      day.items.forEach((item, itemIdx) => {
-        const itemY = curY + dayPadY + itemIdx * lineH + 22;
-        // Bullet
-        ctx.fillStyle = "rgba(253,251,247,0.5)";
-        ctx.beginPath();
-        ctx.arc(margin + dayLabelW + 20, itemY - 5, 3, 0, Math.PI * 2);
-        ctx.fill();
-        // Text
-        ctx.fillStyle = "rgba(253,251,247,0.9)";
-        ctx.fillText(item, margin + dayLabelW + 32, itemY);
-      });
-
-      curY += rowH;
-    });
-
-    // Bottom border line
-    ctx.strokeStyle = "rgba(253,251,247,0.1)";
-    ctx.lineWidth = 0.5;
-    ctx.beginPath();
-    ctx.moveTo(margin, curY);
-    ctx.lineTo(margin + innerW, curY);
-    ctx.stroke();
+    }
 
     // ── Footer ──
     ctx.textAlign = "center";
-    ctx.font = 'bold 16px Georgia, "Times New Roman", serif';
-    ctx.fillStyle = "rgba(46,158,143,0.8)";
-    ctx.fillText("Cronograma Geral", W / 2, H - 30);
-
-    // Empty state
-    if (dayData.length === 0) {
-      ctx.font = '18px "Helvetica Neue", Arial, sans-serif';
-      ctx.fillStyle = "rgba(253,251,247,0.35)";
-      ctx.fillText("Nenhum grupo cadastrado no calendário", W / 2, logoH + barH + 50);
-    }
+    ctx.textBaseline = "middle";
+    ctx.font = 'bold 17px Georgia, "Times New Roman", serif';
+    ctx.fillStyle = "rgba(46,158,143,0.9)";
+    ctx.fillText("Cronograma Geral", W / 2, H - 35);
   }, [horarios, slots]);
 
   // Auto-draw cronograma when tab is active or data changes
