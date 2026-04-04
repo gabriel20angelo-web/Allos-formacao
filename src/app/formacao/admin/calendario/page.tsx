@@ -239,23 +239,25 @@ export default function CalendarioPage() {
     fetchAll().catch(() => setLoading(false));
   }, [fetchAll]);
 
-  // Load logo + background texture for canvas
+  // Load assets for canvas (logo, background, fonts)
   useEffect(() => {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.src = "/Logo_Allos_Light.png";
     img.onload = () => { logoRef.current = img; };
-    img.onerror = () => {
-      const fallback = new window.Image();
-      fallback.crossOrigin = "anonymous";
-      fallback.src = "/Icone_Allos_Verde.png";
-      fallback.onload = () => { logoRef.current = fallback; };
-    };
 
     const bg = new window.Image();
     bg.crossOrigin = "anonymous";
     bg.src = "/bg_allos_teal.png";
     bg.onload = () => { bgRef.current = bg; };
+
+    // Load Cocogoose font for canvas
+    const cocoBold = new FontFace("CocogoosePro", "url(/fonts/CocogoosePro.ttf)");
+    const cocoLight = new FontFace("CocogooseProSemilight", "url(/fonts/CocogooseProSemilight.ttf)");
+    Promise.all([cocoBold.load(), cocoLight.load()]).then(([b, l]) => {
+      document.fonts.add(b);
+      document.fonts.add(l);
+    }).catch(() => {});
   }, []);
 
   // ─── Config upsert ────────────────────────────────────────────────────────
@@ -287,11 +289,9 @@ export default function CalendarioPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
-    // Use ALL horarios (already filtered by ativo=true in the query)
-    const activeH = horarios.sort((a, b) => a.ordem - b.ordem);
+    const activeH = [...horarios].sort((a, b) => a.ordem - b.ordem);
     const activeSlots = slots.filter((s) => s.ativo && s.atividade_nome);
 
-    // Build data per day
     const dayData: { dia: string; items: string[] }[] = [];
     DIAS.forEach((dia, diaIdx) => {
       const items: string[] = [];
@@ -304,157 +304,170 @@ export default function CalendarioPage() {
       if (items.length > 0) dayData.push({ dia, items });
     });
 
-    const W = 900;
-    const margin = 60;
-    const innerW = W - margin * 2;
-    const logoAreaH = 180;
-    const barH = 52;
-    const dayLabelW = 150;
-    const lineH = 36;
-    const dayPadY = 20;
+    // ── Dimensions ──
+    const W = 1080;
+    const pad = 70;
+    const tableW = W - pad * 2;
+    const logoAreaH = 200;
+    const titleBarH = 56;
+    const dayColW = 170;
+    const itemLineH = 38;
+    const rowPadY = 22;
+    const footerH = 100;
 
-    // Calculate content height
-    let totalItemRows = 0;
-    dayData.forEach((d) => { totalItemRows += d.items.length; });
-    const contentH = dayData.length > 0
-      ? dayData.length * (dayPadY * 2) + totalItemRows * lineH
-      : 100;
-    const footerH = 90;
-    const H = logoAreaH + barH + contentH + footerH;
+    let tableContentH = 0;
+    if (dayData.length === 0) {
+      tableContentH = 110;
+    } else {
+      dayData.forEach((d) => {
+        tableContentH += rowPadY * 2 + d.items.length * itemLineH;
+      });
+    }
+    const H = logoAreaH + titleBarH + tableContentH + footerH;
 
     canvas.width = W;
     canvas.height = H;
 
-    // ── Background: real Allos texture ──
+    // Font helpers
+    const fontBold = (size: number) => `bold ${size}px CocogoosePro, "Helvetica Neue", Arial, sans-serif`;
+    const fontSemilight = (size: number) => `${size}px CocogooseProSemilight, "Helvetica Neue", Arial, sans-serif`;
+    const fontBody = (size: number) => `${size}px Inter, "Helvetica Neue", Arial, sans-serif`;
+    const fontBodyBold = (size: number) => `bold ${size}px Inter, "Helvetica Neue", Arial, sans-serif`;
+
+    // ── Background ──
     if (bgRef.current) {
-      // Draw the texture image covering the entire canvas
       const bgImg = bgRef.current;
-      const bgRatio = bgImg.width / bgImg.height;
-      const canvasRatio = W / H;
-      let srcX = 0, srcY = 0, srcW = bgImg.width, srcH = bgImg.height;
-      if (bgRatio > canvasRatio) {
-        srcW = bgImg.height * canvasRatio;
-        srcX = (bgImg.width - srcW) / 2;
-      } else {
-        srcH = bgImg.width / canvasRatio;
-        srcY = (bgImg.height - srcH) / 2;
-      }
-      ctx.drawImage(bgImg, srcX, srcY, srcW, srcH, 0, 0, W, H);
+      const bgR = bgImg.width / bgImg.height;
+      const cR = W / H;
+      let sx = 0, sy = 0, sw = bgImg.width, sh = bgImg.height;
+      if (bgR > cR) { sw = bgImg.height * cR; sx = (bgImg.width - sw) / 2; }
+      else { sh = bgImg.width / cR; sy = (bgImg.height - sh) / 2; }
+      ctx.drawImage(bgImg, sx, sy, sw, sh, 0, 0, W, H);
     } else {
-      // Fallback gradient
-      const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-      bgGrad.addColorStop(0, "#2D9E8F");
-      bgGrad.addColorStop(1, "#185C54");
-      ctx.fillStyle = bgGrad;
+      ctx.fillStyle = "#2D9E8F";
       ctx.fillRect(0, 0, W, H);
     }
 
-    // Subtle vignette
-    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.75);
-    vigGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vigGrad.addColorStop(1, "rgba(0,0,0,0.15)");
-    ctx.fillStyle = vigGrad;
+    // Gentle vignette (edges only, very subtle)
+    const vig = ctx.createRadialGradient(W / 2, H / 2, Math.min(W, H) * 0.35, W / 2, H / 2, Math.max(W, H) * 0.65);
+    vig.addColorStop(0, "rgba(0,0,0,0)");
+    vig.addColorStop(1, "rgba(0,0,0,0.12)");
+    ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
 
     // ── Logo ──
     if (logoRef.current) {
       const img = logoRef.current;
-      const maxLogoW = 280;
-      const ratio = img.width / img.height;
-      const logoW = Math.min(maxLogoW, img.width);
-      const logoHt = logoW / ratio;
-      ctx.drawImage(img, (W - logoW) / 2, 30, logoW, logoHt);
+      const maxW = 300;
+      const r = img.width / img.height;
+      const lw = Math.min(maxW, img.width);
+      const lh = lw / r;
+      const logoY = (logoAreaH - lh) / 2;
+      ctx.drawImage(img, (W - lw) / 2, logoY, lw, lh);
     }
 
-    // ── "QUADRO DE HORÁRIOS" dark bar ──
-    const barY = logoAreaH;
-    ctx.fillStyle = "rgba(10,10,10,0.8)";
-    ctx.fillRect(margin, barY, innerW, barH);
+    // ── Title bar: "QUADRO DE HORÁRIOS" ──
+    const titleY = logoAreaH;
+    ctx.fillStyle = "rgba(15, 20, 18, 0.78)";
+    ctx.fillRect(pad, titleY, tableW, titleBarH);
+
+    // Top & bottom lines on title bar
+    ctx.strokeStyle = "rgba(253,251,247,0.08)";
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, titleY); ctx.lineTo(pad + tableW, titleY);
+    ctx.moveTo(pad, titleY + titleBarH); ctx.lineTo(pad + tableW, titleY + titleBarH);
+    ctx.stroke();
 
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = 'bold 20px "Helvetica Neue", Arial, sans-serif';
+    ctx.font = fontBold(18);
     ctx.fillStyle = "#FDFBF7";
-    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, barY + barH / 2);
+    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, titleY + titleBarH / 2 + 1);
 
-    // ── Day rows ──
-    let curY = logoAreaH + barH;
+    // ── Table rows ──
+    let curY = logoAreaH + titleBarH;
 
     if (dayData.length === 0) {
-      // Empty state
-      const emptyH = 100;
-      ctx.fillStyle = "rgba(0,0,0,0.12)";
-      ctx.fillRect(margin, curY, innerW, emptyH);
+      ctx.fillStyle = "rgba(0,0,0,0.10)";
+      ctx.fillRect(pad, curY, tableW, 110);
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = '18px "Helvetica Neue", Arial, sans-serif';
-      ctx.fillStyle = "rgba(253,251,247,0.4)";
-      ctx.fillText("Nenhum grupo cadastrado no calendário", W / 2, curY + emptyH / 2);
-      curY += emptyH;
+      ctx.font = fontSemilight(17);
+      ctx.fillStyle = "rgba(253,251,247,0.35)";
+      ctx.fillText("Nenhum grupo cadastrado no calendário", W / 2, curY + 55);
+      curY += 110;
     } else {
-      dayData.forEach((day, dayIdx) => {
-        const rowH = dayPadY * 2 + day.items.length * lineH;
+      dayData.forEach((day, idx) => {
+        const rowH = rowPadY * 2 + day.items.length * itemLineH;
 
-        // Alternating row backgrounds
-        ctx.fillStyle = dayIdx % 2 === 0 ? "rgba(0,0,0,0.15)" : "rgba(0,0,0,0.08)";
-        ctx.fillRect(margin, curY, innerW, rowH);
+        // Row background (alternating)
+        ctx.fillStyle = idx % 2 === 0 ? "rgba(0,0,0,0.13)" : "rgba(0,0,0,0.06)";
+        ctx.fillRect(pad, curY, tableW, rowH);
 
-        // Top separator
-        ctx.strokeStyle = "rgba(253,251,247,0.12)";
+        // Day column darker overlay
+        ctx.fillStyle = "rgba(0,0,0,0.06)";
+        ctx.fillRect(pad, curY, dayColW, rowH);
+
+        // Horizontal separator (top of each row)
+        ctx.strokeStyle = "rgba(253,251,247,0.10)";
         ctx.lineWidth = 0.5;
         ctx.beginPath();
-        ctx.moveTo(margin, curY);
-        ctx.lineTo(margin + innerW, curY);
+        ctx.moveTo(pad, curY);
+        ctx.lineTo(pad + tableW, curY);
         ctx.stroke();
 
-        // Vertical separator
-        ctx.strokeStyle = "rgba(253,251,247,0.1)";
+        // Vertical separator between day and content
+        ctx.strokeStyle = "rgba(253,251,247,0.08)";
+        ctx.lineWidth = 0.5;
         ctx.beginPath();
-        ctx.moveTo(margin + dayLabelW, curY + 8);
-        ctx.lineTo(margin + dayLabelW, curY + rowH - 8);
+        ctx.moveTo(pad + dayColW, curY);
+        ctx.lineTo(pad + dayColW, curY + rowH);
         ctx.stroke();
 
-        // Day label
+        // Day name
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = 'bold 17px "Helvetica Neue", Arial, sans-serif';
+        ctx.font = fontBold(16);
         ctx.fillStyle = "#FDFBF7";
-        ctx.fillText(day.dia.toUpperCase(), margin + dayLabelW / 2, curY + rowH / 2);
+        ctx.fillText(day.dia.toUpperCase(), pad + dayColW / 2, curY + rowH / 2 + 1);
 
-        // Items
+        // Activity items
         ctx.textAlign = "left";
         ctx.textBaseline = "alphabetic";
-        day.items.forEach((item, itemIdx) => {
-          const itemY = curY + dayPadY + itemIdx * lineH + 24;
-          // Bullet
-          ctx.fillStyle = "rgba(253,251,247,0.5)";
-          ctx.beginPath();
-          ctx.arc(margin + dayLabelW + 22, itemY - 5, 3.5, 0, Math.PI * 2);
-          ctx.fill();
-          // Text
-          ctx.font = '16px "Helvetica Neue", Arial, sans-serif';
-          ctx.fillStyle = "rgba(253,251,247,0.92)";
-          ctx.fillText(item, margin + dayLabelW + 36, itemY);
+        day.items.forEach((item, i) => {
+          const iy = curY + rowPadY + i * itemLineH + 26;
+
+          // Bullet square (like in reference)
+          ctx.fillStyle = "rgba(253,251,247,0.45)";
+          const bx = pad + dayColW + 24;
+          const bs = 5;
+          ctx.fillRect(bx - bs / 2, iy - 6 - bs / 2, bs, bs);
+
+          // Item text
+          ctx.font = fontBody(16);
+          ctx.fillStyle = "rgba(253,251,247,0.88)";
+          ctx.fillText(item, pad + dayColW + 40, iy);
         });
 
         curY += rowH;
       });
 
-      // Bottom border
-      ctx.strokeStyle = "rgba(253,251,247,0.12)";
+      // Bottom border of table
+      ctx.strokeStyle = "rgba(253,251,247,0.10)";
       ctx.lineWidth = 0.5;
       ctx.beginPath();
-      ctx.moveTo(margin, curY);
-      ctx.lineTo(margin + innerW, curY);
+      ctx.moveTo(pad, curY);
+      ctx.lineTo(pad + tableW, curY);
       ctx.stroke();
     }
 
     // ── Footer ──
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = 'bold 17px Georgia, "Times New Roman", serif';
-    ctx.fillStyle = "rgba(46,158,143,0.9)";
-    ctx.fillText("Cronograma Geral", W / 2, H - 35);
+    ctx.font = fontSemilight(18);
+    ctx.fillStyle = "rgba(200,225,220,0.55)";
+    ctx.fillText("Cronograma Geral", W / 2, H - footerH / 2 + 5);
   }, [horarios, slots]);
 
   // Auto-draw cronograma when tab is active or data changes
