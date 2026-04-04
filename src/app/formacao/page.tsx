@@ -8,6 +8,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import HeroFormacao from "@/components/formacao/HeroFormacao";
+import DownloadAppCard from "@/components/formacao/DownloadAppCard";
 
 import SyncGroupsSection from "@/components/formacao/SyncGroupsSection";
 import CategoryCarousel from "@/components/formacao/CategoryCarousel";
@@ -622,6 +623,11 @@ export default function FormacaoPage() {
             </motion.div>
           )}
         </section>
+
+        {/* Download app card */}
+        <div className="px-5 sm:px-6 md:px-8 py-10">
+          <DownloadAppCard />
+        </div>
 
         {/* Discontinued courses link */}
         <div className="max-w-[1200px] mx-auto px-6 py-8 text-center">
