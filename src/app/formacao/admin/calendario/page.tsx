@@ -509,6 +509,9 @@ export default function CalendarioPage() {
     lines.push("📚 Encontros e cursos gravados completos e gratuitos:");
     lines.push("👉 allos.org.br/formacao");
     lines.push("");
+    lines.push("🧠 Confira também nosso projeto de psicoterapia acessível a valor social:");
+    lines.push("👉 https://bit.ly/terapiasite");
+    lines.push("");
     lines.push("_Sua participação fortalece nossos projetos!_ 💚");
 
     return lines.join("\n");
