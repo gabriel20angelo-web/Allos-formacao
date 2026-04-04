@@ -1275,50 +1275,99 @@ export default function CalendarioPage() {
               />
             </div>
 
-            {/* Conductor WhatsApp links with personalized messages */}
-            <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center gap-2 mb-4">
-                <Send className="h-4 w-4" style={{ color: "#25D366" }} />
-                <h3 className="font-dm text-sm font-semibold" style={{ color: "rgba(253,251,247,0.7)" }}>Mensagens para Condutores</h3>
-              </div>
-              <div className="space-y-2">
-                {condutores.filter((c) => c.telefone).map((c) => {
-                  const firstName = c.nome.split(" ")[0];
-                  // Check if this conductor leads "aprimoramento clínico" via alocacoes
-                  const condSlotIds = alocacoes.filter((a) => a.condutor_id === c.id).map((a) => a.slot_id);
-                  const condSlots = slots.filter((s) => condSlotIds.includes(s.id) && s.ativo && s.atividade_nome);
-                  const isAprimoramento = condSlots.some((s) =>
-                    s.atividade_nome?.toLowerCase().includes("aprimoramento") &&
-                    s.atividade_nome?.toLowerCase().includes("habilidades")
-                  );
+            {/* Conductor WhatsApp links — split by vinculados / não vinculados */}
+            {(() => {
+              const withPhone = condutores.filter((c) => c.telefone);
+              const activeSlotIds = new Set(slots.filter((s) => s.ativo && s.atividade_nome).map((s) => s.id));
+              const vinculadoIds = new Set(
+                alocacoes.filter((a) => activeSlotIds.has(a.slot_id)).map((a) => a.condutor_id)
+              );
+              const vinculados = withPhone.filter((c) => vinculadoIds.has(c.id));
+              const naoVinculados = withPhone.filter((c) => !vinculadoIds.has(c.id));
 
-                  const msg = isAprimoramento
-                    ? `Oi, ${firstName}! Tudo bem? Tudo certo para o grupo da semana que vem? Quando puder, me avisa qual será o tema abordado, por gentileza.`
-                    : `Oi, ${firstName}! Tudo bem? Tudo certo pro grupo da semana que vem?`;
+              return (
+                <div className="rounded-xl p-5 space-y-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  {/* Vinculados */}
+                  <div>
+                    <div className="flex items-center gap-2 mb-3">
+                      <Send className="h-4 w-4" style={{ color: "#25D366" }} />
+                      <h3 className="font-dm text-sm font-semibold" style={{ color: "rgba(253,251,247,0.7)" }}>Condutores vinculados</h3>
+                      <span className="text-[10px] font-dm px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.06)", color: "rgba(253,251,247,0.35)" }}>{vinculados.length}</span>
+                    </div>
+                    <div className="space-y-2">
+                      {vinculados.map((c) => {
+                        const firstName = c.nome.split(" ")[0];
+                        const condSlotIds = alocacoes.filter((a) => a.condutor_id === c.id).map((a) => a.slot_id);
+                        const condSlots = slots.filter((s) => condSlotIds.includes(s.id) && s.ativo && s.atividade_nome);
+                        const isAprimoramento = condSlots.some((s) =>
+                          s.atividade_nome?.toLowerCase().includes("aprimoramento") &&
+                          s.atividade_nome?.toLowerCase().includes("habilidades")
+                        );
+                        const msg = isAprimoramento
+                          ? `Oi, ${firstName}! Tudo bem? Tudo certo para o grupo da semana que vem? Quando puder, me avisa qual será o tema abordado, por gentileza.`
+                          : `Oi, ${firstName}! Tudo bem? Tudo certo pro grupo da semana que vem?`;
+                        const phone = c.telefone!.replace(/\D/g, "");
+                        const waLink = `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`;
 
-                  const phone = c.telefone!.replace(/\D/g, "");
-                  const waLink = `https://wa.me/55${phone}?text=${encodeURIComponent(msg)}`;
+                        return (
+                          <a key={c.id} href={waLink} target="_blank" rel="noopener noreferrer"
+                            className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-white/[0.03]"
+                            style={{ border: "1px solid rgba(255,255,255,0.04)" }}>
+                            <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(37,211,102,0.12)" }}>
+                              <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <p className="text-sm font-dm font-medium truncate" style={{ color: "rgba(253,251,247,0.8)" }}>{c.nome}</p>
+                              <p className="text-[10px] font-dm truncate" style={{ color: "rgba(253,251,247,0.25)" }}>{msg}</p>
+                            </div>
+                            <span className="text-[10px] font-dm font-bold px-2 py-0.5 rounded flex-shrink-0" style={{ background: "rgba(37,211,102,0.1)", color: "#25D366" }}>Enviar</span>
+                          </a>
+                        );
+                      })}
+                      {vinculados.length === 0 && (
+                        <p className="text-xs font-dm text-center py-4" style={{ color: "rgba(253,251,247,0.3)" }}>Nenhum condutor vinculado a atividades.</p>
+                      )}
+                    </div>
+                  </div>
 
-                  return (
-                    <a key={c.id} href={waLink} target="_blank" rel="noopener noreferrer"
-                      className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-white/[0.03]"
-                      style={{ border: "1px solid rgba(255,255,255,0.04)" }}>
-                      <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(37,211,102,0.12)" }}>
-                        <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
+                  {/* Separator */}
+                  {naoVinculados.length > 0 && (
+                    <div className="h-[1px]" style={{ background: "rgba(255,255,255,0.06)" }} />
+                  )}
+
+                  {/* Não vinculados */}
+                  {naoVinculados.length > 0 && (
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <MessageCircle className="h-4 w-4" style={{ color: "rgba(253,251,247,0.3)" }} />
+                        <h3 className="font-dm text-sm font-semibold" style={{ color: "rgba(253,251,247,0.4)" }}>Sem vínculo no calendário</h3>
+                        <span className="text-[10px] font-dm px-1.5 py-0.5 rounded" style={{ background: "rgba(255,255,255,0.04)", color: "rgba(253,251,247,0.25)" }}>{naoVinculados.length}</span>
                       </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-dm font-medium truncate" style={{ color: "rgba(253,251,247,0.8)" }}>{c.nome}</p>
-                        <p className="text-[10px] font-dm truncate" style={{ color: "rgba(253,251,247,0.25)" }}>{msg}</p>
+                      <div className="space-y-2">
+                        {naoVinculados.map((c) => {
+                          const phone = c.telefone!.replace(/\D/g, "");
+                          const waLink = `https://wa.me/55${phone}`;
+                          return (
+                            <a key={c.id} href={waLink} target="_blank" rel="noopener noreferrer"
+                              className="flex items-center gap-3 px-3 py-2.5 rounded-lg transition-all hover:bg-white/[0.03]"
+                              style={{ border: "1px solid rgba(255,255,255,0.04)" }}>
+                              <div className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0" style={{ background: "rgba(255,255,255,0.04)" }}>
+                                <MessageCircle className="h-4 w-4" style={{ color: "rgba(253,251,247,0.3)" }} />
+                              </div>
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-dm font-medium truncate" style={{ color: "rgba(253,251,247,0.5)" }}>{c.nome}</p>
+                                <p className="text-[10px] font-dm" style={{ color: "rgba(253,251,247,0.2)" }}>{c.telefone}</p>
+                              </div>
+                              <span className="text-[10px] font-dm font-bold px-2 py-0.5 rounded flex-shrink-0" style={{ background: "rgba(255,255,255,0.04)", color: "rgba(253,251,247,0.3)" }}>WhatsApp</span>
+                            </a>
+                          );
+                        })}
                       </div>
-                      <span className="text-[10px] font-dm font-bold px-2 py-0.5 rounded flex-shrink-0" style={{ background: "rgba(37,211,102,0.1)", color: "#25D366" }}>Enviar</span>
-                    </a>
-                  );
-                })}
-                {condutores.filter((c) => c.telefone).length === 0 && (
-                  <p className="text-xs font-dm text-center py-6" style={{ color: "rgba(253,251,247,0.3)" }}>Nenhum condutor com telefone cadastrado.</p>
-                )}
-              </div>
-            </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })()}
           </motion.div>
         )}
 
