@@ -206,6 +206,7 @@ export default function CalendarioPage() {
   // Cronograma canvas
   const cronogramaCanvasRef = useRef<HTMLCanvasElement>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
+  const bgRef = useRef<HTMLImageElement | null>(null);
 
   // WhatsApp
   const [whatsappCopied, setWhatsappCopied] = useState(false);
@@ -238,19 +239,23 @@ export default function CalendarioPage() {
     fetchAll().catch(() => setLoading(false));
   }, [fetchAll]);
 
-  // Load logo for canvas
+  // Load logo + background texture for canvas
   useEffect(() => {
     const img = new window.Image();
     img.crossOrigin = "anonymous";
     img.src = "/Logo_Allos_Light.png";
     img.onload = () => { logoRef.current = img; };
     img.onerror = () => {
-      // Fallback to icon
       const fallback = new window.Image();
       fallback.crossOrigin = "anonymous";
       fallback.src = "/Icone_Allos_Verde.png";
       fallback.onload = () => { logoRef.current = fallback; };
     };
+
+    const bg = new window.Image();
+    bg.crossOrigin = "anonymous";
+    bg.src = "/bg_allos_teal.png";
+    bg.onload = () => { bgRef.current = bg; };
   }, []);
 
   // ─── Config upsert ────────────────────────────────────────────────────────
@@ -320,30 +325,34 @@ export default function CalendarioPage() {
     canvas.width = W;
     canvas.height = H;
 
-    // ── Background: teal gradient matching Allos identity ──
-    const bgGrad = ctx.createLinearGradient(0, 0, W, H);
-    bgGrad.addColorStop(0, "#2D9E8F");
-    bgGrad.addColorStop(0.3, "#268A7D");
-    bgGrad.addColorStop(0.7, "#1E7268");
-    bgGrad.addColorStop(1, "#185C54");
-    ctx.fillStyle = bgGrad;
-    ctx.fillRect(0, 0, W, H);
-
-    // Subtle texture overlay
-    for (let i = 0; i < 3000; i++) {
-      const x = Math.random() * W;
-      const y = Math.random() * H;
-      const a = Math.random() * 0.03;
-      ctx.fillStyle = `rgba(0,0,0,${a})`;
-      ctx.beginPath();
-      ctx.arc(x, y, Math.random() * 1.5, 0, Math.PI * 2);
-      ctx.fill();
+    // ── Background: real Allos texture ──
+    if (bgRef.current) {
+      // Draw the texture image covering the entire canvas
+      const bgImg = bgRef.current;
+      const bgRatio = bgImg.width / bgImg.height;
+      const canvasRatio = W / H;
+      let srcX = 0, srcY = 0, srcW = bgImg.width, srcH = bgImg.height;
+      if (bgRatio > canvasRatio) {
+        srcW = bgImg.height * canvasRatio;
+        srcX = (bgImg.width - srcW) / 2;
+      } else {
+        srcH = bgImg.width / canvasRatio;
+        srcY = (bgImg.height - srcH) / 2;
+      }
+      ctx.drawImage(bgImg, srcX, srcY, srcW, srcH, 0, 0, W, H);
+    } else {
+      // Fallback gradient
+      const bgGrad = ctx.createLinearGradient(0, 0, W, H);
+      bgGrad.addColorStop(0, "#2D9E8F");
+      bgGrad.addColorStop(1, "#185C54");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, W, H);
     }
 
-    // Vignette
-    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.7);
+    // Subtle vignette
+    const vigGrad = ctx.createRadialGradient(W / 2, H / 2, W * 0.3, W / 2, H / 2, W * 0.75);
     vigGrad.addColorStop(0, "rgba(0,0,0,0)");
-    vigGrad.addColorStop(1, "rgba(0,0,0,0.2)");
+    vigGrad.addColorStop(1, "rgba(0,0,0,0.15)");
     ctx.fillStyle = vigGrad;
     ctx.fillRect(0, 0, W, H);
 
