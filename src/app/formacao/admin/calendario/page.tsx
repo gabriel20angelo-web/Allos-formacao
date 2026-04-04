@@ -506,6 +506,9 @@ export default function CalendarioPage() {
 
     lines.push("🔗 Grupo WhatsApp: https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ");
     lines.push("");
+    lines.push("📚 Encontros e cursos gravados completos e gratuitos:");
+    lines.push("👉 allos.org.br/formacao");
+    lines.push("");
     lines.push("_Sua participação fortalece nossos projetos!_ 💚");
 
     return lines.join("\n");
