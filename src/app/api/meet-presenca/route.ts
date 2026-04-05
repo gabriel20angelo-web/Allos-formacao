@@ -5,7 +5,7 @@ export const dynamic = "force-dynamic";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
   "Content-Type": "application/json; charset=utf-8",
 };
@@ -22,6 +22,7 @@ export async function POST(req: NextRequest) {
       meet_link,
       condutor_nome,
       slot_id,
+      atividade_nome,
       hora_inicio,
       hora_fim,
       duracao_minutos,
@@ -31,24 +32,24 @@ export async function POST(req: NextRequest) {
       pico_participantes,
     } = body;
 
-    if (!meet_link || !condutor_nome || !hora_inicio || !hora_fim) {
+    if (!condutor_nome || !hora_inicio || !hora_fim) {
       return NextResponse.json(
-        { error: "Campos obrigatórios: meet_link, condutor_nome, hora_inicio, hora_fim" },
+        { error: "Campos obrigatórios: condutor_nome, hora_inicio, hora_fim" },
         { status: 400, headers: corsHeaders }
       );
     }
 
     const dataReuniao = new Date(hora_inicio);
     const diaSemana = dataReuniao.getDay();
-    // JS: 0=domingo, ajustar para 0=segunda como no formacao_slots
     const diaSemanaAjustado = diaSemana === 0 ? 6 : diaSemana - 1;
 
     const sb = await createServiceRoleClient();
 
     const { data, error } = await sb.from("formacao_meet_presencas").insert({
       slot_id: slot_id || null,
-      meet_link,
+      meet_link: meet_link || "manual",
       condutor_nome,
+      atividade_nome: atividade_nome || null,
       data_reuniao: dataReuniao.toISOString().split("T")[0],
       dia_semana: diaSemanaAjustado,
       hora_inicio,
@@ -97,6 +98,34 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     return NextResponse.json(data, { headers: corsHeaders });
+  } catch (err: unknown) {
+    const message = err instanceof Error ? err.message : "Erro interno";
+    return NextResponse.json(
+      { error: message },
+      { status: 500, headers: corsHeaders }
+    );
+  }
+}
+
+export async function DELETE(req: NextRequest) {
+  try {
+    const id = req.nextUrl.searchParams.get("id");
+    if (!id) {
+      return NextResponse.json(
+        { error: "ID obrigatório" },
+        { status: 400, headers: corsHeaders }
+      );
+    }
+
+    const sb = await createServiceRoleClient();
+    const { error } = await sb
+      .from("formacao_meet_presencas")
+      .delete()
+      .eq("id", id);
+
+    if (error) throw error;
+
+    return NextResponse.json({ success: true }, { headers: corsHeaders });
   } catch (err: unknown) {
     const message = err instanceof Error ? err.message : "Erro interno";
     return NextResponse.json(
