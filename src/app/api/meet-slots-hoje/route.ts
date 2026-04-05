@@ -44,7 +44,8 @@ export async function GET() {
     // Buscar alocações com nomes dos condutores para cada slot
     const slotIds = (slots || []).map((s) => s.id);
 
-    let alocacoes: { slot_id: string; certificado_condutores: { id: string; nome: string } | null }[] = [];
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    let alocacoes: any[] = [];
     if (slotIds.length > 0) {
       const { data: alocs, error: alocError } = await sb
         .from("formacao_alocacoes")
@@ -65,8 +66,10 @@ export async function GET() {
           .filter(Boolean),
       }))
       .sort((a, b) => {
-        const ordemA = a.formacao_horarios?.ordem ?? 99;
-        const ordemB = b.formacao_horarios?.ordem ?? 99;
+        const hA = a.formacao_horarios as any;
+        const hB = b.formacao_horarios as any;
+        const ordemA = (Array.isArray(hA) ? hA[0]?.ordem : hA?.ordem) ?? 99;
+        const ordemB = (Array.isArray(hB) ? hB[0]?.ordem : hB?.ordem) ?? 99;
         return ordemA - ordemB;
       });
 
