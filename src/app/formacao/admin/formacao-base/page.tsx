@@ -3,7 +3,7 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, BookOpen, Calendar, Users, Layers, GraduationCap, BarChart3, UserCheck } from "lucide-react";
+import { Shield, BookOpen, Calendar, Users, Layers, GraduationCap, BarChart3, UserCheck, Activity } from "lucide-react";
 
 // Lazy-load existing page content
 const CursosPage = dynamic(() => import("@/app/formacao/admin/cursos/page"), { ssr: false });
@@ -13,8 +13,9 @@ const AtividadesPage = dynamic(() => import("@/app/formacao/admin/atividades/pag
 const AlunosPage = dynamic(() => import("@/app/formacao/admin/alunos/page"), { ssr: false });
 const EstatisticasPage = dynamic(() => import("@/app/formacao/admin/estatisticas/page"), { ssr: false });
 const QuorumPage = dynamic(() => import("@/app/formacao/admin/quorum/page"), { ssr: false });
+const AnalyticsPage = dynamic(() => import("@/app/formacao/admin/analytics/page"), { ssr: false });
 
-type SubTab = "cursos" | "calendario" | "condutores" | "atividades" | "alunos" | "estatisticas" | "quorum";
+type SubTab = "cursos" | "calendario" | "condutores" | "atividades" | "alunos" | "estatisticas" | "quorum" | "analytics";
 
 const TABS: { key: SubTab; label: string; icon: typeof Calendar }[] = [
   { key: "cursos", label: "Cursos", icon: BookOpen },
@@ -24,6 +25,7 @@ const TABS: { key: SubTab; label: string; icon: typeof Calendar }[] = [
   { key: "atividades", label: "Atividades", icon: Layers },
   { key: "estatisticas", label: "Estatísticas", icon: BarChart3 },
   { key: "quorum", label: "Quórum", icon: UserCheck },
+  { key: "analytics", label: "Analytics", icon: Activity },
 ];
 
 const PAGE_MAP: Record<SubTab, React.ComponentType> = {
@@ -34,6 +36,7 @@ const PAGE_MAP: Record<SubTab, React.ComponentType> = {
   atividades: AtividadesPage,
   estatisticas: EstatisticasPage,
   quorum: QuorumPage,
+  analytics: AnalyticsPage,
 };
 
 export default function FormacaoBasePage() {
