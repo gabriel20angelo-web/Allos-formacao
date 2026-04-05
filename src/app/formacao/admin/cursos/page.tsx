@@ -235,20 +235,27 @@ export default function AdminCursosPage() {
   }
 
   async function toggleFeatured(course: EnrichedCourse) {
-    const supabase = createClient();
     const newFeatured = !course.featured;
     const defaultLabel = course.course_type === "sync" ? "Ao vivo" : "Em destaque";
-    const { error } = await supabase
+    const { error, count } = await createClient()
       .from("courses")
-      .update({
-        featured: newFeatured,
-        featured_label: newFeatured ? (course.featured_label || defaultLabel) : null,
-      })
+      .update(
+        {
+          featured: newFeatured,
+          featured_label: newFeatured ? (course.featured_label || defaultLabel) : null,
+        },
+        { count: "exact" }
+      )
       .eq("id", course.id);
 
     if (error) {
       console.error("Erro ao atualizar destaque:", error);
       toast.error(`Erro ao atualizar destaque: ${error.message}`);
+      return;
+    }
+
+    if (count === 0) {
+      toast.error("Sem permissão para alterar este curso. Verifique se você está logado como admin.");
       return;
     }
 
@@ -264,13 +271,19 @@ export default function AdminCursosPage() {
 
   async function toggleStructured(course: EnrichedCourse) {
     const newVal = !course.is_structured;
-    const { error } = await createClient()
+    const { error, count } = await createClient()
       .from("courses")
-      .update({ is_structured: newVal })
+      .update({ is_structured: newVal }, { count: "exact" })
       .eq("id", course.id);
 
     if (error) {
-      toast.error("Erro ao atualizar curso.");
+      console.error("Erro ao atualizar estruturado:", error);
+      toast.error(`Erro ao atualizar curso: ${error.message}`);
+      return;
+    }
+
+    if (count === 0) {
+      toast.error("Sem permissão para alterar este curso. Verifique se você está logado como admin.");
       return;
     }
 
