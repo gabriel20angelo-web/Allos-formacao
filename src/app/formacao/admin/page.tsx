@@ -263,6 +263,28 @@ function AdminRankingCard({
 // StatCard helper
 // ═══════════════════════════════════════════════════════════════
 
+function HintButton({ text }: { text: string }) {
+  const [show, setShow] = useState(false);
+  return (
+    <span className="relative inline-block">
+      <button
+        onClick={(e) => { e.stopPropagation(); setShow(!show); }}
+        className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors"
+        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(253,251,247,0.3)" }}
+      >?</button>
+      {show && (
+        <div
+          className="absolute z-50 bottom-6 left-1/2 -translate-x-1/2 w-52 px-3 py-2 rounded-lg text-[11px] font-dm leading-relaxed"
+          style={{ background: "#222", border: "1px solid #444", color: "rgba(253,251,247,0.7)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
+        >
+          {text}
+          <button onClick={() => setShow(false)} className="absolute top-1 right-1.5 text-cream/30 hover:text-cream text-[10px]">x</button>
+        </div>
+      )}
+    </span>
+  );
+}
+
 function StatCard({
   card,
   delay,
@@ -272,6 +294,7 @@ function StatCard({
     value: string;
     suffix?: string;
     subtitle?: string;
+    hint?: string;
     icon: any;
     iconColor: string;
     iconBg: string;
@@ -316,7 +339,10 @@ function StatCard({
                 </span>
               )}
             </div>
-            <p className="text-[11px] font-dm text-cream/40">{card.label}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-[11px] font-dm text-cream/40">{card.label}</p>
+              {card.hint && <HintButton text={card.hint} />}
+            </div>
             {card.subtitle && (
               <p className="text-[10px] font-dm text-cream/25">
                 {card.subtitle}
@@ -1556,14 +1582,16 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
                   {
-                    label: "Sessões realizadas",
+                    label: "Grupos conduzidos",
+                    hint: "Total de feedbacks/presenças registrados no formulário de certificado no período selecionado.",
                     value: String(formacaoStats.totalSessions),
                     icon: Calendar,
                     iconColor: "#C84B31",
                     iconBg: "rgba(200,75,49,0.1)",
                   },
                   {
-                    label: "Média por sessão",
+                    label: "Pessoas por grupo",
+                    hint: "Média de participantes por grupo conduzido no período.",
                     value:
                       formacaoStats.avgParticipantsPerSession.toFixed(1),
                     icon: Users,
@@ -1571,7 +1599,8 @@ export default function AdminDashboard() {
                     iconBg: "rgba(46,158,143,0.1)",
                   },
                   {
-                    label: "Frequência média",
+                    label: "Vezes que cada pessoa participou",
+                    hint: "Em média, quantas vezes cada pessoa participou de grupos no período (total de presenças / participantes únicos).",
                     value:
                       formacaoStats.avgFrequencyPerStudent.toFixed(1) +
                       "x",
@@ -1580,7 +1609,8 @@ export default function AdminDashboard() {
                     iconBg: "rgba(212,133,74,0.1)",
                   },
                   {
-                    label: "Participantes únicos",
+                    label: "Pessoas diferentes",
+                    hint: "Total de pessoas únicas que participaram de pelo menos um grupo no período.",
                     value: String(formacaoStats.uniqueParticipants),
                     icon: GraduationCap,
                     iconColor: "#C84B31",
@@ -1595,21 +1625,24 @@ export default function AdminDashboard() {
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
                 {[
                   {
-                    label: "Novos no período",
+                    label: "Primeira vez no período",
+                    hint: "Pessoas que apareceram pela primeira vez nos grupos síncronos durante este período.",
                     value: String(formacaoStats.newStudentsThisPeriod),
                     icon: Plus,
                     iconColor: "#22C55E",
                     iconBg: "rgba(34,197,94,0.1)",
                   },
                   {
-                    label: "Ativos (30d)",
+                    label: "Participaram nos últimos 30 dias",
+                    hint: "Pessoas que enviaram pelo menos 1 feedback/presença nos últimos 30 dias.",
                     value: String(formacaoStats.activeStudents),
                     icon: CheckCircle,
                     iconColor: "#22C55E",
                     iconBg: "rgba(34,197,94,0.1)",
                   },
                   {
-                    label: "Inativos",
+                    label: "Sumiram",
+                    hint: "Pessoas que já participaram antes mas não aparecem há mais de 30 dias.",
                     value: String(formacaoStats.inactiveStudents),
                     icon: UserX,
                     iconColor: "#EF4444",
@@ -1617,6 +1650,7 @@ export default function AdminDashboard() {
                   },
                   {
                     label: "Taxa de retenção",
+                    hint: "Porcentagem de participantes que continuam ativos (últimos 30 dias) em relação ao total histórico.",
                     value:
                       formacaoStats.retentionRate.toFixed(0) + "%",
                     icon: TrendingUp,
@@ -2484,8 +2518,8 @@ export default function AdminDashboard() {
                 </Card>
               </motion.div>
 
-              {/* ── Submissions trend ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              {/* ── Presenças registradas no período ── */}
+              <div className="grid grid-cols-1 gap-4 mb-6">
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2498,8 +2532,9 @@ export default function AdminDashboard() {
                         style={{ color: "#C84B31" }}
                       />
                       <h3 className="font-dm text-sm font-semibold text-cream/70">
-                        Submissões no Período
+                        Presenças registradas no período
                       </h3>
+                      <HintButton text="Quantidade de feedbacks/presenças enviados por dia no formulário de certificado." />
                     </div>
                     {formacaoStats.submissionsTrend.length > 0 ? (
                       <MiniBarChart
@@ -2508,35 +2543,7 @@ export default function AdminDashboard() {
                       />
                     ) : (
                       <p className="text-xs text-cream/30 text-center py-6">
-                        Nenhuma submissão no período.
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.3, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <TrendingUp
-                        className="h-4 w-4"
-                        style={{ color: "#2E9E8F" }}
-                      />
-                      <h3 className="font-dm text-sm font-semibold text-cream/70">
-                        Matrículas no Período
-                      </h3>
-                    </div>
-                    {formacaoStats.enrollmentTrend.length > 0 ? (
-                      <MiniBarChart
-                        data={formacaoStats.enrollmentTrend}
-                        color="#2E9E8F"
-                      />
-                    ) : (
-                      <p className="text-xs text-cream/30 text-center py-6">
-                        Nenhuma matrícula no período.
+                        Nenhuma presença registrada no período.
                       </p>
                     )}
                   </Card>
@@ -2833,6 +2840,25 @@ export default function AdminDashboard() {
                     )}
                   </Card>
                 </motion.div>
+
+                {/* Enrollment trend */}
+                {formacaoStats && formacaoStats.enrollmentTrend.length > 0 && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 0.45, duration: 0.4 }}
+                    className="lg:col-span-2 mb-4"
+                  >
+                    <Card>
+                      <div className="flex items-center gap-2 mb-3">
+                        <TrendingUp className="h-4 w-4" style={{ color: "#2E9E8F" }} />
+                        <h3 className="font-dm text-sm font-semibold text-cream/70">Matrículas em cursos no período</h3>
+                        <HintButton text="Novas matrículas em cursos gravados ao longo do tempo." />
+                      </div>
+                      <MiniBarChart data={formacaoStats.enrollmentTrend} color="#2E9E8F" />
+                    </Card>
+                  </motion.div>
+                )}
 
                 {/* Activity feed column */}
                 <motion.div
