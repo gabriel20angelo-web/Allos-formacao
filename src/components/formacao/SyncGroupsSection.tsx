@@ -485,7 +485,7 @@ export default function SyncGroupsSection() {
                 onClick={(e) => e.stopPropagation()}
               >
                 <div className="flex items-start justify-between mb-4">
-                  <div>
+                  <div className="min-w-0 flex-1 mr-3">
                     <p className="font-dm text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#C84B31" }}>
                       Sobre o grupo
                     </p>
@@ -495,15 +495,17 @@ export default function SyncGroupsSection() {
                   </div>
                   <button
                     onClick={() => setDescModal(null)}
-                    className="p-1 rounded-lg transition-colors hover:bg-white/5"
+                    className="p-1 rounded-lg transition-colors hover:bg-white/5 flex-shrink-0"
                     style={{ color: "rgba(253,251,247,0.3)" }}
                   >
                     <X size={16} />
                   </button>
                 </div>
-                <p className="font-dm text-sm leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
-                  {descModal.descricao}
-                </p>
+                <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
+                  <p className="font-dm text-sm leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
+                    {descModal.descricao}
+                  </p>
+                </div>
               </motion.div>
             </motion.div>
           )}

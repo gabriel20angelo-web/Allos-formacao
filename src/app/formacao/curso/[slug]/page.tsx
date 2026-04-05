@@ -293,10 +293,10 @@ export default function CourseOverviewPage() {
             >
               <Link
                 href="/formacao"
-                className="inline-flex items-center gap-2 text-sm text-white/70 hover:text-white transition-colors mb-6 font-dm"
+                className="inline-flex items-center gap-2 text-sm font-medium text-white/70 hover:text-white transition-all hover:-translate-x-0.5 mb-6 font-dm px-3 py-1.5 rounded-xl hover:bg-white/[0.06]"
               >
                 <ArrowLeft className="h-4 w-4" />
-                Voltar
+                Explorar outros cursos
               </Link>
             </motion.div>
 
