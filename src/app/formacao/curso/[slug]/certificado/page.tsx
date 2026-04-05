@@ -55,7 +55,34 @@ export default function CertificadoPage() {
   const [extraHours, setExtraHours] = useState(0);
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
+  const [certName, setCertName] = useState("");
+  const [savingName, setSavingName] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+
+  const certDisplayName = certName || profile?.full_name || "";
+
+  // Initialize certificate name from profile
+  useEffect(() => {
+    if (profile) {
+      setCertName(profile.certificate_name || profile.full_name || "");
+    }
+  }, [profile]);
+
+  async function saveCertName() {
+    if (!user || !certName.trim()) return;
+    setSavingName(true);
+    const client = createClient();
+    const { error } = await client
+      .from("profiles")
+      .update({ certificate_name: certName.trim() })
+      .eq("id", user.id);
+    if (error) {
+      toast.error("Erro ao salvar nome.");
+    } else {
+      toast.success("Nome salvo para certificados!");
+    }
+    setSavingName(false);
+  }
 
   useEffect(() => {
     async function fetch() {
@@ -298,10 +325,10 @@ export default function CertificadoPage() {
       // Name
       ctx.fillStyle = "#c0392b";
       ctx.font = "italic 700 52px Georgia, 'Times New Roman', serif";
-      ctx.fillText(profile.full_name, W / 2, 445);
+      ctx.fillText(certDisplayName, W / 2, 445);
 
       // Name underline gradient
-      const nameWidth = ctx.measureText(profile.full_name).width;
+      const nameWidth = ctx.measureText(certDisplayName).width;
       const grad = ctx.createLinearGradient(W / 2 - nameWidth / 2, 0, W / 2 + nameWidth / 2, 0);
       grad.addColorStop(0, "rgba(192,57,43,0)");
       grad.addColorStop(0.2, "rgba(192,57,43,0.3)");
@@ -326,7 +353,7 @@ export default function CertificadoPage() {
       let bodyText: string;
       if (course.certificate_body_text) {
         bodyText = course.certificate_body_text
-          .replace("{nome}", profile.full_name)
+          .replace("{nome}", certDisplayName)
           .replace("{curso}", course.title)
           .replace("{horas}", `${hours} (${extenso})`)
           .replace("{data}", dateStr);
@@ -489,7 +516,39 @@ export default function CertificadoPage() {
             : <>Parabéns pela conclusão do curso <span className="font-medium text-cream">{course?.title}</span>! Clique abaixo para gerar seu certificado.</>
           }
         </p>
-        <Button size="lg" loading={generating} onClick={generateCertificate}>
+        <div className="max-w-sm mx-auto mb-6 text-left">
+          <label className="block text-xs font-dm text-cream/50 mb-1.5">
+            Nome completo para o certificado
+          </label>
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={certName}
+              onChange={(e) => setCertName(e.target.value)}
+              placeholder="Seu nome completo"
+              className="flex-1 px-4 py-2.5 rounded-xl text-sm font-dm text-cream outline-none transition-all focus:ring-2 focus:ring-accent/30"
+              style={{
+                background: "rgba(255,255,255,0.05)",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+            />
+            {certName !== (profile?.certificate_name || profile?.full_name) && certName.trim() && (
+              <button
+                onClick={saveCertName}
+                disabled={savingName}
+                className="px-3 py-2 rounded-xl text-xs font-dm font-semibold transition-all"
+                style={{ background: "rgba(46,158,143,0.15)", color: "#2E9E8F", border: "1px solid rgba(46,158,143,0.2)" }}
+              >
+                {savingName ? "..." : "Salvar"}
+              </button>
+            )}
+          </div>
+          <p className="text-[11px] font-dm mt-2" style={{ color: "rgba(253,251,247,0.3)" }}>
+            Confira se o nome esta correto. Este nome aparecera no seu certificado e nao podera ser alterado depois.
+          </p>
+        </div>
+
+        <Button size="lg" loading={generating} onClick={async () => { await saveCertName(); generateCertificate(); }} disabled={!certName.trim()}>
           <Award className="h-5 w-5" />
           Gerar meu certificado
         </Button>

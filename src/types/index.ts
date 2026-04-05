@@ -15,6 +15,7 @@ export type InstructorRole = "lead" | "assistant";
 export interface Profile {
   id: string;
   full_name: string;
+  certificate_name: string | null;
   email: string;
   avatar_url: string | null;
   role: UserRole;
