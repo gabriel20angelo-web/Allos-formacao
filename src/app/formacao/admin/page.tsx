@@ -439,6 +439,11 @@ export default function AdminDashboard() {
     { date: string; count: number }[]
   >([]);
   const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
+  const [asyncEngagement, setAsyncEngagement] = useState<{
+    avgProgress: number;
+    topCourses: { title: string; slug: string; watchCount: number; avgProgress: number }[];
+    topViewers: { name: string; lessonsWatched: number; hoursWatched: number }[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
 
   // ── Sync (Formação Base) stats ──
@@ -729,6 +734,143 @@ export default function AdminDashboard() {
 
     fetchStats().catch(() => setLoading(false));
   }, [profile, isAdmin]);
+
+  // ── Async engagement stats ──
+  useEffect(() => {
+    async function fetchEngagement() {
+      if (!profile) return;
+      const supabase = createClient();
+
+      // Get all lesson progress with completion data
+      const { data: progress } = await supabase
+        .from("lesson_progress")
+        .select("user_id, lesson_id, completed")
+
+      if (!progress || progress.length === 0) return;
+
+      // Get lessons with sections and courses
+      const lessonIds = Array.from(new Set(progress.map(p => p.lesson_id)));
+      const { data: lessons } = await supabase
+        .from("lessons")
+        .select("id, section_id, duration_minutes")
+        .in("id", lessonIds);
+
+      if (!lessons) return;
+
+      const sectionIds = Array.from(new Set(lessons.map(l => l.section_id)));
+      const { data: sections } = await supabase
+        .from("sections")
+        .select("id, course_id")
+        .in("id", sectionIds);
+
+      if (!sections) return;
+
+      const courseIds = Array.from(new Set(sections.map(s => s.course_id)));
+      const [{ data: courses }, { data: allLessons }] = await Promise.all([
+        supabase.from("courses").select("id, title, slug").in("id", courseIds),
+        supabase.from("lessons").select("id, section_id").in("section_id", sectionIds),
+      ]);
+
+      if (!courses || !allLessons) return;
+
+      // Build maps
+      const sectionToCourse = new Map(sections.map(s => [s.id, s.course_id]));
+      const lessonToSection = new Map(lessons.map(l => [l.id, l.section_id]));
+      const lessonDuration = new Map(lessons.map(l => [l.id, l.duration_minutes || 0]));
+      const courseMap = new Map(courses.map(c => [c.id, c]));
+
+      // Total lessons per course
+      const totalLessonsPerCourse = new Map<string, number>();
+      allLessons.forEach(l => {
+        const cid = sectionToCourse.get(l.section_id);
+        if (cid) totalLessonsPerCourse.set(cid, (totalLessonsPerCourse.get(cid) || 0) + 1);
+      });
+
+      // Completed lessons per user per course
+      const userCourseProgress = new Map<string, Map<string, number>>();
+      progress.filter(p => p.completed).forEach(p => {
+        const sid = lessonToSection.get(p.lesson_id);
+        if (!sid) return;
+        const cid = sectionToCourse.get(sid);
+        if (!cid) return;
+        if (!userCourseProgress.has(p.user_id)) userCourseProgress.set(p.user_id, new Map());
+        const userMap = userCourseProgress.get(p.user_id)!;
+        userMap.set(cid, (userMap.get(cid) || 0) + 1);
+      });
+
+      // Average progress across all user-course pairs
+      let totalPct = 0, pctCount = 0;
+      userCourseProgress.forEach((courseMap) => {
+        courseMap.forEach((completed, cid) => {
+          const total = totalLessonsPerCourse.get(cid) || 1;
+          totalPct += (completed / total) * 100;
+          pctCount++;
+        });
+      });
+      const avgProgress = pctCount > 0 ? totalPct / pctCount : 0;
+
+      // Top courses by watch count
+      const courseWatchCount = new Map<string, { count: number; completedLessons: number }>();
+      progress.filter(p => p.completed).forEach(p => {
+        const sid = lessonToSection.get(p.lesson_id);
+        if (!sid) return;
+        const cid = sectionToCourse.get(sid);
+        if (!cid) return;
+        const e = courseWatchCount.get(cid) || { count: 0, completedLessons: 0 };
+        e.count++;
+        courseWatchCount.set(cid, e);
+      });
+
+      const topCourses = Array.from(courseWatchCount.entries())
+        .map(([cid, d]) => {
+          const c = courseMap.get(cid);
+          const total = totalLessonsPerCourse.get(cid) || 1;
+          // unique users who watched this course
+          let uniqueUsers = 0;
+          userCourseProgress.forEach((um) => { if (um.has(cid)) uniqueUsers++; });
+          const avgProg = uniqueUsers > 0
+            ? Array.from(userCourseProgress.values()).reduce((s, um) => s + ((um.get(cid) || 0) / total * 100), 0) / uniqueUsers
+            : 0;
+          return {
+            title: c?.title || "?",
+            slug: c?.slug || "",
+            watchCount: d.count,
+            avgProgress: Math.round(avgProg),
+          };
+        })
+        .sort((a, b) => b.watchCount - a.watchCount)
+        .slice(0, 5);
+
+      // Top viewers (users)
+      const userIds = Array.from(new Set(progress.map(p => p.user_id)));
+      const { data: profiles } = await supabase
+        .from("profiles")
+        .select("id, full_name")
+        .in("id", userIds);
+
+      const nameMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
+
+      const userStats = new Map<string, { lessonsWatched: number; minutes: number }>();
+      progress.filter(p => p.completed).forEach(p => {
+        const e = userStats.get(p.user_id) || { lessonsWatched: 0, minutes: 0 };
+        e.lessonsWatched++;
+        e.minutes += lessonDuration.get(p.lesson_id) || 0;
+        userStats.set(p.user_id, e);
+      });
+
+      const topViewers = Array.from(userStats.entries())
+        .map(([uid, d]) => ({
+          name: nameMap.get(uid) || "?",
+          lessonsWatched: d.lessonsWatched,
+          hoursWatched: Math.round(d.minutes / 60 * 10) / 10,
+        }))
+        .sort((a, b) => b.lessonsWatched - a.lessonsWatched)
+        .slice(0, 5);
+
+      setAsyncEngagement({ avgProgress, topCourses, topViewers });
+    }
+    if (profile) fetchEngagement();
+  }, [profile]);
 
   // ═══════════════════════════════════════════════════════════
   // Data fetching: Sync (Formação Base) stats
@@ -2921,6 +3063,106 @@ export default function AdminDashboard() {
                   </Card>
                 </motion.div>
               </div>
+
+              {/* Engagement stats */}
+              {asyncEngagement && (
+                <div className="space-y-5">
+                  {/* Avg progress card */}
+                  <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.4 }}>
+                    <Card>
+                      <div className="flex items-center gap-3 mb-3">
+                        <div className="w-10 h-10 rounded-[10px] flex items-center justify-center" style={{ background: "rgba(46,158,143,0.1)" }}>
+                          <BarChart3 className="h-5 w-5" style={{ color: "#2E9E8F" }} />
+                        </div>
+                        <div>
+                          <p className="font-fraunces font-bold text-xl text-cream">
+                            <span style={{ color: "#2E9E8F" }}>{asyncEngagement.avgProgress.toFixed(0)}%</span>
+                          </p>
+                          <div className="flex items-center gap-1.5">
+                            <p className="text-[11px] font-dm text-cream/40">Progresso medio dos alunos nos cursos</p>
+                            <HintButton text="Porcentagem media de conclusao considerando todos os alunos matriculados em todos os cursos." />
+                          </div>
+                        </div>
+                      </div>
+                      <div className="w-full h-3 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <motion.div initial={{ width: 0 }} animate={{ width: `${Math.min(asyncEngagement.avgProgress, 100)}%` }}
+                          transition={{ duration: 1, delay: 0.8 }}
+                          className="h-full rounded-full" style={{ background: "#2E9E8F" }} />
+                      </div>
+                    </Card>
+                  </motion.div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                    {/* Top courses */}
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.4 }}>
+                      <Card>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Flame className="h-4 w-4" style={{ color: "#C84B31" }} />
+                          <h3 className="font-dm text-sm font-semibold text-cream/70">Cursos mais assistidos</h3>
+                        </div>
+                        {asyncEngagement.topCourses.length > 0 ? (
+                          <div className="space-y-3">
+                            {asyncEngagement.topCourses.map((course, i) => {
+                              const medals = ["#C84B31", "rgba(253,251,247,0.5)", "rgba(200,75,49,0.6)"];
+                              const isMedal = i < 3;
+                              const maxWatch = asyncEngagement.topCourses[0]?.watchCount || 1;
+                              return (
+                                <div key={course.slug} className="space-y-1">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-fraunces font-bold text-sm w-5 text-center" style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.2)" }}>{i + 1}</span>
+                                    <span className="font-dm text-xs flex-1 text-cream/70 truncate">{course.title}</span>
+                                    <span className="font-dm text-[10px] text-cream/30">{course.watchCount} aulas</span>
+                                    <span className="font-dm text-[10px] font-semibold" style={{ color: "#2E9E8F" }}>{course.avgProgress}%</span>
+                                  </div>
+                                  <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
+                                    <div className="h-full rounded-full" style={{ width: `${(course.watchCount / maxWatch) * 100}%`, background: isMedal ? medals[i] : "rgba(253,251,247,0.15)", opacity: isMedal ? 0.6 : 0.3 }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-cream/30 text-center py-4">Nenhum dado.</p>
+                        )}
+                      </Card>
+                    </motion.div>
+
+                    {/* Top viewers */}
+                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.4 }}>
+                      <Card>
+                        <div className="flex items-center gap-2 mb-4">
+                          <Trophy className="h-4 w-4" style={{ color: "#D4854A" }} />
+                          <h3 className="font-dm text-sm font-semibold text-cream/70">Quem mais assiste</h3>
+                        </div>
+                        {asyncEngagement.topViewers.length > 0 ? (
+                          <div className="space-y-3">
+                            {asyncEngagement.topViewers.map((viewer, i) => {
+                              const medals = ["#D4854A", "rgba(253,251,247,0.5)", "rgba(212,133,74,0.6)"];
+                              const isMedal = i < 3;
+                              const maxLessons = asyncEngagement.topViewers[0]?.lessonsWatched || 1;
+                              return (
+                                <div key={viewer.name} className="space-y-1">
+                                  <div className="flex items-center gap-3">
+                                    <span className="font-fraunces font-bold text-sm w-5 text-center" style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.2)" }}>{i + 1}</span>
+                                    <span className="font-dm text-xs flex-1 text-cream/70 truncate">{viewer.name.split(" ").slice(0, 2).join(" ")}</span>
+                                    <span className="font-dm text-[10px] text-cream/30">{viewer.lessonsWatched} aulas</span>
+                                    <span className="font-dm text-[10px] font-semibold" style={{ color: "#D4854A" }}>{viewer.hoursWatched}h</span>
+                                  </div>
+                                  <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
+                                    <div className="h-full rounded-full" style={{ width: `${(viewer.lessonsWatched / maxLessons) * 100}%`, background: isMedal ? medals[i] : "rgba(253,251,247,0.15)", opacity: isMedal ? 0.6 : 0.3 }} />
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        ) : (
+                          <p className="text-xs text-cream/30 text-center py-4">Nenhum dado.</p>
+                        )}
+                      </Card>
+                    </motion.div>
+                  </div>
+                </div>
+              )}
             </>
           )}
         </motion.div>
