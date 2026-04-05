@@ -26,6 +26,7 @@ import {
   FileText,
   GraduationCap,
   Calendar,
+  BarChart3,
 } from "lucide-react";
 
 const navItems = [

@@ -214,6 +214,15 @@ export default function AdminDashboard() {
   } | null>(null);
   const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null);
 
+  // Meet quorum stats
+  const [quorumStats, setQuorumStats] = useState<{
+    gruposEstaSemana: number;
+    mediaEstaSemana: number;
+    picoEstaSemana: number;
+    participantesUnicos: number;
+    tendencia: number; // % vs semana anterior
+  } | null>(null);
+
   // Main dashboard fetch
   useEffect(() => {
     async function fetchStats() {
@@ -832,6 +841,75 @@ export default function AdminDashboard() {
 
     fetchFormacaoStats();
   }, [profile, dashPeriod]);
+
+  // Meet quorum fetch
+  useEffect(() => {
+    async function fetchQuorum() {
+      try {
+        const supabase = createClient();
+        const now = new Date();
+        const jsDay = now.getDay();
+        const mondayOffset = jsDay === 0 ? 6 : jsDay - 1;
+        const monday = new Date(now);
+        monday.setDate(now.getDate() - mondayOffset);
+        const sunday = new Date(monday);
+        sunday.setDate(monday.getDate() + 6);
+
+        const inicioSemana = monday.toISOString().split("T")[0];
+        const fimSemana = sunday.toISOString().split("T")[0];
+
+        const prevMonday = new Date(monday);
+        prevMonday.setDate(monday.getDate() - 7);
+        const prevSunday = new Date(monday);
+        prevSunday.setDate(monday.getDate() - 1);
+
+        const [{ data: current }, { data: prev }] = await Promise.all([
+          supabase.from("formacao_meet_presencas").select("*")
+            .gte("data_reuniao", inicioSemana).lte("data_reuniao", fimSemana),
+          supabase.from("formacao_meet_presencas").select("media_participantes")
+            .gte("data_reuniao", prevMonday.toISOString().split("T")[0])
+            .lte("data_reuniao", prevSunday.toISOString().split("T")[0]),
+        ]);
+
+        const presencas = current || [];
+        const prevPresencas = prev || [];
+
+        if (presencas.length === 0 && prevPresencas.length === 0) {
+          setQuorumStats(null);
+          return;
+        }
+
+        const gruposEstaSemana = presencas.length;
+        const mediaEstaSemana = gruposEstaSemana > 0
+          ? presencas.reduce((s: number, p: any) => s + (p.media_participantes || 0), 0) / gruposEstaSemana
+          : 0;
+        const picoEstaSemana = gruposEstaSemana > 0
+          ? Math.max(...presencas.map((p: any) => p.pico_participantes || 0))
+          : 0;
+
+        const nomes = new Set<string>();
+        presencas.forEach((p: any) => {
+          (p.participantes || []).forEach((part: any) => nomes.add(part.nome));
+        });
+
+        const mediaPrev = prevPresencas.length > 0
+          ? prevPresencas.reduce((s: number, p: any) => s + (p.media_participantes || 0), 0) / prevPresencas.length
+          : 0;
+        const tendencia = mediaPrev > 0 ? ((mediaEstaSemana - mediaPrev) / mediaPrev) * 100 : 0;
+
+        setQuorumStats({
+          gruposEstaSemana,
+          mediaEstaSemana,
+          picoEstaSemana,
+          participantesUnicos: nomes.size,
+          tendencia,
+        });
+      } catch {
+        // table may not exist yet
+      }
+    }
+    if (profile) fetchQuorum();
+  }, [profile]);
 
   if (loading) {
     return (
@@ -1650,6 +1728,62 @@ export default function AdminDashboard() {
               </motion.div>
             ))}
           </div>
+
+          {/* ── 3.5 QUÓRUM DO MEET ────────────────────────── */}
+          {quorumStats && quorumStats.gruposEstaSemana > 0 && (
+            <>
+              <div className="mb-2 mt-2">
+                <h3 className="font-fraunces font-semibold text-sm text-cream/60">Quórum do Meet</h3>
+                <p className="font-dm text-[11px] text-cream/25">Presença capturada automaticamente nas reuniões do Google Meet esta semana.</p>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+                {[
+                  { label: "Grupos realizados", value: String(quorumStats.gruposEstaSemana), icon: Calendar, iconColor: "#6c5ce7", iconBg: "rgba(108,92,231,0.1)" },
+                  {
+                    label: "Média por grupo",
+                    value: quorumStats.mediaEstaSemana.toFixed(1),
+                    icon: Users,
+                    iconColor: "#00b894",
+                    iconBg: "rgba(0,184,148,0.1)",
+                    trend: quorumStats.tendencia,
+                  },
+                  { label: "Pico da semana", value: String(quorumStats.picoEstaSemana), icon: TrendingUp, iconColor: "#fdcb6e", iconBg: "rgba(253,203,110,0.1)" },
+                  { label: "Participantes únicos", value: String(quorumStats.participantesUnicos), icon: GraduationCap, iconColor: "#e17055", iconBg: "rgba(225,112,85,0.1)" },
+                ].map((card: any, i) => (
+                  <motion.div
+                    key={card.label}
+                    initial={{ opacity: 0, y: 12 }}
+                    animate={{ opacity: 1, y: 0 }}
+                    transition={{ delay: 1.1 + i * 0.06, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
+                  >
+                    <Card>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-10 h-10 rounded-[10px] flex items-center justify-center flex-shrink-0"
+                          style={{ background: card.iconBg }}
+                        >
+                          <card.icon className="h-5 w-5" style={{ color: card.iconColor }} />
+                        </div>
+                        <div className="min-w-0">
+                          <div className="flex items-center gap-2">
+                            <p className="font-fraunces font-bold text-xl text-cream tabular-nums">
+                              <span style={{ color: card.iconColor }}>{card.value}</span>
+                            </p>
+                            {card.trend !== undefined && card.trend !== 0 && (
+                              <span className="font-dm text-[10px] font-semibold" style={{ color: card.trend > 0 ? "#00b894" : "#e74c3c" }}>
+                                {card.trend > 0 ? "+" : ""}{card.trend.toFixed(0)}%
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-[11px] font-dm text-cream/40">{card.label}</p>
+                        </div>
+                      </div>
+                    </Card>
+                  </motion.div>
+                ))}
+              </div>
+            </>
+          )}
 
           {/* ── 4. RETENÇÃO E CRESCIMENTO ────────────────────────── */}
           <div className="mb-2 mt-2">

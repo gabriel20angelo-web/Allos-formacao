@@ -311,3 +311,30 @@ export interface FormacaoSlotLog {
   condutor_ids: string[];
   changed_at: string;
 }
+
+// ─── Meet Presence Tracking ─────────────────
+
+export interface MeetParticipante {
+  nome: string;
+  primeira_entrada: string;
+  ultima_saida: string;
+  intervalos: [string, string | null][];
+  snapshots_presente: number;
+}
+
+export interface FormacaoMeetPresenca {
+  id: string;
+  slot_id: string | null;
+  meet_link: string;
+  condutor_nome: string;
+  data_reuniao: string;
+  dia_semana: number;
+  hora_inicio: string;
+  hora_fim: string;
+  duracao_minutos: number;
+  participantes: MeetParticipante[];
+  total_participantes: number;
+  media_participantes: number;
+  pico_participantes: number;
+  created_at: string;
+}
