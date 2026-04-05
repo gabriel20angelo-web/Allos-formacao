@@ -3,7 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
-import { Radio, Clock, Video, ChevronRight, MessageCircle, X, Trophy } from "lucide-react";
+import { Radio, Clock, Video, ChevronRight, MessageCircle, X, Trophy, ExternalLink, CalendarDays } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
 
@@ -22,6 +22,16 @@ interface AtividadeInfo {
   id: string;
   nome: string;
   descricao: string | null;
+}
+
+interface Evento {
+  id: string;
+  titulo: string;
+  descricao: string | null;
+  link: string | null;
+  data_inicio: string;
+  data_fim: string;
+  ativo: boolean;
 }
 
 interface ScheduleItem {
@@ -59,13 +69,14 @@ function getTodayIndex() {
 export default function SyncGroupsSection() {
   const [slots, setSlots] = useState<Slot[]>([]);
   const [atividades, setAtividades] = useState<AtividadeInfo[]>([]);
+  const [eventos, setEventos] = useState<Evento[]>([]);
   const [duracao, setDuracao] = useState(90);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(false);
   const [visivel, setVisivel] = useState(true);
   const [nowMinutes, setNowMinutes] = useState(getNowMinutes);
   const [todayIndex, setTodayIndex] = useState(getTodayIndex);
-  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [descModal, setDescModal] = useState<{ atividade: string; descricao: string } | null>(null);
 
   // Ranking
   type RankingPeriod = "week" | "month" | "quarter" | "semester" | "year";
@@ -78,7 +89,6 @@ export default function SyncGroupsSection() {
 
   const { ref, inView } = useInView({ triggerOnce: true, threshold: 0.1 });
 
-  // Tick every 60s to keep live status in sync
   useEffect(() => {
     const interval = setInterval(() => {
       setNowMinutes(getNowMinutes());
@@ -92,7 +102,7 @@ export default function SyncGroupsSection() {
       try {
         const client = (await import("@/lib/supabase/client")).createClient();
 
-        const [slotsRes, atividadesRes] = await Promise.all([
+        const [slotsRes, atividadesRes, eventosRes, cfgRes] = await Promise.all([
           client
             .from("formacao_slots")
             .select("*, formacao_horarios(hora, ordem)")
@@ -101,10 +111,26 @@ export default function SyncGroupsSection() {
             .from("certificado_atividades")
             .select("id, nome, descricao")
             .eq("ativo", true),
+          client
+            .from("certificado_eventos")
+            .select("*")
+            .eq("ativo", true)
+            .gte("data_fim", new Date().toISOString())
+            .order("data_inicio"),
+          client
+            .from("formacao_cronograma")
+            .select("grupos_visiveis, duracao_minutos")
+            .limit(1)
+            .single(),
         ]);
 
         if (slotsRes.data) setSlots(slotsRes.data as unknown as Slot[]);
         if (atividadesRes.data) setAtividades(atividadesRes.data);
+        if (eventosRes.data) setEventos(eventosRes.data);
+        if (cfgRes.data) {
+          setVisivel(cfgRes.data.grupos_visiveis !== false);
+          if (cfgRes.data.duracao_minutos) setDuracao(cfgRes.data.duracao_minutos);
+        }
       } catch {
         setError(true);
       } finally {
@@ -114,7 +140,6 @@ export default function SyncGroupsSection() {
     fetchSchedule();
   }, []);
 
-  // Ranking fetch
   useEffect(() => {
     fetch(`/api/ranking?period=${rankingPeriod}&type=${rankingType}&_t=${Date.now()}`)
       .then(r => r.json())
@@ -178,12 +203,19 @@ export default function SyncGroupsSection() {
     return map;
   }, [schedule]);
 
+  // Active/upcoming events
+  const activeEventos = useMemo(() => {
+    const now = new Date();
+    return eventos.filter(e => e.ativo && new Date(e.data_fim) >= now);
+  }, [eventos]);
+
   if (loading || error || !visivel) return null;
 
   const hasSchedule = schedule.length > 0;
   const hasRanking = rankingData.length > 0;
+  const hasEvents = activeEventos.length > 0;
 
-  if (!hasSchedule && !hasRanking) return null;
+  if (!hasSchedule && !hasRanking && !hasEvents) return null;
 
   return (
     <section
@@ -194,7 +226,7 @@ export default function SyncGroupsSection() {
       }}
     >
       <div className="max-w-[1200px] mx-auto">
-        {/* Header — only show if schedule exists */}
+        {/* Header */}
         {hasSchedule && (
         <div className="text-center mb-10">
           <motion.p
@@ -203,7 +235,7 @@ export default function SyncGroupsSection() {
             transition={{ duration: 0.5 }}
             className="font-dm font-semibold text-xs tracking-[.22em] text-[#2E9E8F] uppercase mb-3"
           >
-            Grupos Síncronos
+            Grupos Sincronos
           </motion.p>
           <motion.h2
             initial={{ opacity: 0, y: 16 }}
@@ -212,91 +244,128 @@ export default function SyncGroupsSection() {
             className="font-fraunces font-bold text-[#FDFBF7] mb-3"
             style={{ fontSize: "clamp(24px,3vw,36px)" }}
           >
-            Aprendizado <span className="italic text-[#2E9E8F]">ao vivo</span>
+            Aprendizado ao vivo
           </motion.h2>
           <motion.p
-            initial={{ opacity: 0 }}
-            animate={inView ? { opacity: 1 } : {}}
-            transition={{ delay: 0.16, duration: 0.5 }}
-            className="font-dm max-w-lg mx-auto"
-            style={{ fontSize: "15px", color: "rgba(253,251,247,0.5)" }}
+            initial={{ opacity: 0, y: 12 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.15, duration: 0.6 }}
+            className="font-dm text-sm max-w-xl mx-auto"
+            style={{ color: "rgba(253,251,247,0.45)" }}
           >
-            Participe dos nossos grupos síncronos semanais conduzidos por
-            profissionais da Allos. Encontros ao vivo para aprofundar a prática.
-            Certificados são enviados no chat do Google Meet ao final de cada encontro.
+            Participe dos nossos grupos de formacao ao vivo. Cada sessao e conduzida por facilitadores experientes.
           </motion.p>
         </div>
         )}
 
-        {/* Live / Upcoming banner */}
-        {hasSchedule && liveOrNext.length > 0 && (
+        {/* Events banner */}
+        {hasEvents && (
           <motion.div
-            initial={{ opacity: 0, y: 20 }}
+            initial={{ opacity: 0, y: 16 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ delay: 0.2, duration: 0.6 }}
-            className="mb-8 space-y-3"
+            className="mb-6 space-y-3"
+          >
+            {activeEventos.map((evento) => {
+              const inicio = new Date(evento.data_inicio);
+              const fim = new Date(evento.data_fim);
+              const isHappening = new Date() >= inicio && new Date() <= fim;
+              const diaStr = inicio.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" });
+              const horaStr = inicio.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" });
+
+              return (
+                <div
+                  key={evento.id}
+                  className="rounded-2xl px-5 py-4 flex flex-col sm:flex-row sm:items-center gap-3"
+                  style={{
+                    background: isHappening
+                      ? "linear-gradient(135deg, rgba(200,75,49,0.08), rgba(200,75,49,0.02))"
+                      : "rgba(253,251,247,0.02)",
+                    border: `1px solid ${isHappening ? "rgba(200,75,49,0.15)" : "rgba(253,251,247,0.06)"}`,
+                  }}
+                >
+                  <div className="flex items-center gap-3 flex-1">
+                    <div className="p-2 rounded-lg" style={{ background: isHappening ? "rgba(200,75,49,0.1)" : "rgba(253,251,247,0.04)" }}>
+                      <CalendarDays size={16} style={{ color: isHappening ? "#C84B31" : "rgba(253,251,247,0.3)" }} />
+                    </div>
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2">
+                        <p className="font-dm text-sm font-semibold text-[#FDFBF7] truncate">{evento.titulo}</p>
+                        {isHappening && (
+                          <span className="flex items-center gap-1 text-[10px] font-semibold px-2 py-0.5 rounded-full"
+                            style={{ background: "rgba(200,75,49,0.12)", color: "#C84B31" }}>
+                            <Radio size={8} className="animate-pulse" /> Agora
+                          </span>
+                        )}
+                      </div>
+                      <p className="font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.4)" }}>
+                        {diaStr} as {horaStr}
+                        {evento.descricao && ` — ${evento.descricao}`}
+                      </p>
+                    </div>
+                  </div>
+                  {evento.link && (
+                    <a
+                      href={evento.link}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-dm text-xs font-semibold px-4 py-2 rounded-xl flex items-center gap-1.5 transition-all hover:-translate-y-0.5 flex-shrink-0"
+                      style={{
+                        background: isHappening ? "rgba(200,75,49,0.12)" : "rgba(253,251,247,0.04)",
+                        color: isHappening ? "#C84B31" : "rgba(253,251,247,0.5)",
+                        border: `1px solid ${isHappening ? "rgba(200,75,49,0.2)" : "rgba(253,251,247,0.08)"}`,
+                      }}
+                    >
+                      <ExternalLink size={12} />
+                      {isHappening ? "Assistir agora" : "Acessar"}
+                    </a>
+                  )}
+                </div>
+              );
+            })}
+          </motion.div>
+        )}
+
+        {/* Live/Upcoming banner */}
+        {liveOrNext.length > 0 && (
+          <motion.div
+            initial={{ opacity: 0, y: 16 }}
+            animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ delay: 0.25, duration: 0.5 }}
+            className="mb-4 space-y-2"
           >
             {liveOrNext.map((item) => {
               const live = isLive(item);
               return (
                 <div
-                  key={item.id}
-                  className="rounded-2xl p-5 flex flex-col sm:flex-row sm:items-center gap-4"
+                  key={item.id + "-banner"}
+                  className="rounded-2xl px-5 py-4 flex items-center gap-3"
                   style={{
                     background: live
-                      ? "linear-gradient(135deg, rgba(34,197,94,0.08), rgba(46,158,143,0.08))"
-                      : "rgba(253,251,247,0.02)",
-                    border: `1px solid ${live ? "rgba(34,197,94,0.2)" : "rgba(253,251,247,0.06)"}`,
+                      ? "linear-gradient(135deg,rgba(34,197,94,0.06),rgba(34,197,94,0.01))"
+                      : "rgba(253,251,247,0.015)",
+                    border: `1px solid ${live ? "rgba(34,197,94,0.12)" : "rgba(253,251,247,0.06)"}`,
                   }}
                 >
-                  <div className="flex items-center gap-3 flex-1 min-w-0">
-                    <div
-                      className="w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0"
-                      style={{
-                        background: live ? "rgba(34,197,94,0.15)" : "rgba(46,158,143,0.1)",
-                        border: `1px solid ${live ? "rgba(34,197,94,0.3)" : "rgba(46,158,143,0.2)"}`,
-                      }}
-                    >
-                      {live ? (
-                        <Radio size={18} style={{ color: "#22c55e" }} className="animate-pulse" />
-                      ) : (
-                        <Clock size={18} style={{ color: "#2E9E8F" }} />
-                      )}
-                    </div>
-                    <div className="min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span
-                          className="font-dm text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-full"
-                          style={{
-                            backgroundColor: live ? "rgba(34,197,94,0.15)" : "rgba(46,158,143,0.1)",
-                            color: live ? "#22c55e" : "#2E9E8F",
-                          }}
-                        >
-                          {live ? "Ao vivo agora" : "Em breve"}
-                        </span>
-                        <span className="font-fraunces font-bold text-sm" style={{ color: "#FDFBF7" }}>
-                          {item.atividade}
-                        </span>
-                      </div>
-                      <p className="font-dm text-xs mt-0.5" style={{ color: "rgba(253,251,247,0.4)" }}>
-                        {item.dia} as {item.hora}
-                      </p>
-                    </div>
+                  {live && <Radio size={14} className="animate-pulse flex-shrink-0" style={{ color: "#22c55e" }} />}
+                  {!live && <Clock size={14} style={{ color: "rgba(253,251,247,0.25)" }} className="flex-shrink-0" />}
+                  <div className="flex-1 min-w-0">
+                    <p className="font-dm text-sm font-semibold" style={{ color: live ? "#22c55e" : "rgba(253,251,247,0.6)" }}>
+                      {live ? "Ao vivo agora" : `Em breve — ${item.hora}`}
+                    </p>
+                    <p className="font-dm text-xs truncate" style={{ color: "rgba(253,251,247,0.35)" }}>
+                      {item.atividade}
+                    </p>
                   </div>
-
-                  {item.meetLink && (
+                  {live && item.meetLink && (
                     <a
                       href={item.meetLink}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="font-dm text-sm font-bold px-5 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5 flex-shrink-0"
-                      style={{
-                        backgroundColor: live ? "#22c55e" : "#2E9E8F",
-                        color: "#fff",
-                        boxShadow: live ? "0 4px 20px rgba(34,197,94,0.3)" : "0 4px 20px rgba(46,158,143,0.25)",
-                      }}
+                      className="font-dm text-xs font-bold flex items-center gap-1 transition-all hover:gap-2 flex-shrink-0"
+                      style={{ color: "#22c55e" }}
                     >
-                      <Video size={16} /> Clique aqui para assistir
+                      <Video size={14} /> Entrar <ChevronRight size={12} />
                     </a>
                   )}
                 </div>
@@ -336,11 +405,10 @@ export default function SyncGroupsSection() {
                     <div className="space-y-2">
                       {items.map((item) => {
                         const live = isLive(item);
-                        const isExpanded = expandedId === item.id;
                         return (
                           <div key={item.id}>
                             <button
-                              onClick={() => item.descricao && setExpandedId(isExpanded ? null : item.id)}
+                              onClick={() => item.descricao && setDescModal({ atividade: item.atividade, descricao: item.descricao })}
                               className="w-full text-left rounded-lg p-2.5 transition-all"
                               style={{
                                 background: live ? "rgba(34,197,94,0.06)" : "rgba(253,251,247,0.02)",
@@ -351,7 +419,7 @@ export default function SyncGroupsSection() {
                                 <span className="font-dm text-[11px] font-bold" style={{ color: "#C84B31" }}>{item.hora}</span>
                                 {live && <Radio size={10} style={{ color: "#22c55e" }} className="animate-pulse" />}
                                 {item.descricao && (
-                                  <span className="ml-auto" style={{ color: isExpanded ? "rgba(253,251,247,0.4)" : "rgba(253,251,247,0.12)" }}><InfoIcon size={11} /></span>
+                                  <span className="ml-auto" style={{ color: "rgba(253,251,247,0.2)" }}><InfoIcon size={11} /></span>
                                 )}
                               </div>
                               <p className="font-dm text-xs font-medium" style={{ color: "rgba(253,251,247,0.65)" }}>{item.atividade}</p>
@@ -362,18 +430,6 @@ export default function SyncGroupsSection() {
                                 </a>
                               )}
                             </button>
-                            <AnimatePresence>
-                              {isExpanded && item.descricao && (
-                                <motion.div initial={{ height: 0, opacity: 0 }} animate={{ height: "auto", opacity: 1 }} exit={{ height: 0, opacity: 0 }} transition={{ duration: 0.25 }} className="overflow-hidden">
-                                  <div className="px-2.5 pb-2.5 pt-1.5 rounded-b-lg -mt-0.5" style={{ background: "rgba(253,251,247,0.02)", border: "1px solid rgba(253,251,247,0.06)", borderTop: "none" }}>
-                                    <div className="flex items-start gap-1.5">
-                                      <p className="font-dm text-[11px] leading-relaxed flex-1" style={{ color: "rgba(253,251,247,0.4)" }}>{item.descricao}</p>
-                                      <button onClick={() => setExpandedId(null)} className="p-0.5 rounded flex-shrink-0 hover:bg-white/[0.05]" style={{ color: "rgba(253,251,247,0.2)" }}><X size={10} /></button>
-                                    </div>
-                                  </div>
-                                </motion.div>
-                              )}
-                            </AnimatePresence>
                           </div>
                         );
                       })}
@@ -408,7 +464,52 @@ export default function SyncGroupsSection() {
           </div>
         </motion.div>}
 
-        {/* Ranking — compact, same visual language */}
+        {/* Description modal */}
+        <AnimatePresence>
+          {descModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 z-50 flex items-center justify-center px-4"
+              style={{ background: "rgba(0,0,0,0.6)", backdropFilter: "blur(6px)" }}
+              onClick={() => setDescModal(null)}
+            >
+              <motion.div
+                initial={{ scale: 0.92, opacity: 0, y: 20 }}
+                animate={{ scale: 1, opacity: 1, y: 0 }}
+                exit={{ scale: 0.95, opacity: 0, y: 10 }}
+                transition={{ type: "spring", stiffness: 400, damping: 30 }}
+                className="rounded-2xl p-6 max-w-md w-full"
+                style={{ background: "#161616", border: "1px solid rgba(253,251,247,0.08)" }}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start justify-between mb-4">
+                  <div>
+                    <p className="font-dm text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#C84B31" }}>
+                      Sobre o grupo
+                    </p>
+                    <h3 className="font-fraunces font-bold text-lg text-[#FDFBF7]">
+                      {descModal.atividade}
+                    </h3>
+                  </div>
+                  <button
+                    onClick={() => setDescModal(null)}
+                    className="p-1 rounded-lg transition-colors hover:bg-white/5"
+                    style={{ color: "rgba(253,251,247,0.3)" }}
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+                <p className="font-dm text-sm leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
+                  {descModal.descricao}
+                </p>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Ranking */}
         {rankingData.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}

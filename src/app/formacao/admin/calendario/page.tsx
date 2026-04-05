@@ -199,7 +199,7 @@ export default function CalendarioPage() {
   const [addingHorario, setAddingHorario] = useState(false);
 
   // Eventos tab
-  const [eventoForm, setEventoForm] = useState({ titulo: "", descricao: "", data_inicio: "", data_fim: "" });
+  const [eventoForm, setEventoForm] = useState({ titulo: "", descricao: "", link: "", data_inicio: "", data_fim: "" });
   const [addingEvento, setAddingEvento] = useState(false);
   const [deleteEventoTarget, setDeleteEventoTarget] = useState<CertificadoEvento | null>(null);
 
@@ -728,6 +728,7 @@ export default function CalendarioPage() {
       .insert({
         titulo: eventoForm.titulo.trim(),
         descricao: eventoForm.descricao.trim() || null,
+        link: eventoForm.link.trim() || null,
         data_inicio: eventoForm.data_inicio,
         data_fim: eventoForm.data_fim,
         ativo: true,
@@ -736,7 +737,7 @@ export default function CalendarioPage() {
       .single();
     if (error || !data) { toast.error("Erro ao criar evento."); setAddingEvento(false); return; }
     setEventos((prev) => [data, ...prev]);
-    setEventoForm({ titulo: "", descricao: "", data_inicio: "", data_fim: "" });
+    setEventoForm({ titulo: "", descricao: "", link: "", data_inicio: "", data_fim: "" });
     setAddingEvento(false);
     toast.success("Evento criado!");
   }
@@ -1406,6 +1407,18 @@ export default function CalendarioPage() {
                   placeholder="Descrição (opcional)"
                   value={eventoForm.descricao}
                   onChange={(e) => setEventoForm((f) => ({ ...f, descricao: e.target.value }))}
+                  className="px-3 py-2 rounded-lg text-sm font-dm col-span-full"
+                  style={{
+                    background: "rgba(255,255,255,0.05)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "#FDFBF7",
+                  }}
+                />
+                <input
+                  type="url"
+                  placeholder="Link do evento (YouTube, Meet, etc.)"
+                  value={eventoForm.link}
+                  onChange={(e) => setEventoForm((f) => ({ ...f, link: e.target.value }))}
                   className="px-3 py-2 rounded-lg text-sm font-dm col-span-full"
                   style={{
                     background: "rgba(255,255,255,0.05)",

@@ -272,6 +272,7 @@ export interface CertificadoEvento {
   id: string;
   titulo: string;
   descricao: string | null;
+  link: string | null;
   data_inicio: string;
   data_fim: string;
   ativo: boolean;
