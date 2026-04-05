@@ -11,6 +11,7 @@ import HeroFormacao from "@/components/formacao/HeroFormacao";
 import DownloadAppCard from "@/components/formacao/DownloadAppCard";
 
 import SyncGroupsSection from "@/components/formacao/SyncGroupsSection";
+import TopRanking from "@/components/formacao/TopRanking";
 import CategoryCarousel from "@/components/formacao/CategoryCarousel";
 import CourseBackground from "@/components/course/CourseBackground";
 import { toast } from "sonner";
@@ -165,6 +166,9 @@ export default function FormacaoPage() {
       {/* Hero */}
       <div className="relative z-10">
         <HeroFormacao />
+
+        {/* Top Participantes & Curseiros */}
+        <TopRanking />
 
         {/* Featured courses - premium gold section */}
         {!loading && featuredCourses.length > 0 && (

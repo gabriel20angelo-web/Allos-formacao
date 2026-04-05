@@ -135,6 +135,49 @@ async function getAsyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleCl
   }))
 }
 
+async function getCurseirosRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
+  // Get certificates issued since period
+  const { data: certs } = await sb
+    .from('certificates')
+    .select('user_id, course_id, issued_at')
+    .gte('issued_at', since.toISOString())
+
+  if (!certs || certs.length === 0) return []
+
+  // Get course info for hours
+  const courseIds = Array.from(new Set(certs.map(c => c.course_id)))
+  const { data: courses } = await sb
+    .from('courses')
+    .select('id, certificate_hours, total_duration_minutes')
+    .in('id', courseIds)
+
+  const courseMap = new Map((courses || []).map(c => [c.id, c]))
+
+  // Get user names
+  const userIds = Array.from(new Set(certs.map(c => c.user_id)))
+  const { data: profiles } = await sb
+    .from('profiles')
+    .select('id, full_name')
+    .in('id', userIds)
+
+  const nameMap = new Map((profiles || []).map(p => [p.id, p.full_name]))
+
+  // Aggregate
+  const map = new Map<string, { count: number; horas: number }>()
+  certs.forEach(cert => {
+    const nome = nameMap.get(cert.user_id)
+    if (!nome) return
+    const course = courseMap.get(cert.course_id)
+    const hours = course?.certificate_hours || Math.round((course?.total_duration_minutes || 0) / 60)
+    const e = map.get(nome) || { count: 0, horas: 0 }
+    e.count++
+    e.horas += hours
+    map.set(nome, e)
+  })
+
+  return Array.from(map.entries()).map(([nome, d]) => ({ nome, count: d.count, horas: d.horas }))
+}
+
 export async function GET(req: NextRequest) {
   try {
     const period = req.nextUrl.searchParams.get('period') || 'week'
@@ -152,6 +195,13 @@ export async function GET(req: NextRequest) {
     if (type === 'async') {
       const ranked = (await getAsyncRanking(sb, since))
         .sort((a, b) => b.horas - a.horas || b.count - a.count)
+        .slice(0, 5)
+      return NextResponse.json(ranked)
+    }
+
+    if (type === 'curseiros') {
+      const ranked = (await getCurseirosRanking(sb, since))
+        .sort((a, b) => b.count - a.count || b.horas - a.horas)
         .slice(0, 5)
       return NextResponse.json(ranked)
     }
