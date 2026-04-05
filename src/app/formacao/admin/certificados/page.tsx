@@ -12,6 +12,7 @@ import type { Certificate } from "@/types";
 
 const CertFormacaoPage = dynamic(() => import("@/app/formacao/admin/certificados-formacao/page"), { ssr: false });
 const EnviosPage = dynamic(() => import("@/app/formacao/admin/envios/page"), { ssr: false });
+const CertAvulsoPage = dynamic(() => import("@/app/formacao/admin/certificado-avulso/page"), { ssr: false });
 
 interface CourseOption {
   id: string;
@@ -23,7 +24,7 @@ export default function AdminCertificadosPage() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"cursos" | "formacao" | "envios">("cursos");
+  const [view, setView] = useState<"cursos" | "formacao" | "envios" | "avulso">("cursos");
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
@@ -158,11 +159,23 @@ export default function AdminCertificadosPage() {
           >
             Envios
           </button>
+          <button
+            onClick={() => setView("avulso")}
+            className="font-dm text-xs px-4 py-2 rounded-full transition-all"
+            style={{
+              backgroundColor: view === "avulso" ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
+              color: view === "avulso" ? "#C84B31" : "rgba(253,251,247,0.4)",
+              border: `1px solid ${view === "avulso" ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+            }}
+          >
+            Avulso
+          </button>
         </div>
       </motion.div>
 
       {view === "formacao" && <CertFormacaoPage />}
       {view === "envios" && <EnviosPage />}
+      {view === "avulso" && <CertAvulsoPage />}
 
       {view === "cursos" && (<>
       {/* Stats bar */}
