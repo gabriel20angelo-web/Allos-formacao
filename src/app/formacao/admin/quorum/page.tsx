@@ -92,6 +92,7 @@ function formatDateShort(dateStr: string): string {
 export default function QuorumPage() {
   const [presencas, setPresencas] = useState<MeetPresenca[]>([]);
   const [atividades, setAtividades] = useState<Atividade[]>([]);
+  const [condutores, setCondutores] = useState<{ id: string; nome: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>("semana");
   const [offset, setOffset] = useState(0);
@@ -131,8 +132,14 @@ export default function QuorumPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
   useEffect(() => {
-    createClient().from("certificado_atividades").select("id, nome, carga_horaria").eq("ativo", true).order("nome")
-      .then(({ data }) => setAtividades(data || []));
+    const sb = createClient();
+    Promise.all([
+      sb.from("certificado_atividades").select("id, nome, carga_horaria").eq("ativo", true).order("nome"),
+      sb.from("certificado_condutores").select("id, nome").eq("ativo", true).order("nome"),
+    ]).then(([atRes, coRes]) => {
+      setAtividades(atRes.data || []);
+      setCondutores(coRes.data || []);
+    });
   }, []);
 
   // Reset offset when changing period
@@ -307,8 +314,11 @@ export default function QuorumPage() {
                 </div>
                 <div>
                   <label className="block text-xs text-cream/50 mb-1">Condutor</label>
-                  <input type="text" value={manualCondutor} onChange={(e) => setManualCondutor(e.target.value)} placeholder="Nome do condutor"
-                    className="w-full px-3 py-2 rounded-lg text-sm text-cream outline-none" style={{ background: "#111", border: "1px solid #333" }} />
+                  <select value={manualCondutor} onChange={(e) => setManualCondutor(e.target.value)}
+                    className="w-full px-3 py-2 rounded-lg text-sm text-cream outline-none" style={{ background: "#111", border: "1px solid #333" }}>
+                    <option value="">Selecione...</option>
+                    {condutores.map((c) => <option key={c.id} value={c.nome}>{c.nome}</option>)}
+                  </select>
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
