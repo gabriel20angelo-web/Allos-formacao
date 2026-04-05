@@ -18,6 +18,7 @@ import {
   RefreshCw,
   Activity,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
@@ -39,16 +40,33 @@ export default function AtividadesPage() {
   const [editDescricao, setEditDescricao] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoAtividade | null>(null);
+  const [quorumByAtividade, setQuorumByAtividade] = useState<Record<string, { count: number; media: number }>>({});
   const router = useRouter();
 
   useEffect(() => {
     async function fetch() {
       const client = createClient();
-      const { data } = await client
-        .from("certificado_atividades")
-        .select("*")
-        .order("nome");
+      const [{ data }, { data: presencas }] = await Promise.all([
+        client.from("certificado_atividades").select("*").order("nome"),
+        client.from("formacao_meet_presencas").select("atividade_nome, media_participantes, total_participantes"),
+      ]);
       if (data) setAtividades(data);
+
+      // Aggregate quorum by atividade
+      const qMap: Record<string, { count: number; total: number }> = {};
+      (presencas || []).forEach((p: any) => {
+        const nome = p.atividade_nome;
+        if (!nome) return;
+        if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };
+        qMap[nome].count++;
+        qMap[nome].total += p.total_participantes || 0;
+      });
+      const result: Record<string, { count: number; media: number }> = {};
+      Object.entries(qMap).forEach(([nome, d]) => {
+        result[nome] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
+      });
+      setQuorumByAtividade(result);
+
       setLoading(false);
     }
     fetch().catch(() => setLoading(false));
@@ -375,6 +393,19 @@ export default function AtividadesPage() {
                     {item.ativo ? "Ativa" : "Inativa"}
                   </span>
                 </div>
+                {quorumByAtividade[item.nome] && (
+                  <span
+                    className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm inline-flex items-center gap-1"
+                    style={{
+                      background: "rgba(108,92,231,0.08)",
+                      color: "rgba(108,92,231,0.7)",
+                      border: "1px solid rgba(108,92,231,0.15)",
+                    }}
+                  >
+                    <Users className="h-3 w-3" />
+                    {quorumByAtividade[item.nome].count}x · média {quorumByAtividade[item.nome].media.toFixed(1)} pessoas
+                  </span>
+                )}
                 {item.descricao && (
                   <p className="text-[11px] text-cream/25 mt-0.5 font-dm truncate max-w-md">
                     {item.descricao}

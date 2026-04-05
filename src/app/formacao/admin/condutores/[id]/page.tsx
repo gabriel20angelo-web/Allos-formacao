@@ -16,6 +16,7 @@ import {
   Calendar,
   ChevronDown,
   UserCircle,
+  Users,
 } from "lucide-react";
 import type { CertificadoCondutor, CertificadoSubmission, CertificadoAtividade } from "@/types";
 
@@ -41,6 +42,7 @@ export default function CondutorDetailPage() {
   const [atividades, setAtividades] = useState<CertificadoAtividade[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedAtividade, setExpandedAtividade] = useState<string | null>(null);
+  const [quorumData, setQuorumData] = useState<{ count: number; media: number; pico: number; porAtividade: Record<string, { count: number; media: number }> } | null>(null);
 
   useEffect(() => {
     async function load() {
@@ -52,13 +54,38 @@ export default function CondutorDetailPage() {
 
       if (condRes.data) {
         setCondutor(condRes.data);
-        // Fetch all submissions that mention this conductor
-        const { data: subs } = await supabase
-          .from("certificado_submissions")
-          .select("*")
-          .contains("condutores", [condRes.data.nome])
-          .order("created_at", { ascending: false });
+        // Fetch submissions + meet presencas in parallel
+        const [{ data: subs }, { data: presencas }] = await Promise.all([
+          supabase
+            .from("certificado_submissions")
+            .select("*")
+            .contains("condutores", [condRes.data.nome])
+            .order("created_at", { ascending: false }),
+          supabase
+            .from("formacao_meet_presencas")
+            .select("atividade_nome, total_participantes, media_participantes, pico_participantes")
+            .eq("condutor_nome", condRes.data.nome),
+        ]);
         if (subs) setSubmissions(subs);
+
+        // Quorum aggregation
+        if (presencas && presencas.length > 0) {
+          const count = presencas.length;
+          const media = presencas.reduce((s: number, p: any) => s + (p.media_participantes || 0), 0) / count;
+          const pico = Math.max(...presencas.map((p: any) => p.pico_participantes || 0));
+          const porAtividade: Record<string, { count: number; total: number }> = {};
+          presencas.forEach((p: any) => {
+            const nome = p.atividade_nome || "Sem atividade";
+            if (!porAtividade[nome]) porAtividade[nome] = { count: 0, total: 0 };
+            porAtividade[nome].count++;
+            porAtividade[nome].total += p.total_participantes || 0;
+          });
+          const porAtividadeResult: Record<string, { count: number; media: number }> = {};
+          Object.entries(porAtividade).forEach(([n, d]) => {
+            porAtividadeResult[n] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
+          });
+          setQuorumData({ count, media, pico, porAtividade: porAtividadeResult });
+        }
       }
       if (atvRes.data) setAtividades(atvRes.data);
       setLoading(false);
@@ -202,6 +229,43 @@ export default function CondutorDetailPage() {
           </p>
         </div>
       </div>
+
+      {/* Quorum do Meet */}
+      {quorumData && (
+        <div className="rounded-xl p-5 space-y-4" style={{ background: "rgba(108,92,231,0.04)", border: "1px solid rgba(108,92,231,0.12)" }}>
+          <div className="flex items-center gap-2">
+            <Users size={16} style={{ color: "#6c5ce7" }} />
+            <h2 className="text-sm font-fraunces font-semibold text-[#FDFBF7]">Quórum do Meet</h2>
+          </div>
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.count}</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Grupos registrados</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.media.toFixed(1)}</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Média de participantes</p>
+            </div>
+            <div className="text-center">
+              <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.pico}</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Pico máximo</p>
+            </div>
+          </div>
+          {Object.keys(quorumData.porAtividade).length > 1 && (
+            <div className="space-y-1.5 pt-2" style={{ borderTop: "1px solid rgba(108,92,231,0.1)" }}>
+              <p className="text-[10px] text-[#FDFBF7]/30 font-dm uppercase tracking-wider">Por atividade</p>
+              {Object.entries(quorumData.porAtividade)
+                .sort(([, a], [, b]) => b.count - a.count)
+                .map(([nome, d]) => (
+                  <div key={nome} className="flex items-center justify-between px-2 py-1.5 rounded-lg" style={{ background: "rgba(255,255,255,0.02)" }}>
+                    <span className="font-dm text-xs text-[#FDFBF7]/60">{nome}</span>
+                    <span className="font-dm text-xs text-[#FDFBF7]/40">{d.count}x · média {d.media.toFixed(1)}</span>
+                  </div>
+                ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Per-activity breakdown */}
       <div>

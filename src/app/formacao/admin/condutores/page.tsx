@@ -20,6 +20,7 @@ import {
   UserCircle,
   Star,
   BarChart3,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
@@ -39,17 +40,35 @@ export default function CondutoresPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoCondutor | null>(null);
   const [submissions, setSubmissions] = useState<CertificadoSubmission[]>([]);
+  const [quorumByCondutor, setQuorumByCondutor] = useState<Record<string, { count: number; media: number }>>({});
   const router = useRouter();
 
   useEffect(() => {
     async function fetch() {
       const client = createClient();
-      const [condRes, subRes] = await Promise.all([
+      const [condRes, subRes, presRes] = await Promise.all([
         client.from("certificado_condutores").select("*").order("nome"),
         client.from("certificado_submissions").select("id,condutores,nota_condutor"),
+        client.from("formacao_meet_presencas").select("condutor_nome, total_participantes, media_participantes"),
       ]);
       if (condRes.data) setCondutores(condRes.data);
       if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
+
+      // Aggregate quorum by conductor
+      const qMap: Record<string, { count: number; total: number }> = {};
+      (presRes.data || []).forEach((p: any) => {
+        const nome = p.condutor_nome;
+        if (!nome) return;
+        if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };
+        qMap[nome].count++;
+        qMap[nome].total += p.total_participantes || 0;
+      });
+      const result: Record<string, { count: number; media: number }> = {};
+      Object.entries(qMap).forEach(([nome, d]) => {
+        result[nome] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
+      });
+      setQuorumByCondutor(result);
+
       setLoading(false);
     }
     fetch().catch(() => setLoading(false));
@@ -302,6 +321,16 @@ export default function CondutoresPage() {
                       <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium font-dm" style={{ background: "rgba(200,75,49,0.08)", color: "#C84B31", border: "1px solid rgba(200,75,49,0.15)" }}>
                         <Star className="h-2.5 w-2.5" />
                         {media} ({s.total})
+                      </span>
+                    );
+                  })()}
+                  {(() => {
+                    const q = quorumByCondutor[item.nome];
+                    if (!q || q.count === 0) return null;
+                    return (
+                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium font-dm" style={{ background: "rgba(108,92,231,0.08)", color: "rgba(108,92,231,0.7)", border: "1px solid rgba(108,92,231,0.15)" }}>
+                        <Users className="h-2.5 w-2.5" />
+                        {q.count}x · média {q.media.toFixed(1)}
                       </span>
                     );
                   })()}
