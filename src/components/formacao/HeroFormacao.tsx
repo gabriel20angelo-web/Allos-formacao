@@ -105,17 +105,26 @@ function MovingGradient() {
 }
 
 interface RankingEntry { nome: string; horas: number; count: number }
+type RankTab = "participantes" | "curseiros";
+type RankPeriod = "week" | "month" | "quarter" | "semester" | "year";
+const RANK_PERIOD_LABELS: Record<RankPeriod, string> = { week: "Semana", month: "Mês", quarter: "Tri", semester: "Sem", year: "Ano" };
 
 export default function HeroFormacao() {
   const r = useReducedMotion();
   const [ranking, setRanking] = useState<RankingEntry[]>([]);
+  const [rankTab, setRankTab] = useState<RankTab>("participantes");
+  const [rankPeriod, setRankPeriod] = useState<RankPeriod>("month");
+  const [rankLoading, setRankLoading] = useState(false);
 
   useEffect(() => {
-    fetch("/api/ranking")
+    setRankLoading(true);
+    const type = rankTab === "participantes" ? "sync" : "curseiros";
+    fetch(`/api/ranking?period=${rankPeriod}&type=${type}&_t=${Date.now()}`)
       .then(r => r.json())
-      .then(d => { if (Array.isArray(d)) setRanking(d); })
-      .catch(() => {});
-  }, []);
+      .then(d => { if (Array.isArray(d)) setRanking(d.slice(0, 5)); else setRanking([]); })
+      .catch(() => setRanking([]))
+      .finally(() => setRankLoading(false));
+  }, [rankTab, rankPeriod]);
   const up = (d: number) => ({
     initial: { opacity: 0, y: r ? 0 : 24 },
     animate: { opacity: 1, y: 0 },
@@ -233,52 +242,69 @@ export default function HeroFormacao() {
               />
             </div>
 
-            {/* Mini ranking */}
-            {ranking.length > 0 && (
-              <div
-                className="rounded-2xl p-4 sm:p-5 mt-4"
-                style={{
-                  background: "rgba(251,188,5,0.03)",
-                  border: "1px solid rgba(251,188,5,0.1)",
-                  backdropFilter: "blur(12px)",
-                }}
-              >
-                <div className="flex items-center gap-2 mb-3">
-                  <Trophy style={{ color: "#FBBC05", width: 14, height: 14 }} />
-                  <span className="font-dm text-[11px] font-semibold tracking-wider uppercase" style={{ color: "rgba(251,188,5,0.7)" }}>
-                    Top participantes da semana
-                  </span>
+            {/* Ranking card */}
+            <div
+              className="rounded-2xl p-4 sm:p-5 mt-3"
+              style={{
+                background: "rgba(253,251,247,0.02)",
+                border: "1px solid rgba(253,251,247,0.06)",
+                backdropFilter: "blur(12px)",
+              }}
+            >
+              {/* Tabs + period */}
+              <div className="flex flex-wrap items-center gap-1.5 mb-3">
+                {(["participantes", "curseiros"] as RankTab[]).map((t) => (
+                  <button key={t} onClick={() => setRankTab(t)}
+                    className="font-dm text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all flex items-center gap-1"
+                    style={{
+                      background: rankTab === t ? "rgba(200,75,49,0.1)" : "transparent",
+                      color: rankTab === t ? "#C84B31" : "rgba(253,251,247,0.25)",
+                    }}>
+                    {t === "participantes" ? <Trophy size={9} /> : <Award size={9} />}
+                    {t === "participantes" ? "Participantes" : "Curseiros"}
+                  </button>
+                ))}
+                <span className="w-px h-3 mx-0.5" style={{ background: "rgba(253,251,247,0.06)" }} />
+                {(Object.keys(RANK_PERIOD_LABELS) as RankPeriod[]).map((p) => (
+                  <button key={p} onClick={() => setRankPeriod(p)}
+                    className="font-dm text-[9px] px-1.5 py-0.5 rounded-full transition-all"
+                    style={{
+                      background: rankPeriod === p ? "rgba(46,158,143,0.12)" : "transparent",
+                      color: rankPeriod === p ? "#2E9E8F" : "rgba(253,251,247,0.15)",
+                    }}>
+                    {RANK_PERIOD_LABELS[p]}
+                  </button>
+                ))}
+              </div>
+
+              {/* Content */}
+              {rankLoading ? (
+                <div className="flex gap-2 py-3">
+                  {[0,1,2].map(i => <div key={i} className="h-4 flex-1 rounded animate-pulse" style={{ background: "rgba(253,251,247,0.04)" }} />)}
                 </div>
+              ) : ranking.length === 0 ? (
+                <p className="font-dm text-[11px] text-center py-3" style={{ color: "rgba(253,251,247,0.15)" }}>Nenhum dado no periodo.</p>
+              ) : (
                 <div className="space-y-1.5">
                   {ranking.map((entry, i) => {
-                    const medals = ["#FFD700", "#C0C0C0", "#CD7F32"];
+                    const medals = ["#C84B31", "rgba(253,251,247,0.45)", "rgba(200,75,49,0.55)"];
                     const isMedal = i < 3;
                     return (
-                      <div key={entry.nome} className="flex items-center gap-2.5">
-                        <span
-                          className="font-fraunces font-bold text-xs w-5 text-center"
-                          style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.25)" }}
-                        >
-                          {i + 1}
+                      <div key={entry.nome + i} className="flex items-center gap-2.5">
+                        <span className="font-fraunces font-bold text-xs w-5 text-center"
+                          style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.15)" }}>{i + 1}</span>
+                        <span className="font-dm text-xs flex-1 truncate" style={{ color: "rgba(253,251,247,0.55)" }}>
+                          {entry.nome.split(" ").slice(0, 2).join(" ")}
                         </span>
-                        <span
-                          className="font-dm text-xs flex-1 truncate"
-                          style={{ color: "rgba(253,251,247,0.6)" }}
-                        >
-                          {entry.nome}
-                        </span>
-                        <span
-                          className="font-dm text-[11px] font-bold"
-                          style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.3)" }}
-                        >
-                          {entry.horas}h
+                        <span className="font-dm text-[10px] font-bold" style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.2)" }}>
+                          {rankTab === "curseiros" ? `${entry.count} cert${entry.count > 1 ? "s" : ""}` : `${entry.horas}h`}
                         </span>
                       </div>
                     );
                   })}
                 </div>
-              </div>
-            )}
+              )}
+            </div>
           </motion.div>
         </div>
       </div>
