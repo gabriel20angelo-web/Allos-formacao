@@ -78,6 +78,13 @@ export default function CourseCard({ course, isInstructor }: CourseCardProps) {
             </p>
           )}
 
+          {/* Description */}
+          {course.description && (
+            <p className="font-dm text-[11px] leading-relaxed text-white/40 line-clamp-2 mb-2">
+              {course.description}
+            </p>
+          )}
+
           {/* Meta info */}
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/50 mb-4">
             {course.average_rating !== undefined && course.average_rating > 0 && (

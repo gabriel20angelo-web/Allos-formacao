@@ -294,6 +294,13 @@ export default function FormacaoPage() {
                             )}
                           </div>
 
+                          {/* Description on hover */}
+                          {course.description && (
+                            <p className="font-dm text-[11px] leading-relaxed text-cream/40 line-clamp-3 mb-3 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden sm:block">
+                              {course.description}
+                            </p>
+                          )}
+
                           {/* Gold CTA */}
                           <span
                             className="inline-flex items-center justify-center w-full py-2.5 rounded-xl text-xs font-dm font-semibold transition-all opacity-0 group-hover:opacity-100 duration-300"
@@ -456,6 +463,13 @@ export default function FormacaoPage() {
                           {course.instructor && course.show_instructor && (
                             <p className="text-[11px] text-amber-200/40 mt-1 font-dm">
                               {course.instructor.full_name}
+                            </p>
+                          )}
+
+                          {/* Description on hover */}
+                          {course.description && (
+                            <p className="font-dm text-[10px] leading-relaxed text-cream/35 line-clamp-2 mt-2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 hidden sm:block">
+                              {course.description}
                             </p>
                           )}
 
