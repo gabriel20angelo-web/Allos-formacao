@@ -1,26 +1,14 @@
 import { createBrowserClient } from "@supabase/ssr";
 
+const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
 
-/**
- * In the browser, route all Supabase traffic through a same-origin proxy
- * (/_sb/* → rewritten to the real Supabase URL by next.config.mjs). This
- * prevents iOS Safari / iCloud Private Relay / adblockers from failing on the
- * raw *.supabase.co domain ("servidor não pode ser encontrado"). On the server
- * we keep the direct URL since server-side fetch isn't subject to client DNS.
- */
-function getSupabaseUrl(): string {
-  if (typeof window !== "undefined") {
-    // Proxy via our own route handler (/formacao/api/sb/*) instead of calling
-    // Supabase directly. This avoids iOS Safari / iCloud Private Relay / adblock
-    // failing on the raw *.supabase.co domain, and unlike next.config rewrites
-    // we control which headers are forwarded — Cloudflare in front of Supabase
-    // would otherwise 403 ("DNS points to prohibited IP") when it sees the
-    // forwarded Host/CF-* headers from allos.org.br's own Cloudflare edge.
-    return `${window.location.origin}/formacao/api/sb`;
-  }
-  return process.env.NEXT_PUBLIC_SUPABASE_URL!;
-}
+// NOTE: The /formacao/api/sb/[...path] proxy route handler + /formacao/_sb
+// rewrite are still wired up but currently unused — the browser calls the
+// Supabase URL directly. Proxying broke auth for users without DNS bloqueio
+// (reason TBD — curl via proxy worked, but browser SDK failed silently).
+// Re-enable by returning `${window.location.origin}/formacao/api/sb` here
+// after identifying the SDK-vs-proxy mismatch.
 
 /**
  * Key used in localStorage to store cookie data.
@@ -83,7 +71,7 @@ let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
   if (client) return client;
-  client = createBrowserClient(getSupabaseUrl(), SUPABASE_KEY, {
+  client = createBrowserClient(SUPABASE_URL, SUPABASE_KEY, {
     cookies: {
       getAll() {
         return getStoredCookies();
