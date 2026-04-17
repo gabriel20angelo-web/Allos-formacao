@@ -21,83 +21,62 @@ import type { Course } from "@/types";
 
 export default function FormacaoPage() {
   const { profile } = useAuth();
-  const { categories } = useCategories();
+  const { categories: hookCategories } = useCategories();
   const [courses, setCourses] = useState<Course[]>([]);
+  const [serverCategories, setServerCategories] = useState<string[] | null>(null);
   const [loading, setLoading] = useState(true);
 
   // Notify email state
   const [notifyEmail, setNotifyEmail] = useState("");
   const [notifySending, setNotifySending] = useState(false);
 
+  // Prefer server-side categories (fetched in the same call as courses) over
+  // the hook's direct Supabase query — the hook can fail for clients whose
+  // network blocks *.supabase.co, causing the hook to fall back to defaults.
+  const categories = serverCategories ?? hookCategories;
+
   useEffect(() => {
     let cancelled = false;
-    async function fetchCourses() {
+    async function fetchHomeData() {
       try {
-        const client = createClient();
-        const { data, error: fetchError } = await client
-          .from("courses")
-          .select(`
-            *,
-            instructor:profiles!courses_instructor_id_fkey(id, full_name, avatar_url)
-          `)
-          .eq("status", "published")
-          .or("is_discontinued.is.null,is_discontinued.eq.false")
-          .order("display_order", { ascending: true })
-          .order("created_at", { ascending: false });
-
+        // Same-origin server endpoint — bypasses any client-side block of
+        // syiaushvzhgyhvsmoegt.supabase.co (Private Relay / adblock / ISP).
+        const res = await fetch("/formacao/api/home-data", {
+          cache: "no-store",
+        });
+        if (!res.ok) throw new Error(`home-data ${res.status}`);
+        const payload: { courses: Course[]; categories: string[] } =
+          await res.json();
         if (cancelled) return;
-        if (fetchError) { console.error("Supabase error:", fetchError); setLoading(false); return; }
-        if (!data || data.length === 0) { setLoading(false); return; }
-
-        if (data.length > 0) {
-          const courseIds = data.map((c) => c.id);
-
-          const [enrollmentsRes, reviewsRes] = await Promise.all([
-            client
-              .from("enrollments")
-              .select("course_id")
-              .in("course_id", courseIds),
-            client
-              .from("reviews")
-              .select("course_id, rating")
-              .in("course_id", courseIds),
-          ]);
-
-          if (cancelled) return;
-
-          const enrollCounts: Record<string, number> = {};
-          enrollmentsRes.data?.forEach((e) => {
-            enrollCounts[e.course_id] = (enrollCounts[e.course_id] || 0) + 1;
-          });
-
-          const reviewData: Record<string, { sum: number; count: number }> = {};
-          reviewsRes.data?.forEach((r) => {
-            if (!reviewData[r.course_id]) {
-              reviewData[r.course_id] = { sum: 0, count: 0 };
-            }
-            reviewData[r.course_id].sum += r.rating;
-            reviewData[r.course_id].count += 1;
-          });
-
-          const enriched: Course[] = data.map((c) => ({
-            ...c,
-            enrollments_count: enrollCounts[c.id] || 0,
-            average_rating: reviewData[c.id]
-              ? reviewData[c.id].sum / reviewData[c.id].count
-              : 0,
-            reviews_count: reviewData[c.id]?.count || 0,
-          }));
-
-          setCourses(enriched);
+        setCourses(payload.courses || []);
+        if (Array.isArray(payload.categories)) {
+          setServerCategories(payload.categories);
         }
       } catch (err) {
-        console.error("Erro ao carregar cursos:", err);
+        console.error("Erro ao carregar cursos (fallback pro client):", err);
+        // Fallback: try the direct Supabase query so local dev without the
+        // route handler still works.
+        try {
+          const client = createClient();
+          const { data } = await client
+            .from("courses")
+            .select(
+              `*, instructor:profiles!courses_instructor_id_fkey(id, full_name, avatar_url)`
+            )
+            .eq("status", "published")
+            .or("is_discontinued.is.null,is_discontinued.eq.false")
+            .order("display_order", { ascending: true })
+            .order("created_at", { ascending: false });
+          if (!cancelled && data) setCourses(data as Course[]);
+        } catch {
+          // swallow — UI shows empty state
+        }
       } finally {
         if (!cancelled) setLoading(false);
       }
     }
 
-    fetchCourses();
+    fetchHomeData();
     return () => { cancelled = true; };
   }, []);
 
