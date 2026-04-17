@@ -266,7 +266,13 @@ export default function AdminLayout({
               style={{ background: "rgba(200,75,49,0.12)", border: "1px solid rgba(200,75,49,0.2)" }}
             >
               {profile.avatar_url ? (
-                <img src={profile.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                <Image
+                  src={profile.avatar_url}
+                  alt=""
+                  width={36}
+                  height={36}
+                  className="w-9 h-9 rounded-full object-cover"
+                />
               ) : (
                 <User className="h-4 w-4 text-accent" />
               )}

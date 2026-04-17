@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Badge from "@/components/ui/Badge";
@@ -503,7 +504,13 @@ export default function AdminAlunosPage() {
                             style={{ background: "rgba(200,75,49,0.1)" }}
                           >
                             {student.avatar_url ? (
-                              <img src={student.avatar_url} alt="" className="w-8 h-8 rounded-full object-cover" />
+                              <Image
+                                src={student.avatar_url}
+                                alt=""
+                                width={32}
+                                height={32}
+                                className="w-8 h-8 rounded-full object-cover"
+                              />
                             ) : (
                               <User className="h-4 w-4 text-accent" />
                             )}

@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Image from "next/image";
 import { useParams, useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -142,11 +143,15 @@ export default function ComprarPage() {
         {/* Thumbnail */}
         <div className="md:w-1/2">
           {course.thumbnail_url ? (
-            <img
-              src={course.thumbnail_url}
-              alt={course.title}
-              className="w-full aspect-video object-cover rounded-[16px]"
-            />
+            <div className="relative w-full aspect-video rounded-[16px] overflow-hidden">
+              <Image
+                src={course.thumbnail_url}
+                alt={course.title}
+                fill
+                sizes="(max-width: 768px) 100vw, 500px"
+                className="object-cover"
+              />
+            </div>
           ) : (
             <div
               className="w-full aspect-video rounded-[16px] flex items-center justify-center"
@@ -198,9 +203,11 @@ export default function ComprarPage() {
                 style={{ background: "rgba(200,75,49,0.1)" }}
               >
                 {course.instructor.avatar_url ? (
-                  <img
+                  <Image
                     src={course.instructor.avatar_url}
                     alt=""
+                    width={40}
+                    height={40}
                     className="w-10 h-10 rounded-full object-cover"
                   />
                 ) : (

@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import Image from "next/image";
 import { Star, Clock, Users, BookOpen, Lock, Radio } from "lucide-react";
 import Badge from "@/components/ui/Badge";
 import { formatPrice, formatDuration } from "@/lib/utils/format";
@@ -26,10 +27,12 @@ export default function CourseCard({ course, isInstructor }: CourseCardProps) {
       <article className="relative aspect-[9/13] rounded-2xl overflow-hidden cursor-pointer">
         {/* Background image */}
         {course.thumbnail_url ? (
-          <img
+          <Image
             src={course.thumbnail_url}
             alt={course.title}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            fill
+            sizes="(max-width: 640px) 45vw, (max-width: 1024px) 25vw, 220px"
+            className="object-cover transition-transform duration-500 group-hover:scale-105"
           />
         ) : (
           <div

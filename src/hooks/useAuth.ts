@@ -11,7 +11,7 @@ import {
   type ReactNode,
 } from "react";
 import { createElement } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, resetClient } from "@/lib/supabase/client";
 import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -178,9 +178,13 @@ export function AuthProvider({
 
     init();
 
-    // Detect bfcache restore
+    // Detect bfcache restore — reset the Supabase singleton first so the
+    // next createClient() rebuilds with fresh in-memory state (otherwise
+    // the client can hold stale tokens / listeners from the prior page
+    // load).
     function onPageShow(e: PageTransitionEvent) {
       if (e.persisted) {
+        resetClient();
         init();
       }
     }

@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
@@ -697,11 +698,15 @@ export default function AdminCursosPage() {
                     <td className="px-4 py-3">
                       <div className="flex items-center gap-3">
                         {course.thumbnail_url ? (
-                          <img
-                            src={course.thumbnail_url}
-                            alt=""
-                            className="w-16 h-10 rounded-[8px] object-cover flex-shrink-0"
-                          />
+                          <div className="relative w-16 h-10 rounded-[8px] overflow-hidden flex-shrink-0">
+                            <Image
+                              src={course.thumbnail_url}
+                              alt=""
+                              fill
+                              sizes="64px"
+                              className="object-cover"
+                            />
+                          </div>
                         ) : (
                           <div
                             className="w-16 h-10 rounded-[8px] flex items-center justify-center flex-shrink-0"

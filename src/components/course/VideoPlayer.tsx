@@ -1,6 +1,7 @@
 "use client";
 
 import { useMemo, useState } from "react";
+import Image from "next/image";
 import { getEmbedUrl } from "@/lib/utils/video";
 import { Loader2, PlayCircle } from "lucide-react";
 import type { VideoSource } from "@/types";
@@ -57,10 +58,12 @@ export function VideoPlaceholder({ title, thumbnailUrl }: { title: string; thumb
     >
       {thumbnailUrl ? (
         <>
-          <img
+          <Image
             src={thumbnailUrl}
             alt={title}
-            className="absolute inset-0 w-full h-full object-cover"
+            fill
+            sizes="(max-width: 1024px) 100vw, 720px"
+            className="object-cover"
           />
           <div
             className="absolute inset-0"

@@ -14,19 +14,44 @@ export default function GoogleButton({ redirectTo }: GoogleButtonProps) {
 
   async function handleGoogleLogin() {
     setLoading(true);
-    const { error } = await supabase.auth.signInWithOAuth({
+    // skipBrowserRedirect: we want to bridge the PKCE code_verifier to
+    // HTTP cookies (not just localStorage) BEFORE leaving for Google —
+    // otherwise Brave/Safari shields block document.cookie and the
+    // server callback can't exchange the code (AuthPKCECodeVerifierMissingError).
+    const { data, error } = await supabase.auth.signInWithOAuth({
       provider: "google",
       options: {
         redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/formacao/auth/callback${
           redirectTo ? `?redirect=${encodeURIComponent(redirectTo)}` : ""
         }`,
+        skipBrowserRedirect: true,
       },
     });
 
-    if (error) {
+    if (error || !data?.url) {
       toast.error("Erro ao conectar com o Google.");
       setLoading(false);
+      return;
     }
+
+    // Supabase SDK just saved the code_verifier via our localStorage-based
+    // cookie handler. Mirror everything it stored to real HttpOnly cookies
+    // so the server-side callback can read the verifier.
+    try {
+      const raw = localStorage.getItem("sb-auth-cookies");
+      const parsed: { name: string; value: string }[] = raw ? JSON.parse(raw) : [];
+      if (parsed.length > 0) {
+        await fetch("/formacao/auth/sync-cookies", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ cookies: parsed }),
+        });
+      }
+    } catch (err) {
+      console.warn("[GoogleButton] sync-cookies failed, continuing:", err);
+    }
+
+    window.location.href = data.url;
   }
 
   return (

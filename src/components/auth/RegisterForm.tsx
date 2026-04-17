@@ -80,7 +80,7 @@ export default function RegisterForm({ redirectTo }: RegisterFormProps) {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signUp({
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -95,6 +95,23 @@ export default function RegisterForm({ redirectTo }: RegisterFormProps) {
       toast.error(error.message);
       setLoading(false);
       return;
+    }
+
+    // If Supabase returned a session (email confirmation disabled), bridge
+    // it to HttpOnly server cookies so middleware/SSR see the user right away.
+    if (data.session) {
+      try {
+        await fetch("/formacao/auth/set-session", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            access_token: data.session.access_token,
+            refresh_token: data.session.refresh_token,
+          }),
+        });
+      } catch (err) {
+        console.warn("[RegisterForm] set-session failed:", err);
+      }
     }
 
     toast.success("Conta criada com sucesso!");

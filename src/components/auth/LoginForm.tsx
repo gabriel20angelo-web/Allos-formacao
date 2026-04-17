@@ -39,19 +39,36 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
 
     setLoading(true);
 
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
-    if (error) {
+    if (error || !data.session) {
       toast.error(
-        error.message === "Invalid login credentials"
+        error?.message === "Invalid login credentials"
           ? "Email ou senha incorretos."
-          : error.message
+          : error?.message || "Não foi possível entrar."
       );
       setLoading(false);
       return;
+    }
+
+    // Bridge the session to HttpOnly server cookies so middleware/SSR
+    // recognize the user immediately. Without this, Brave/Safari shields
+    // block document.cookie and the next navigation loops back to /auth.
+    try {
+      const res = await fetch("/formacao/auth/set-session", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          access_token: data.session.access_token,
+          refresh_token: data.session.refresh_token,
+        }),
+      });
+      if (!res.ok) throw new Error(`set-session ${res.status}`);
+    } catch (err) {
+      console.warn("[LoginForm] set-session failed, continuing anyway:", err);
     }
 
     toast.success("Login realizado com sucesso!");

@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
+import Image from "next/image";
 import { BookOpen, Bell, Mail, Archive, GraduationCap, Sparkles, Star, Users, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
@@ -211,10 +212,12 @@ export default function FormacaoPage() {
                       >
                         {/* Image */}
                         {course.thumbnail_url ? (
-                          <img
+                          <Image
                             src={course.thumbnail_url}
                             alt={course.title}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            fill
+                            sizes="(max-width: 640px) 50vw, (max-width: 1024px) 30vw, 240px"
+                            className="object-cover transition-transform duration-700 group-hover:scale-110"
                           />
                         ) : (
                           <div
@@ -409,10 +412,12 @@ export default function FormacaoPage() {
                         }}
                       >
                         {course.thumbnail_url ? (
-                          <img
+                          <Image
                             src={course.thumbnail_url}
                             alt={course.title}
-                            className="absolute inset-0 w-full h-full object-cover transition-transform duration-700 group-hover:scale-110"
+                            fill
+                            sizes="(max-width: 640px) 100vw, (max-width: 768px) 50vw, (max-width: 1024px) 33vw, 260px"
+                            className="object-cover transition-transform duration-700 group-hover:scale-110"
                           />
                         ) : (
                           <div

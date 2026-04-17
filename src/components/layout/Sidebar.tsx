@@ -233,9 +233,11 @@ export default function Sidebar() {
                 style={{ background: "rgba(200,75,49,0.15)" }}
               >
                 {profile.avatar_url ? (
-                  <img
+                  <Image
                     src={profile.avatar_url}
                     alt={profile.full_name}
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full object-cover"
                   />
                 ) : (

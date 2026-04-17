@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
@@ -155,9 +156,11 @@ export default function CommentSection({ lessonId, onCountChange }: CommentSecti
                 style={{ background: "rgba(200,75,49,0.1)" }}
               >
                 {comment.user?.avatar_url ? (
-                  <img
+                  <Image
                     src={comment.user.avatar_url}
                     alt=""
+                    width={32}
+                    height={32}
                     className="w-8 h-8 rounded-full object-cover"
                   />
                 ) : (

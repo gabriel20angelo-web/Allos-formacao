@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
@@ -189,7 +190,13 @@ function ProfessoresTab() {
                 style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.2)" }}
               >
                 {inst.avatar_url ? (
-                  <img src={inst.avatar_url} alt="" className="w-10 h-10 rounded-full object-cover" />
+                  <Image
+                    src={inst.avatar_url}
+                    alt=""
+                    width={40}
+                    height={40}
+                    className="w-10 h-10 rounded-full object-cover"
+                  />
                 ) : (
                   <span className="font-fraunces font-bold text-sm text-accent">
                     {inst.full_name.charAt(0)}

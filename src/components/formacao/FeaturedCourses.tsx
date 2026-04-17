@@ -6,6 +6,7 @@ import { useInView } from "react-intersection-observer";
 import { Radio, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import Link from "next/link";
+import Image from "next/image";
 
 interface FeaturedCourse {
   id: string;
@@ -76,10 +77,12 @@ export default function FeaturedCourses() {
                 {/* Thumbnail */}
                 {course.thumbnail_url && (
                   <div className="relative h-36 overflow-hidden">
-                    <img
+                    <Image
                       src={course.thumbnail_url}
                       alt={course.title}
-                      className="w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+                      fill
+                      sizes="(max-width: 768px) 100vw, 33vw"
+                      className="object-cover transition-transform duration-500 group-hover:scale-105"
                     />
                     <div
                       className="absolute inset-0"
