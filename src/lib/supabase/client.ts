@@ -11,7 +11,10 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
  */
 function getSupabaseUrl(): string {
   if (typeof window !== "undefined") {
-    return `${window.location.origin}/_sb`;
+    // /formacao/_sb/* is rewritten to the real Supabase URL by next.config.mjs.
+    // We use the /formacao prefix because allos.org.br proxies /formacao/*
+    // to this Next app preserving the prefix — so a bare /_sb would 404 there.
+    return `${window.location.origin}/formacao/_sb`;
   }
   return process.env.NEXT_PUBLIC_SUPABASE_URL!;
 }

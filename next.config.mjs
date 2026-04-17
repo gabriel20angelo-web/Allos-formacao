@@ -6,6 +6,10 @@ const nextConfig = {
     if (!supabaseUrl) return [];
     return [
       {
+        source: '/formacao/_sb/:path*',
+        destination: `${supabaseUrl}/:path*`,
+      },
+      {
         source: '/_sb/:path*',
         destination: `${supabaseUrl}/:path*`,
       },
