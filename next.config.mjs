@@ -1,6 +1,16 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   assetPrefix: 'https://allos-formacao-production.up.railway.app',
+  async rewrites() {
+    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
+    if (!supabaseUrl) return [];
+    return [
+      {
+        source: '/_sb/:path*',
+        destination: `${supabaseUrl}/:path*`,
+      },
+    ];
+  },
   async headers() {
     return [
       {

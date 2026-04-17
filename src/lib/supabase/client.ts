@@ -1,7 +1,20 @@
 import { createBrowserClient } from "@supabase/ssr";
 
-const SUPABASE_URL = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
+
+/**
+ * In the browser, route all Supabase traffic through a same-origin proxy
+ * (/_sb/* → rewritten to the real Supabase URL by next.config.mjs). This
+ * prevents iOS Safari / iCloud Private Relay / adblockers from failing on the
+ * raw *.supabase.co domain ("servidor não pode ser encontrado"). On the server
+ * we keep the direct URL since server-side fetch isn't subject to client DNS.
+ */
+function getSupabaseUrl(): string {
+  if (typeof window !== "undefined") {
+    return `${window.location.origin}/_sb`;
+  }
+  return process.env.NEXT_PUBLIC_SUPABASE_URL!;
+}
 
 /**
  * Key used in localStorage to store cookie data.
@@ -64,7 +77,7 @@ let client: ReturnType<typeof createBrowserClient> | null = null;
 
 export function createClient() {
   if (client) return client;
-  client = createBrowserClient(SUPABASE_URL, SUPABASE_KEY, {
+  client = createBrowserClient(getSupabaseUrl(), SUPABASE_KEY, {
     cookies: {
       getAll() {
         return getStoredCookies();

@@ -911,6 +911,16 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       );
     }
 
+    if (url.includes("drive.google.com")) {
+      return (
+        <p className="mt-1.5 text-[11px] text-amber-400/80 leading-snug">
+          Google Drive detectado. Compartilhe o arquivo como{" "}
+          <strong>&ldquo;Qualquer pessoa com o link&rdquo;</strong> (acesso
+          de Leitor) — caso contrário os alunos verão &ldquo;Solicitar acesso&rdquo;.
+        </p>
+      );
+    }
+
     return null;
   }
 

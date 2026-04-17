@@ -97,10 +97,7 @@ export default function RegisterForm({ redirectTo }: RegisterFormProps) {
       return;
     }
 
-    toast.success(
-      "Conta criada! Verifique seu email para confirmar o cadastro.",
-      { duration: 6000 }
-    );
+    toast.success("Conta criada com sucesso!");
     setLoading(false);
   }
 
