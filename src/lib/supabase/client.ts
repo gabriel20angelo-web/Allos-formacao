@@ -11,10 +11,13 @@ const SUPABASE_KEY = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
  */
 function getSupabaseUrl(): string {
   if (typeof window !== "undefined") {
-    // /formacao/_sb/* is rewritten to the real Supabase URL by next.config.mjs.
-    // We use the /formacao prefix because allos.org.br proxies /formacao/*
-    // to this Next app preserving the prefix — so a bare /_sb would 404 there.
-    return `${window.location.origin}/formacao/_sb`;
+    // Proxy via our own route handler (/formacao/api/sb/*) instead of calling
+    // Supabase directly. This avoids iOS Safari / iCloud Private Relay / adblock
+    // failing on the raw *.supabase.co domain, and unlike next.config rewrites
+    // we control which headers are forwarded — Cloudflare in front of Supabase
+    // would otherwise 403 ("DNS points to prohibited IP") when it sees the
+    // forwarded Host/CF-* headers from allos.org.br's own Cloudflare edge.
+    return `${window.location.origin}/formacao/api/sb`;
   }
   return process.env.NEXT_PUBLIC_SUPABASE_URL!;
 }
