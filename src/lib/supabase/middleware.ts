@@ -30,10 +30,9 @@ export async function updateSession(request: NextRequest) {
   const isPublic = PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
 
   if (isPublic) {
-    const res = NextResponse.next({ request });
-    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    res.headers.set("Pragma", "no-cache");
-    return res;
+    // Pass through — let the route handler set its own Cache-Control
+    // so CDN caching (s-maxage on home-data and ranking) actually works.
+    return NextResponse.next({ request });
   }
 
   let supabaseResponse = NextResponse.next({ request });
