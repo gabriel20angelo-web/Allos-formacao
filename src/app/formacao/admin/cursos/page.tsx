@@ -235,6 +235,16 @@ export default function AdminCursosPage() {
     toast.success("Curso restaurado como rascunho.");
   }
 
+  async function revalidateHomeData() {
+    // Fire-and-forget — bumping the home-data cache so the public /formacao
+    // page reflects the toggle immediately instead of within 30s.
+    try {
+      await fetch("/formacao/api/home-data/revalidate", { method: "POST" });
+    } catch {
+      // non-blocking — cache will revalidate on the natural 30s TTL anyway
+    }
+  }
+
   async function toggleFeatured(course: EnrichedCourse) {
     const newFeatured = !course.featured;
     const defaultLabel = course.course_type === "sync" ? "Ao vivo" : "Em destaque";
@@ -267,6 +277,7 @@ export default function AdminCursosPage() {
           : c
       )
     );
+    revalidateHomeData();
     toast.success(newFeatured ? "Curso marcado como destaque!" : "Destaque removido.");
   }
 
@@ -291,6 +302,7 @@ export default function AdminCursosPage() {
     setCourses((prev) =>
       prev.map((c) => (c.id === course.id ? { ...c, is_structured: newVal } : c))
     );
+    revalidateHomeData();
     toast.success(newVal ? "Marcado como curso estruturado." : "Removido dos cursos estruturados.");
   }
 
@@ -332,6 +344,7 @@ export default function AdminCursosPage() {
         c.id === course.id ? { ...c, status: newStatus as Course["status"] } : c
       )
     );
+    revalidateHomeData();
     toast.success(
       newStatus === "published" ? "Curso publicado com sucesso." : "Curso movido para rascunho."
     );

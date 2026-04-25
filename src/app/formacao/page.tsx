@@ -3,20 +3,31 @@
 import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import dynamic from "next/dynamic";
 import { BookOpen, Bell, Mail, Archive, GraduationCap, Sparkles, Star, Users, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import HeroFormacao from "@/components/formacao/HeroFormacao";
-import DownloadAppCard from "@/components/formacao/DownloadAppCard";
-
-import SyncGroupsSection from "@/components/formacao/SyncGroupsSection";
-import CategoryCarousel from "@/components/formacao/CategoryCarousel";
 import CourseBackground from "@/components/course/CourseBackground";
 import { toast } from "sonner";
 import { formatDuration } from "@/lib/utils/format";
 import type { Course } from "@/types";
+
+// Below-the-fold components — defer their JS off the initial bundle.
+const CategoryCarousel = dynamic(
+  () => import("@/components/formacao/CategoryCarousel"),
+  { ssr: false }
+);
+const SyncGroupsSection = dynamic(
+  () => import("@/components/formacao/SyncGroupsSection"),
+  { ssr: false }
+);
+const DownloadAppCard = dynamic(
+  () => import("@/components/formacao/DownloadAppCard"),
+  { ssr: false }
+);
 
 
 export default function FormacaoPage() {

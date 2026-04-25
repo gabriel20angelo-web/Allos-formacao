@@ -189,21 +189,33 @@ export async function GET(req: NextRequest) {
       const ranked = (await getSyncRanking(sb, since))
         .sort((a, b) => b.horas - a.horas || b.count - a.count)
         .slice(0, 5)
-      return NextResponse.json(ranked)
+      return NextResponse.json(ranked, {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+        },
+      })
     }
 
     if (type === 'async') {
       const ranked = (await getAsyncRanking(sb, since))
         .sort((a, b) => b.horas - a.horas || b.count - a.count)
         .slice(0, 5)
-      return NextResponse.json(ranked)
+      return NextResponse.json(ranked, {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+        },
+      })
     }
 
     if (type === 'curseiros') {
       const ranked = (await getCurseirosRanking(sb, since))
         .sort((a, b) => b.count - a.count || b.horas - a.horas)
         .slice(0, 5)
-      return NextResponse.json(ranked)
+      return NextResponse.json(ranked, {
+        headers: {
+          "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+        },
+      })
     }
 
     // type === 'all': combine both

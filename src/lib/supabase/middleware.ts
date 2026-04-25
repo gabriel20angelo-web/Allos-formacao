@@ -13,7 +13,29 @@ function hardRedirect(path: string, cookieSource?: NextResponse) {
   return new Response(null, { status: 307, headers });
 }
 
+// Public paths that don't need auth/profile checks. Skipping the middleware's
+// supabase.auth.getUser() call here saves one Supabase round-trip (~200-500ms
+// from Singapore region) per request to these endpoints.
+const PUBLIC_PATH_PREFIXES = [
+  "/formacao/api/home-data",
+  "/formacao/api/ranking",
+  "/formacao/api/sb",
+  "/formacao/auth/callback",
+  "/formacao/auth/set-session",
+  "/formacao/auth/sync-cookies",
+];
+
 export async function updateSession(request: NextRequest) {
+  const pathname = request.nextUrl.pathname;
+  const isPublic = PUBLIC_PATH_PREFIXES.some((p) => pathname.startsWith(p));
+
+  if (isPublic) {
+    const res = NextResponse.next({ request });
+    res.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    res.headers.set("Pragma", "no-cache");
+    return res;
+  }
+
   let supabaseResponse = NextResponse.next({ request });
 
   const supabase = createServerClient(
@@ -40,8 +62,6 @@ export async function updateSession(request: NextRequest) {
   const {
     data: { user },
   } = await supabase.auth.getUser();
-
-  const pathname = request.nextUrl.pathname;
 
   // Protected routes that require authentication
   const protectedPaths = ["/formacao/admin", "/formacao/curso"];

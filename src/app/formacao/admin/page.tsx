@@ -509,25 +509,15 @@ export default function AdminDashboard() {
       }
       const supabase = createClient();
 
-      // Published courses count
+      // Published courses — single query that gives us both the count and the ids
       let coursesQuery = supabase
         .from("courses")
-        .select("id", { count: "exact", head: true })
+        .select("id", { count: "exact" })
         .eq("status", "published");
       if (!isAdmin) {
         coursesQuery = coursesQuery.eq("instructor_id", profile.id);
       }
-      const { count: courseCount } = await coursesQuery;
-
-      // All course IDs (published) for stats
-      let courseIdsQuery = supabase
-        .from("courses")
-        .select("id")
-        .eq("status", "published");
-      if (!isAdmin) {
-        courseIdsQuery = courseIdsQuery.eq("instructor_id", profile.id);
-      }
-      const { data: courseIds } = await courseIdsQuery;
+      const { data: courseIds, count: courseCount } = await coursesQuery;
       const ids = courseIds?.map((c) => c.id) || [];
 
       let studentCount = 0;
@@ -886,6 +876,9 @@ export default function AdminDashboard() {
       try {
         const [subsRes, atividadesRes, enrollRes, slotsRes, horariosRes] =
           await Promise.all([
+            // submissions stay unfiltered here — the inactive/retention math
+            // below needs the full participant history to detect first/last
+            // appearance per person.
             supabase
               .from("certificado_submissions")
               .select(
@@ -894,7 +887,13 @@ export default function AdminDashboard() {
             supabase
               .from("certificado_atividades")
               .select("nome, carga_horaria"),
-            supabase.from("enrollments").select("enrolled_at"),
+            // enrollments are only used for the period-window trend chart, so
+            // we can safely filter at the DB level and skip the client-side
+            // pass over the entire enrollments table.
+            supabase
+              .from("enrollments")
+              .select("enrolled_at")
+              .gte("enrolled_at", periodStart.toISOString()),
             supabase
               .from("formacao_slots")
               .select(
