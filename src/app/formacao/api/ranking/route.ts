@@ -1,10 +1,13 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
-// Cacheable at the CDN — see Cache-Control headers on each response branch.
-// `force-dynamic` would make Next inject "no-store" automatically and override
-// the s-maxage we set per-response.
-export const revalidate = 300;
+// Route is dynamic on searchParams (?period=&type=). `revalidate=300` here
+// causes regression in Next 14 (TTFB jumps from ~0.8s → ~3s) because the
+// route still resolves dynamically but the cache layer adds overhead.
+// Keeping force-dynamic; Cache-Control on each response still hints CDN
+// even though Next will append "no-store" — Cloudflare ends up not caching,
+// which we accept until the Railway region is moved out of Singapore.
+export const dynamic = "force-dynamic";
 
 function getSince(period: string): Date {
   const now = new Date()
