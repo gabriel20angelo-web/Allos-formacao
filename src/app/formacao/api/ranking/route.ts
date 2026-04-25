@@ -1,7 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
 
-export const dynamic = "force-dynamic";
+// Cacheable at the CDN — see Cache-Control headers on each response branch.
+// `force-dynamic` would make Next inject "no-store" automatically and override
+// the s-maxage we set per-response.
+export const revalidate = 300;
 
 function getSince(period: string): Date {
   const now = new Date()
@@ -238,7 +241,11 @@ export async function GET(req: NextRequest) {
       .sort((a, b) => b.horas - a.horas || b.count - a.count)
       .slice(0, 5)
 
-    return NextResponse.json(ranked)
+    return NextResponse.json(ranked, {
+      headers: {
+        "Cache-Control": "public, s-maxage=300, stale-while-revalidate=900",
+      },
+    })
   } catch {
     return NextResponse.json([])
   }
