@@ -2,7 +2,7 @@ import type { VideoSource } from "@/types";
 
 export function extractYouTubeId(url: string): string | null {
   const patterns = [
-    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/,
+    /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/|youtube\.com\/live\/|youtube\.com\/shorts\/)([a-zA-Z0-9_-]{11})/,
     /^([a-zA-Z0-9_-]{11})$/,
   ];
   for (const pattern of patterns) {
@@ -27,7 +27,9 @@ export function getEmbedUrl(url: string, source: VideoSource): string {
   switch (source) {
     case "youtube": {
       const id = extractYouTubeId(url);
-      return id ? `https://www.youtube.com/embed/${id}` : url;
+      if (!id) return url;
+      const params = "rel=0&modestbranding=1&playsinline=1";
+      return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
     }
     case "google_drive": {
       const id = extractDriveId(url);
@@ -35,5 +37,26 @@ export function getEmbedUrl(url: string, source: VideoSource): string {
     }
     default:
       return url;
+  }
+}
+
+export function getYouTubeWatchUrl(url: string): string | null {
+  const id = extractYouTubeId(url);
+  return id ? `https://www.youtube.com/watch?v=${id}` : null;
+}
+
+export function getDriveViewUrl(url: string): string | null {
+  const id = extractDriveId(url);
+  return id ? `https://drive.google.com/file/d/${id}/view` : null;
+}
+
+export function getExternalUrl(url: string, source: VideoSource): string | null {
+  switch (source) {
+    case "youtube":
+      return getYouTubeWatchUrl(url);
+    case "google_drive":
+      return getDriveViewUrl(url);
+    default:
+      return url || null;
   }
 }
