@@ -1,7 +1,27 @@
 "use client";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Award, ArrowRight, Trophy } from "lucide-react";
+import { Award, ArrowRight, Trophy, Crown, Medal } from "lucide-react";
+
+const MEDAL_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"]; // ouro, prata, bronze
+const MEDAL_BGS = [
+  "linear-gradient(90deg, rgba(255,215,0,0.10) 0%, rgba(212,175,55,0.02) 100%)",
+  "linear-gradient(90deg, rgba(192,192,192,0.08) 0%, rgba(160,160,160,0.02) 100%)",
+  "linear-gradient(90deg, rgba(205,127,50,0.08) 0%, rgba(165,100,40,0.02) 100%)",
+];
+
+function rankInitial(name: string): string {
+  const parts = name.trim().split(/\s+/);
+  return (parts[0]?.[0] || "?").toUpperCase();
+}
+
+function rankNameToColor(name: string): string {
+  let h = 0;
+  for (let i = 0; i < name.length; i++) {
+    h = name.charCodeAt(i) + ((h << 5) - h);
+  }
+  return `hsl(${Math.abs(h) % 360}, 45%, 48%)`;
+}
 
 function useIsMobile() {
   const [isMobile, setIsMobile] = useState(false);
@@ -246,64 +266,203 @@ export default function HeroFormacao() {
 
             {/* Ranking card */}
             <div
-              className="rounded-2xl p-4 sm:p-5 mt-3"
+              className="rounded-2xl p-4 sm:p-5 mt-3 relative overflow-hidden"
               style={{
-                background: "rgba(253,251,247,0.02)",
+                background:
+                  "linear-gradient(180deg, rgba(253,251,247,0.025) 0%, rgba(253,251,247,0.005) 100%)",
                 border: "1px solid rgba(253,251,247,0.06)",
                 backdropFilter: "blur(12px)",
+                boxShadow: "0 6px 24px rgba(0,0,0,0.18)",
               }}
             >
+              {/* Top gold shimmer */}
+              <div
+                className="absolute top-0 left-0 right-0 h-[1px] pointer-events-none"
+                style={{
+                  background:
+                    "linear-gradient(90deg, transparent 0%, rgba(212,175,55,0.35) 30%, rgba(255,215,0,0.55) 50%, rgba(212,175,55,0.35) 70%, transparent 100%)",
+                }}
+              />
+
+              {/* Header row: title + tabs */}
+              <div className="flex items-center gap-2 mb-2.5">
+                <div
+                  className="w-5 h-5 rounded-md flex items-center justify-center flex-shrink-0"
+                  style={{
+                    background:
+                      "linear-gradient(135deg, rgba(255,215,0,0.16), rgba(212,175,55,0.06))",
+                    border: "1px solid rgba(212,175,55,0.22)",
+                  }}
+                >
+                  <Trophy className="h-2.5 w-2.5" style={{ color: "#FBBC05" }} />
+                </div>
+                <h4 className="font-fraunces font-bold text-[11px] text-cream/80 tracking-tight">
+                  Top do período
+                </h4>
+              </div>
+
               {/* Tabs + period */}
               <div className="flex flex-wrap items-center gap-1.5 mb-3">
-                {(["participantes", "curseiros"] as RankTab[]).map((t) => (
-                  <button key={t} onClick={() => setRankTab(t)}
-                    className="font-dm text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all flex items-center gap-1"
-                    style={{
-                      background: rankTab === t ? "rgba(200,75,49,0.1)" : "transparent",
-                      color: rankTab === t ? "#C84B31" : "rgba(253,251,247,0.25)",
-                    }}>
-                    {t === "participantes" ? <Trophy size={9} /> : <Award size={9} />}
-                    {t === "participantes" ? "Participantes" : "Curseiros"}
-                  </button>
-                ))}
+                {(["participantes", "curseiros"] as RankTab[]).map((t) => {
+                  const active = rankTab === t;
+                  return (
+                    <button
+                      key={t}
+                      onClick={() => setRankTab(t)}
+                      className="font-dm text-[10px] font-semibold px-2.5 py-1 rounded-full transition-all flex items-center gap-1"
+                      style={{
+                        background: active
+                          ? "rgba(200,75,49,0.12)"
+                          : "rgba(255,255,255,0.02)",
+                        color: active ? "#C84B31" : "rgba(253,251,247,0.4)",
+                        border: `1px solid ${
+                          active
+                            ? "rgba(200,75,49,0.28)"
+                            : "rgba(255,255,255,0.05)"
+                        }`,
+                      }}
+                    >
+                      {t === "participantes" ? <Trophy size={9} /> : <Award size={9} />}
+                      {t === "participantes" ? "Participantes" : "Curseiros"}
+                    </button>
+                  );
+                })}
                 <span className="w-px h-3 mx-0.5" style={{ background: "rgba(253,251,247,0.06)" }} />
-                {(Object.keys(RANK_PERIOD_LABELS) as RankPeriod[]).map((p) => (
-                  <button key={p} onClick={() => setRankPeriod(p)}
-                    className="font-dm text-[9px] px-1.5 py-0.5 rounded-full transition-all"
-                    style={{
-                      background: rankPeriod === p ? "rgba(46,158,143,0.12)" : "transparent",
-                      color: rankPeriod === p ? "#2E9E8F" : "rgba(253,251,247,0.15)",
-                    }}>
-                    {RANK_PERIOD_LABELS[p]}
-                  </button>
-                ))}
+                {(Object.keys(RANK_PERIOD_LABELS) as RankPeriod[]).map((p) => {
+                  const active = rankPeriod === p;
+                  return (
+                    <button
+                      key={p}
+                      onClick={() => setRankPeriod(p)}
+                      className="font-dm text-[9px] px-1.5 py-0.5 rounded-full transition-all"
+                      style={{
+                        background: active
+                          ? "rgba(46,158,143,0.14)"
+                          : "transparent",
+                        color: active ? "#2E9E8F" : "rgba(253,251,247,0.25)",
+                        border: `1px solid ${
+                          active ? "rgba(46,158,143,0.22)" : "transparent"
+                        }`,
+                      }}
+                    >
+                      {RANK_PERIOD_LABELS[p]}
+                    </button>
+                  );
+                })}
               </div>
 
               {/* Content */}
               {rankLoading ? (
-                <div className="flex gap-2 py-3">
-                  {[0,1,2].map(i => <div key={i} className="h-4 flex-1 rounded animate-pulse" style={{ background: "rgba(253,251,247,0.04)" }} />)}
+                <div className="space-y-2 py-1">
+                  {[0, 1, 2].map((i) => (
+                    <div key={i} className="flex items-center gap-2">
+                      <div className="h-5 w-5 rounded-full animate-pulse" style={{ background: "rgba(253,251,247,0.05)" }} />
+                      <div className="h-5 w-5 rounded-full animate-pulse" style={{ background: "rgba(253,251,247,0.05)" }} />
+                      <div className="h-2 flex-1 rounded animate-pulse" style={{ background: "rgba(253,251,247,0.05)" }} />
+                    </div>
+                  ))}
                 </div>
               ) : ranking.length === 0 ? (
-                <p className="font-dm text-[11px] text-center py-3" style={{ color: "rgba(253,251,247,0.15)" }}>Nenhum dado no periodo.</p>
+                <div className="flex flex-col items-center py-4 gap-1.5">
+                  <Medal className="h-4 w-4 text-cream/15" />
+                  <p className="font-dm text-[10px] text-cream/30">Nenhum dado no período.</p>
+                </div>
               ) : (
                 <div className="space-y-1.5">
-                  {ranking.map((entry, i) => {
-                    const medals = ["#C84B31", "rgba(253,251,247,0.45)", "rgba(200,75,49,0.55)"];
-                    const isMedal = i < 3;
-                    return (
-                      <div key={entry.nome + i} className="flex items-center gap-2.5">
-                        <span className="font-fraunces font-bold text-xs w-5 text-center"
-                          style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.15)" }}>{i + 1}</span>
-                        <span className="font-dm text-xs flex-1 truncate" style={{ color: "rgba(253,251,247,0.55)" }}>
-                          {entry.nome.split(" ").slice(0, 2).join(" ")}
-                        </span>
-                        <span className="font-dm text-[10px] font-bold" style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.2)" }}>
-                          {rankTab === "curseiros" ? `${entry.count} cert${entry.count > 1 ? "s" : ""}` : `${entry.horas}h`}
-                        </span>
-                      </div>
-                    );
-                  })}
+                  {(() => {
+                    const maxHoras = Math.max(...ranking.map((e) => e.horas), 1);
+                    return ranking.map((entry, i) => {
+                      const isMedal = i < 3;
+                      const medalColor: string | undefined = isMedal
+                        ? MEDAL_COLORS[i]
+                        : undefined;
+                      const medalBg: string | undefined = isMedal
+                        ? MEDAL_BGS[i]
+                        : undefined;
+                      const barWidth = Math.max(
+                        6,
+                        (entry.horas / maxHoras) * 100
+                      );
+                      const initial = rankInitial(entry.nome);
+                      const initialBg = rankNameToColor(entry.nome);
+
+                      return (
+                        <div
+                          key={entry.nome + i}
+                          className="flex items-center gap-2 px-1.5 py-1 rounded-md"
+                          style={medalBg ? { background: medalBg } : undefined}
+                        >
+                          {/* Rank badge */}
+                          <div
+                            className="relative w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0"
+                            style={{
+                              background: isMedal
+                                ? "rgba(0,0,0,0.28)"
+                                : "rgba(255,255,255,0.025)",
+                              border: `1px solid ${
+                                medalColor ? `${medalColor}55` : "rgba(255,255,255,0.05)"
+                              }`,
+                            }}
+                          >
+                            {i === 0 && medalColor ? (
+                              <Crown className="h-2.5 w-2.5" style={{ color: medalColor }} />
+                            ) : (
+                              <span
+                                className="font-fraunces font-bold text-[10px]"
+                                style={{
+                                  color: medalColor ?? "rgba(253,251,247,0.32)",
+                                }}
+                              >
+                                {i + 1}
+                              </span>
+                            )}
+                          </div>
+
+                          {/* Initial avatar */}
+                          <div
+                            className="w-5 h-5 rounded-full flex items-center justify-center flex-shrink-0 font-dm font-bold text-[9px] text-white/95"
+                            style={{ background: initialBg }}
+                          >
+                            {initial}
+                          </div>
+
+                          {/* Name + bar + value */}
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-baseline justify-between gap-2 mb-0.5">
+                              <span
+                                className="font-dm text-[11px] font-medium truncate"
+                                style={{ color: "rgba(253,251,247,0.78)" }}
+                              >
+                                {entry.nome.split(" ").slice(0, 2).join(" ")}
+                              </span>
+                              <span
+                                className="font-fraunces font-bold text-[11px] tabular-nums flex-shrink-0"
+                                style={{
+                                  color: medalColor ?? "rgba(253,251,247,0.42)",
+                                }}
+                              >
+                                {entry.horas}h
+                              </span>
+                            </div>
+                            <div
+                              className="h-[3px] rounded-full overflow-hidden"
+                              style={{ background: "rgba(253,251,247,0.05)" }}
+                            >
+                              <div
+                                className="h-full rounded-full transition-all duration-500"
+                                style={{
+                                  width: `${barWidth}%`,
+                                  background: medalColor
+                                    ? `linear-gradient(90deg, ${medalColor}66, ${medalColor})`
+                                    : "rgba(253,251,247,0.18)",
+                                }}
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    });
+                  })()}
                 </div>
               )}
             </div>
