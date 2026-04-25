@@ -396,16 +396,17 @@ function MiniBarChart({
               </div>
             </div>
             <div
-              className="w-full rounded-t min-h-[3px] transition-all duration-200"
+              className="w-full rounded-t-md min-h-[4px] transition-all duration-200"
               style={{
-                height: `${Math.max(h, 5)}%`,
-                background: `${color}33`,
+                height: `${Math.max(h, 8)}%`,
+                background: `linear-gradient(180deg, ${color}cc 0%, ${color}66 100%)`,
+                boxShadow: `0 0 6px ${color}22`,
               }}
               onMouseEnter={(e) =>
-                (e.currentTarget.style.background = `${color}80`)
+                (e.currentTarget.style.background = `linear-gradient(180deg, ${color} 0%, ${color}aa 100%)`)
               }
               onMouseLeave={(e) =>
-                (e.currentTarget.style.background = `${color}33`)
+                (e.currentTarget.style.background = `linear-gradient(180deg, ${color}cc 0%, ${color}66 100%)`)
               }
             />
             {idx % interval === 0 && (
@@ -644,7 +645,7 @@ export default function AdminDashboard() {
             )
             .in("course_id", ids)
             .order("enrolled_at", { ascending: false })
-            .limit(12),
+            .limit(40),
           supabase
             .from("reviews")
             .select(
@@ -652,7 +653,7 @@ export default function AdminDashboard() {
             )
             .in("course_id", ids)
             .order("created_at", { ascending: false })
-            .limit(5),
+            .limit(15),
         ]);
 
         // Enrollment chart data
@@ -726,7 +727,7 @@ export default function AdminDashboard() {
           (a, b) =>
             new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
         );
-        setActivityFeed(events.slice(0, 8));
+        setActivityFeed(events.slice(0, 30));
       }
 
       setLoading(false);
@@ -2593,11 +2594,13 @@ export default function AdminDashboard() {
                                           style={{ height: "100%" }}
                                         >
                                           <div
-                                            className="w-full rounded-t min-h-[2px] transition-all duration-500"
+                                            className="w-full rounded-t-md min-h-[5px] transition-all duration-500"
                                             style={{
-                                              height: `${Math.max(activeH, 2)}%`,
+                                              height: `${Math.max(activeH, 6)}%`,
                                               background:
-                                                "rgba(34,197,94,0.5)",
+                                                "linear-gradient(180deg, rgba(34,197,94,0.95) 0%, rgba(34,197,94,0.55) 100%)",
+                                              boxShadow:
+                                                "0 0 8px rgba(34,197,94,0.25)",
                                             }}
                                           />
                                         </div>
@@ -2606,11 +2609,13 @@ export default function AdminDashboard() {
                                           style={{ height: "100%" }}
                                         >
                                           <div
-                                            className="w-full rounded-t min-h-[2px] transition-all duration-500"
+                                            className="w-full rounded-t-md min-h-[5px] transition-all duration-500"
                                             style={{
-                                              height: `${Math.max(churnedH, 2)}%`,
+                                              height: `${Math.max(churnedH, 6)}%`,
                                               background:
-                                                "rgba(239,68,68,0.4)",
+                                                "linear-gradient(180deg, rgba(239,68,68,0.85) 0%, rgba(239,68,68,0.45) 100%)",
+                                              boxShadow:
+                                                "0 0 8px rgba(239,68,68,0.2)",
                                             }}
                                           />
                                         </div>
@@ -2899,10 +2904,18 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                               <div
-                                className="w-full rounded-t min-h-[4px] transition-all duration-200 bg-[rgba(200,75,49,0.2)] hover:bg-[rgba(200,75,49,0.5)]"
+                                className="w-full rounded-t-md min-h-[5px] transition-all duration-200"
                                 style={{
-                                  height: `${Math.max(height, 4)}%`,
+                                  height: `${Math.max(height, 8)}%`,
+                                  background: "linear-gradient(180deg, rgba(200,75,49,0.85) 0%, rgba(200,75,49,0.4) 100%)",
+                                  boxShadow: "0 0 6px rgba(200,75,49,0.2)",
                                 }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(200,75,49,1) 0%, rgba(200,75,49,0.65) 100%)")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(200,75,49,0.85) 0%, rgba(200,75,49,0.4) 100%)")
+                                }
                               />
                               {recentEnrollments.indexOf(item) %
                                 5 ===
@@ -2966,10 +2979,18 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                               <div
-                                className="w-full rounded-t min-h-[3px] transition-all duration-200 bg-[rgba(46,158,143,0.2)] hover:bg-[rgba(46,158,143,0.5)]"
+                                className="w-full rounded-t-md min-h-[4px] transition-all duration-200"
                                 style={{
-                                  height: `${Math.max(height, 5)}%`,
+                                  height: `${Math.max(height, 10)}%`,
+                                  background: "linear-gradient(180deg, rgba(46,158,143,0.85) 0%, rgba(46,158,143,0.4) 100%)",
+                                  boxShadow: "0 0 6px rgba(46,158,143,0.2)",
                                 }}
+                                onMouseEnter={(e) =>
+                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(46,158,143,1) 0%, rgba(46,158,143,0.65) 100%)")
+                                }
+                                onMouseLeave={(e) =>
+                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(46,158,143,0.85) 0%, rgba(46,158,143,0.4) 100%)")
+                                }
                               />
                             </div>
                           );
@@ -3009,11 +3030,24 @@ export default function AdminDashboard() {
                   transition={{ delay: 0.5, duration: 0.5 }}
                 >
                   <Card>
-                    <h2 className="font-fraunces font-bold text-lg text-cream mb-3">
-                      Atividade recente
-                    </h2>
+                    <div className="flex items-center justify-between mb-3">
+                      <h2 className="font-fraunces font-bold text-lg text-cream">
+                        Atividade recente
+                      </h2>
+                      {activityFeed.length > 0 && (
+                        <span className="font-dm text-[10px] text-cream/30">
+                          {activityFeed.length} eventos
+                        </span>
+                      )}
+                    </div>
                     {activityFeed.length > 0 ? (
-                      <div className="space-y-1">
+                      <div
+                        className="space-y-1 max-h-[640px] overflow-y-auto pr-1 -mr-1"
+                        style={{
+                          scrollbarWidth: "thin",
+                          scrollbarColor: "rgba(253,251,247,0.1) transparent",
+                        }}
+                      >
                         {activityFeed.map((event) => {
                           const Icon = activityIcon[event.type];
                           const color = activityColor[event.type];
