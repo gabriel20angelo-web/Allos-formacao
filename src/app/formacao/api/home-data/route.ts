@@ -25,8 +25,16 @@ export async function GET() {
     );
   }
 
+  // Pass cache: "no-store" through the supabase-js internal fetch so Next.js
+  // doesn't memoize the response in the Data Cache. Without this, the API
+  // returns stale `featured` / `is_structured` flags after the admin toggles
+  // them — even though the row was updated in the database.
   const supabase = createClient(url, serviceKey, {
     auth: { persistSession: false, autoRefreshToken: false },
+    global: {
+      fetch: (input: RequestInfo | URL, init?: RequestInit) =>
+        fetch(input, { ...init, cache: "no-store" }),
+    },
   });
 
   const [coursesRes, categoriesRes] = await Promise.all([
