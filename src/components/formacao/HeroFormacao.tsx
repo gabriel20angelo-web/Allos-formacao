@@ -118,8 +118,10 @@ export default function HeroFormacao() {
 
   useEffect(() => {
     setRankLoading(true);
-    const type = rankTab === "participantes" ? "sync" : "curseiros";
-    fetch(`/api/ranking?period=${rankPeriod}&type=${type}&_t=${Date.now()}`)
+    // "Participantes" = quem aparece via /certificado (eventos síncronos).
+    // "Curseiros" = quem completa lições de cursos assíncronos (lesson_progress).
+    const type = rankTab === "participantes" ? "sync" : "async";
+    fetch(`/formacao/api/ranking?period=${rankPeriod}&type=${type}&_t=${Date.now()}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setRanking(d.slice(0, 5)); else setRanking([]); })
       .catch(() => setRanking([]))

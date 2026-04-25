@@ -161,7 +161,7 @@ function AdminRankingCard({
       setData(initialData);
       return;
     }
-    fetch(`/api/ranking?period=${period}&type=${type}&_t=${Date.now()}`)
+    fetch(`/formacao/api/ranking?period=${period}&type=${type}&_t=${Date.now()}`)
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d)) setData(d);

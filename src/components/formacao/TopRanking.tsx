@@ -36,8 +36,10 @@ export default function TopRanking() {
 
   useEffect(() => {
     setLoading(true);
-    const type = tab === "participantes" ? "sync" : "curseiros";
-    fetch(`/api/ranking?period=${periodo}&type=${type}&_t=${Date.now()}`)
+    // "Participantes" = quem aparece via /certificado (eventos síncronos).
+    // "Curseiros" = quem completa lições de cursos assíncronos (lesson_progress).
+    const type = tab === "participantes" ? "sync" : "async";
+    fetch(`/formacao/api/ranking?period=${periodo}&type=${type}&_t=${Date.now()}`)
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d)) setData(d.slice(0, 5));
