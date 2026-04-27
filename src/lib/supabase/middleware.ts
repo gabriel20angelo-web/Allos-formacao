@@ -13,6 +13,19 @@ function hardRedirect(path: string, cookieSource?: NextResponse) {
   return new Response(null, { status: 307, headers });
 }
 
+function clearAuthRedirect(request: NextRequest, redirectPath: string) {
+  const headers = new Headers({ Location: `${BASE_URL}${redirectPath}` });
+  for (const cookie of request.cookies.getAll()) {
+    if (cookie.name.startsWith("sb-")) {
+      headers.append(
+        "Set-Cookie",
+        `${cookie.name}=; Path=/; Max-Age=0; Secure; SameSite=Lax`
+      );
+    }
+  }
+  return new Response(null, { status: 307, headers });
+}
+
 // Public paths that don't need auth/profile checks. Skipping the middleware's
 // supabase.auth.getUser() call here saves one Supabase round-trip (~200-500ms
 // from Singapore region) per request to these endpoints.
@@ -35,59 +48,78 @@ export async function updateSession(request: NextRequest) {
     return NextResponse.next({ request });
   }
 
-  let supabaseResponse = NextResponse.next({ request });
+  try {
+    let supabaseResponse = NextResponse.next({ request });
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
+    const supabase = createServerClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+      {
+        cookies: {
+          getAll() {
+            return request.cookies.getAll();
+          },
+          setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
+            cookiesToSet.forEach(({ name, value }) =>
+              request.cookies.set(name, value)
+            );
+            supabaseResponse = NextResponse.next({ request });
+            cookiesToSet.forEach(({ name, value, options }) =>
+              supabaseResponse.cookies.set(name, value, options)
+            );
+          },
         },
-        setAll(cookiesToSet: { name: string; value: string; options?: Record<string, unknown> }[]) {
-          cookiesToSet.forEach(({ name, value }) =>
-            request.cookies.set(name, value)
-          );
-          supabaseResponse = NextResponse.next({ request });
-          cookiesToSet.forEach(({ name, value, options }) =>
-            supabaseResponse.cookies.set(name, value, options)
-          );
-        },
-      },
+      }
+    );
+
+    let user: { id: string } | null = null;
+    try {
+      const result = await supabase.auth.getUser();
+      user = result.data.user;
+    } catch (err) {
+      // Corrupted/truncated sb-* cookies make getUser throw and propagate as
+      // a raw 500 ("Internal Server Error") because middleware errors bypass
+      // error.tsx. Treat as unauthenticated and clear the bad cookies so the
+      // next request starts from a clean slate.
+      console.error("[MIDDLEWARE] auth.getUser threw, clearing session:", err);
+      const target = pathname.startsWith("/formacao/admin") || pathname.startsWith("/formacao/curso")
+        ? `/formacao/auth?redirect=${encodeURIComponent(pathname)}`
+        : pathname;
+      return clearAuthRedirect(request, target);
     }
-  );
 
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
+    // Protected routes that require authentication
+    const protectedPaths = ["/formacao/admin", "/formacao/curso"];
+    const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
 
-  // Protected routes that require authentication
-  const protectedPaths = ["/formacao/admin", "/formacao/curso"];
-  const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
-
-  // If accessing a protected route without auth, redirect to login
-  if (isProtected && !user) {
-    return hardRedirect(`/formacao/auth?redirect=${encodeURIComponent(pathname)}`, supabaseResponse);
-  }
-
-  // Admin routes — check role (admin or instructor required)
-  if (pathname.startsWith("/formacao/admin") && user) {
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("role")
-      .eq("id", user.id)
-      .single();
-
-    const allowedRoles = ["admin", "instructor"];
-    if (!profile?.role || !allowedRoles.includes(profile.role)) {
-      return hardRedirect("/formacao", supabaseResponse);
+    // If accessing a protected route without auth, redirect to login
+    if (isProtected && !user) {
+      return hardRedirect(`/formacao/auth?redirect=${encodeURIComponent(pathname)}`, supabaseResponse);
     }
+
+    // Admin routes — check role (admin or instructor required)
+    if (pathname.startsWith("/formacao/admin") && user) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("role")
+        .eq("id", user.id)
+        .single();
+
+      const allowedRoles = ["admin", "instructor"];
+      if (!profile?.role || !allowedRoles.includes(profile.role)) {
+        return hardRedirect("/formacao", supabaseResponse);
+      }
+    }
+
+    // Prevent CDN (Cloudflare/Railway) from caching HTML responses
+    supabaseResponse.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+    supabaseResponse.headers.set("Pragma", "no-cache");
+
+    return supabaseResponse;
+  } catch (err) {
+    // Last-resort safety net so a thrown middleware never reaches the client
+    // as a bare "Internal Server Error".
+    console.error("[MIDDLEWARE] unexpected throw, clearing session:", err);
+    return clearAuthRedirect(request, "/formacao/auth");
   }
-
-  // Prevent CDN (Cloudflare/Railway) from caching HTML responses
-  supabaseResponse.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-  supabaseResponse.headers.set("Pragma", "no-cache");
-
-  return supabaseResponse;
 }
