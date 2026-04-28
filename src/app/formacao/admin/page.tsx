@@ -3,6 +3,19 @@
 import { useEffect, useState, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { formatPrice } from "@/lib/utils/format";
+import {
+  getPeriodDate,
+  getGreeting,
+  relativeTime,
+  PERIOD_LABELS,
+  type DashMode,
+  type DashPeriod,
+} from "@/lib/utils/dashboard";
+import StatCard from "@/components/admin/dashboard/StatCard";
+import HintButton from "@/components/admin/dashboard/HintButton";
+import MiniBarChart from "@/components/admin/dashboard/MiniBarChart";
+import RankingCard from "@/components/admin/dashboard/RankingCard";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
@@ -64,362 +77,6 @@ interface AdminNote {
   updated_at: string;
 }
 
-type DashMode = "sync" | "async";
-type DashPeriod = "week" | "month" | "quarter" | "semester" | "year";
-
-const PERIOD_LABELS: Record<DashPeriod, string> = {
-  week: "Semana",
-  month: "Mês",
-  quarter: "Trimestre",
-  semester: "Semestre",
-  year: "Ano",
-};
-
-// ═══════════════════════════════════════════════════════════════
-// Utility functions
-// ═══════════════════════════════════════════════════════════════
-
-function getPeriodDate(p: DashPeriod): Date {
-  const now = new Date();
-  switch (p) {
-    case "week": {
-      const d = new Date(now);
-      d.setDate(d.getDate() - d.getDay() + 1);
-      d.setHours(0, 0, 0, 0);
-      return d;
-    }
-    case "month":
-      return new Date(now.getFullYear(), now.getMonth(), 1);
-    case "quarter":
-      return new Date(
-        now.getFullYear(),
-        Math.floor(now.getMonth() / 3) * 3,
-        1
-      );
-    case "semester":
-      return new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1);
-    case "year":
-      return new Date(now.getFullYear(), 0, 1);
-  }
-}
-
-function getGreeting() {
-  const h = new Date().getHours();
-  if (h < 12) return "Bom dia";
-  if (h < 18) return "Boa tarde";
-  return "Boa noite";
-}
-
-function relativeTime(dateStr: string): string {
-  const now = new Date();
-  const date = new Date(dateStr);
-  const diffMs = now.getTime() - date.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return "agora";
-  if (diffMin < 60) return `há ${diffMin}min`;
-  const diffH = Math.floor(diffMin / 60);
-  if (diffH < 24) return `há ${diffH}h`;
-  const diffD = Math.floor(diffH / 24);
-  if (diffD === 1) return "há 1 dia";
-  if (diffD < 30) return `há ${diffD} dias`;
-  return `há ${Math.floor(diffD / 30)} mês${Math.floor(diffD / 30) > 1 ? "es" : ""}`;
-}
-
-function formatCurrency(cents: number): string {
-  return new Intl.NumberFormat("pt-BR", {
-    style: "currency",
-    currency: "BRL",
-  }).format(cents / 100);
-}
-
-// ═══════════════════════════════════════════════════════════════
-// AdminRankingCard sub-component
-// ═══════════════════════════════════════════════════════════════
-
-function AdminRankingCard({
-  period,
-  initialData,
-}: {
-  period: string;
-  initialData: { nome: string; horas: number; count: number }[];
-}) {
-  type RType = "all" | "sync" | "async";
-  const labels: Record<RType, string> = {
-    all: "Geral",
-    sync: "Síncronos",
-    async: "Assíncronos",
-  };
-  const [type, setType] = useState<RType>("all");
-  const [data, setData] = useState(initialData);
-
-  useEffect(() => {
-    setData(initialData);
-  }, [initialData]);
-
-  useEffect(() => {
-    if (type === "all") {
-      setData(initialData);
-      return;
-    }
-    fetch(`/formacao/api/ranking?period=${period}&type=${type}&_t=${Date.now()}`)
-      .then((r) => r.json())
-      .then((d) => {
-        if (Array.isArray(d)) setData(d);
-      })
-      .catch(() => setData([]));
-  }, [type, period, initialData]);
-
-  return (
-    <Card>
-      <div className="flex items-center gap-2 mb-3">
-        <Trophy className="h-4 w-4" style={{ color: "#FBBC05" }} />
-        <h3 className="font-dm text-sm font-semibold text-cream/70">
-          Top Participantes
-        </h3>
-        <div className="flex gap-1 ml-auto">
-          {(Object.keys(labels) as RType[]).map((t) => (
-            <button
-              key={t}
-              onClick={() => setType(t)}
-              className="font-dm text-[9px] px-2 py-0.5 rounded-full transition-all"
-              style={{
-                backgroundColor:
-                  type === t ? "rgba(46,158,143,0.12)" : "transparent",
-                color:
-                  type === t ? "#2E9E8F" : "rgba(253,251,247,0.25)",
-              }}
-            >
-              {labels[t]}
-            </button>
-          ))}
-        </div>
-      </div>
-      {data.length > 0 ? (
-        <div className="space-y-2">
-          {data.map((p, i) => {
-            const medals = ["#FFD700", "#C0C0C0", "#CD7F32"];
-            const isMedal = i < 3;
-            const maxHoras = data[0]?.horas || 1;
-            const barWidth = (p.horas / maxHoras) * 100;
-            return (
-              <div key={p.nome} className="space-y-1">
-                <div className="flex items-center gap-3">
-                  <span
-                    className="font-dm text-sm font-bold w-5 text-center"
-                    style={{
-                      color: isMedal
-                        ? medals[i]
-                        : "rgba(253,251,247,0.3)",
-                    }}
-                  >
-                    {i + 1}
-                  </span>
-                  <span className="font-dm text-sm flex-1 text-cream/70 truncate">
-                    {p.nome}
-                  </span>
-                  <span
-                    className="font-fraunces font-bold text-sm"
-                    style={{
-                      color: isMedal
-                        ? medals[i]
-                        : "rgba(253,251,247,0.4)",
-                    }}
-                  >
-                    {p.horas}h
-                  </span>
-                  <span className="font-dm text-[10px] text-cream/25">
-                    {p.count}x
-                  </span>
-                </div>
-                <div
-                  className="ml-8 h-1.5 rounded-full overflow-hidden"
-                  style={{ background: "rgba(255,255,255,0.04)" }}
-                >
-                  <div
-                    className="h-full rounded-full transition-all duration-500"
-                    style={{
-                      width: `${barWidth}%`,
-                      background: isMedal
-                        ? medals[i]
-                        : "rgba(253,251,247,0.15)",
-                      opacity: isMedal ? 0.6 : 0.3,
-                    }}
-                  />
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-xs text-cream/30 text-center py-4">
-          Nenhum participante no período.
-        </p>
-      )}
-    </Card>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// StatCard helper
-// ═══════════════════════════════════════════════════════════════
-
-function HintButton({ text }: { text: string }) {
-  const [show, setShow] = useState(false);
-  return (
-    <span className="relative inline-block">
-      <button
-        onClick={(e) => { e.stopPropagation(); setShow(!show); }}
-        className="w-4 h-4 rounded-full flex items-center justify-center text-[9px] font-bold transition-colors"
-        style={{ background: "rgba(255,255,255,0.06)", color: "rgba(253,251,247,0.3)" }}
-      >?</button>
-      {show && (
-        <div
-          className="absolute z-50 bottom-6 left-1/2 -translate-x-1/2 w-52 px-3 py-2 rounded-lg text-[11px] font-dm leading-relaxed"
-          style={{ background: "#222", border: "1px solid #444", color: "rgba(253,251,247,0.7)", boxShadow: "0 8px 24px rgba(0,0,0,0.4)" }}
-        >
-          {text}
-          <button onClick={() => setShow(false)} className="absolute top-1 right-1.5 text-cream/30 hover:text-cream text-[10px]">x</button>
-        </div>
-      )}
-    </span>
-  );
-}
-
-function StatCard({
-  card,
-  delay,
-}: {
-  card: {
-    label: string;
-    value: string;
-    suffix?: string;
-    subtitle?: string;
-    hint?: string;
-    icon: any;
-    iconColor: string;
-    iconBg: string;
-    trend?: number;
-  };
-  delay: number;
-}) {
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 12 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ delay, duration: 0.4, ease: [0.22, 1, 0.36, 1] }}
-    >
-      <Card>
-        <div className="flex items-center gap-3">
-          <div
-            className="w-10 h-10 rounded-[10px] flex items-center justify-center flex-shrink-0"
-            style={{ background: card.iconBg }}
-          >
-            <card.icon
-              className="h-5 w-5"
-              style={{ color: card.iconColor }}
-            />
-          </div>
-          <div className="min-w-0">
-            <div className="flex items-center gap-2">
-              <p className="font-fraunces font-bold text-xl text-cream tabular-nums">
-                <span style={{ color: card.iconColor }}>{card.value}</span>
-                {card.suffix && (
-                  <span className="text-sm text-cream/30">{card.suffix}</span>
-                )}
-              </p>
-              {card.trend !== undefined && card.trend !== 0 && (
-                <span
-                  className="font-dm text-[10px] font-semibold"
-                  style={{
-                    color: card.trend > 0 ? "#00b894" : "#e74c3c",
-                  }}
-                >
-                  {card.trend > 0 ? "+" : ""}
-                  {card.trend.toFixed(0)}%
-                </span>
-              )}
-            </div>
-            <div className="flex items-center gap-1.5">
-              <p className="text-[11px] font-dm text-cream/40">{card.label}</p>
-              {card.hint && <HintButton text={card.hint} />}
-            </div>
-            {card.subtitle && (
-              <p className="text-[10px] font-dm text-cream/25">
-                {card.subtitle}
-              </p>
-            )}
-          </div>
-        </div>
-      </Card>
-    </motion.div>
-  );
-}
-
-// ═══════════════════════════════════════════════════════════════
-// MiniBarChart helper
-// ═══════════════════════════════════════════════════════════════
-
-function MiniBarChart({
-  data,
-  color,
-  height = "h-28",
-  labelInterval,
-}: {
-  data: { date: string; count: number }[];
-  color: string;
-  height?: string;
-  labelInterval?: number;
-}) {
-  if (data.length === 0) return null;
-  const maxCount = Math.max(...data.map((e) => e.count), 1);
-  const interval = labelInterval || Math.max(1, Math.floor(data.length / 6));
-
-  return (
-    <div className={`flex items-end gap-1 ${height}`}>
-      {data.map((item, idx) => {
-        const h = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
-        const dateLabel = item.date.split("-").slice(1).join("/");
-        return (
-          <div
-            key={item.date}
-            className="flex-1 flex flex-col items-center justify-end group relative"
-          >
-            <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-              <div
-                className="px-2 py-0.5 rounded text-[9px] font-dm font-medium text-cream whitespace-nowrap"
-                style={{
-                  background: "rgba(30,30,30,0.95)",
-                  border: `1px solid ${color}33`,
-                }}
-              >
-                {item.count} &middot; {dateLabel}
-              </div>
-            </div>
-            <div
-              className="w-full rounded-t-md min-h-[4px] transition-all duration-200"
-              style={{
-                height: `${Math.max(h, 8)}%`,
-                background: `linear-gradient(180deg, ${color}cc 0%, ${color}66 100%)`,
-                boxShadow: `0 0 6px ${color}22`,
-              }}
-              onMouseEnter={(e) =>
-                (e.currentTarget.style.background = `linear-gradient(180deg, ${color} 0%, ${color}aa 100%)`)
-              }
-              onMouseLeave={(e) =>
-                (e.currentTarget.style.background = `linear-gradient(180deg, ${color}cc 0%, ${color}66 100%)`)
-              }
-            />
-            {idx % interval === 0 && (
-              <span className="text-[8px] text-cream/20 mt-1 font-dm">
-                {dateLabel}
-              </span>
-            )}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 // ═══════════════════════════════════════════════════════════════
 // Main component
@@ -2042,7 +1699,7 @@ export default function AdminDashboard() {
                     animate={{ opacity: 1, y: 0 }}
                     transition={{ delay: 0.85, duration: 0.4 }}
                   >
-                    <AdminRankingCard
+                    <RankingCard
                       period={dashPeriod}
                       initialData={formacaoStats.topParticipantes}
                     />
@@ -2769,7 +2426,7 @@ export default function AdminDashboard() {
                     ? [
                         {
                           label: "Receita total",
-                          value: formatCurrency(stats.totalRevenue),
+                          value: formatPrice(stats.totalRevenue),
                           icon: DollarSign,
                           iconColor: "#22C55E",
                           iconBg: "rgba(34,197,94,0.1)",
