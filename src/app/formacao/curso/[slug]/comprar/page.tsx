@@ -7,7 +7,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
-import rehypeRaw from "rehype-raw";
 import ReviewStars from "@/components/community/ReviewStars";
 import Skeleton from "@/components/ui/Skeleton";
 import Badge from "@/components/ui/Badge";
@@ -298,10 +297,7 @@ export default function ComprarPage() {
             Sobre o curso
           </h2>
           <div className="prose-allos">
-            <ReactMarkdown
-              remarkPlugins={[remarkGfm]}
-              rehypePlugins={[rehypeRaw]}
-            >
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {course.long_description}
             </ReactMarkdown>
           </div>

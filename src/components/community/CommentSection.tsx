@@ -74,6 +74,9 @@ export default function CommentSection({ lessonId, onCountChange }: CommentSecti
   }
 
   async function handleDelete(commentId: string) {
+    if (!window.confirm("Apagar este comentário? Esta ação não pode ser desfeita.")) {
+      return;
+    }
     const client = createClient();
     const { error } = await client
       .from("lesson_comments")

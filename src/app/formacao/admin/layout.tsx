@@ -56,6 +56,23 @@ export default function AdminLayout({
   // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
   // (lines 100-112) — no client-side useEffect needed.
 
+  // useEffect ANTES de qualquer early return pra respeitar Rules of Hooks.
+  useEffect(() => {
+    const nav = document.querySelector("nav.fixed");
+    const footer = document.querySelector("footer");
+    const floating = document.querySelector("[data-floating-question]");
+    if (nav) (nav as HTMLElement).style.display = "none";
+    if (footer) (footer as HTMLElement).style.display = "none";
+    if (floating) (floating as HTMLElement).style.display = "none";
+    document.body.style.paddingTop = "0";
+    return () => {
+      if (nav) (nav as HTMLElement).style.display = "";
+      if (footer) (footer as HTMLElement).style.display = "";
+      if (floating) (floating as HTMLElement).style.display = "";
+      document.body.style.paddingTop = "";
+    };
+  }, []);
+
   const currentPageTitle =
     Object.entries(pageTitles).find(([path]) =>
       pathname === path || (path !== "/formacao/admin" && pathname.startsWith(path))
@@ -80,23 +97,6 @@ export default function AdminLayout({
       </div>
     );
   }
-
-  // Hide parent layout header/footer when admin panel is active
-  useEffect(() => {
-    const nav = document.querySelector("nav.fixed");
-    const footer = document.querySelector("footer");
-    const floating = document.querySelector("[data-floating-question]");
-    if (nav) (nav as HTMLElement).style.display = "none";
-    if (footer) (footer as HTMLElement).style.display = "none";
-    if (floating) (floating as HTMLElement).style.display = "none";
-    document.body.style.paddingTop = "0";
-    return () => {
-      if (nav) (nav as HTMLElement).style.display = "";
-      if (footer) (footer as HTMLElement).style.display = "";
-      if (floating) (floating as HTMLElement).style.display = "";
-      document.body.style.paddingTop = "";
-    };
-  }, []);
 
   if (!profile || (!isAdmin && !isInstructor)) return null;
 

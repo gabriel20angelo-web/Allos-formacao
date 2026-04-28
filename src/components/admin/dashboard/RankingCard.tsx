@@ -31,7 +31,7 @@ export default function RankingCard({
       setData(initialData);
       return;
     }
-    fetch(`/formacao/api/ranking?period=${period}&type=${type}&_t=${Date.now()}`)
+    fetch(`/formacao/api/ranking?period=${period}&type=${type}`)
       .then((r) => r.json())
       .then((d) => {
         if (Array.isArray(d)) setData(d);

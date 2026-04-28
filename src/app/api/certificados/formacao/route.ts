@@ -1,21 +1,21 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { buildCorsHeaders, isValidMeetSharedSecret } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Content-Type": "application/json; charset=utf-8",
-  "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, {
+    headers: buildCorsHeaders(req.headers.get("origin"), {
+      cacheControl: "no-store, no-cache, must-revalidate, max-age=0",
+    }),
+  });
 }
 
 export async function GET(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
+    cacheControl: "no-store, no-cache, must-revalidate, max-age=0",
+  });
   try {
     const sb = await createServiceRoleClient();
     const type = req.nextUrl.searchParams.get("type");
@@ -167,16 +167,25 @@ export async function GET(req: NextRequest) {
       { error: "Invalid type parameter" },
       { status: 400, headers: corsHeaders }
     );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+  } catch (error) {
+    console.error("[certificados/formacao]", error);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno" },
       { status: 500, headers: corsHeaders }
     );
   }
 }
 
 export async function POST(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
+    cacheControl: "no-store, no-cache, must-revalidate, max-age=0",
+  });
+  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const sb = await createServiceRoleClient();
     const body = await req.json();
@@ -471,10 +480,10 @@ export async function POST(req: NextRequest) {
       { error: "Invalid action" },
       { status: 400, headers: corsHeaders }
     );
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+  } catch (error) {
+    console.error("[certificados/formacao]", error);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno" },
       { status: 500, headers: corsHeaders }
     );
   }

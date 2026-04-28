@@ -312,7 +312,21 @@ export default function CoursePage() {
       }
 
       if (error) {
-        // Save to localStorage for later sync
+        // Reverte o estado otimista — assim o ícone reflete o que está
+        // realmente persistido. Se o user offline, o pending sync (na
+        // outra useEffect) reaplica quando a conexão volta.
+        setProgressMap((prev) => {
+          const restored: LessonProgress = {
+            ...prev[lessonId],
+            id: existing?.id || "",
+            user_id: user.id,
+            lesson_id: lessonId,
+            completed: existing?.completed ?? false,
+            completed_at: existing?.completed_at ?? null,
+          };
+          return { ...prev, [lessonId]: restored };
+        });
+
         try {
           const key = `allos_pending_progress_${course?.id}`;
           const raw = localStorage.getItem(key);

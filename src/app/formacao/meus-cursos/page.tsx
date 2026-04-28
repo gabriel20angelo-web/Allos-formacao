@@ -275,29 +275,17 @@ export default function MeusCursosPage() {
       // Async hours = total studied minutes from completed lessons
       // We already have studiedMins
 
-      // Sync hours: match profile name against certificado_submissions
+      // Sync hours via endpoint server-side (RLS de certificado_submissions
+      // bloqueia leitura direta — migration 023).
       let syncHoursTotal = 0;
-      const nameToMatch = profile?.certificate_name || profile?.full_name || "";
-      if (nameToMatch) {
-        const [subsRes, atvRes] = await Promise.all([
-          client
-            .from("certificado_submissions")
-            .select("atividade_nome")
-            .ilike("nome_completo", `%${nameToMatch}%`),
-          client
-            .from("certificado_atividades")
-            .select("nome, carga_horaria"),
-        ]);
-
-        if (subsRes.data && atvRes.data) {
-          const horasMap = new Map<string, number>();
-          atvRes.data.forEach((a: { nome: string; carga_horaria: number }) => {
-            horasMap.set(a.nome.toLowerCase(), a.carga_horaria);
-          });
-          subsRes.data.forEach((s: { atividade_nome: string }) => {
-            syncHoursTotal += horasMap.get(s.atividade_nome?.toLowerCase()) || 2;
-          });
+      try {
+        const syncRes = await fetch("/formacao/api/my-sync-hours", { credentials: "include" });
+        if (syncRes.ok) {
+          const payload: { syncHours: number } = await syncRes.json();
+          syncHoursTotal = payload.syncHours || 0;
         }
+      } catch (err) {
+        console.warn("[meus-cursos] sync-hours fetch failed:", err);
       }
 
       setHours({ asyncMinutes: studiedMins, syncHours: syncHoursTotal });

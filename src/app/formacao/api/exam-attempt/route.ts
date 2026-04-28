@@ -54,9 +54,11 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // exam_questions.options é JSONB embutido no schema (000_full_schema:180),
+    // não uma tabela relacionada — select direto da coluna.
     const { data: questions } = await sb
       .from("exam_questions")
-      .select("id, options:exam_options(id, is_correct)")
+      .select("id, options")
       .eq("course_id", courseId);
     if (!questions || questions.length === 0) {
       return NextResponse.json(
@@ -67,10 +69,17 @@ export async function POST(req: NextRequest) {
 
     const answerMap = new Map(answers.map((a) => [a.question_id, a.selected_option_id]));
 
+    interface ExamOption {
+      id: string;
+      text?: string;
+      is_correct: boolean;
+    }
+
     let correct = 0;
-    const examAnswers = questions.map((q: { id: string; options: { id: string; is_correct: boolean }[] }) => {
+    const examAnswers = questions.map((q: { id: string; options: ExamOption[] | null }) => {
       const selectedId = answerMap.get(q.id);
-      const correctOption = q.options?.find((o) => o.is_correct);
+      const opts = Array.isArray(q.options) ? q.options : [];
+      const correctOption = opts.find((o) => o.is_correct);
       const isCorrect = !!selectedId && selectedId === correctOption?.id;
       if (isCorrect) correct++;
       return {

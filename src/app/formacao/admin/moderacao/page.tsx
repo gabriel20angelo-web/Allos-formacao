@@ -1,6 +1,7 @@
 "use client";
 
 import dynamic from "next/dynamic";
+import Image from "next/image";
 import { useEffect, useState, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -383,7 +384,13 @@ export default function ModeracaoPage() {
                   style={{ background: "rgba(200,75,49,0.1)" }}
                 >
                   {review.user?.avatar_url ? (
-                    <img src={review.user.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                    <Image
+                      src={review.user.avatar_url}
+                      alt={review.user.full_name ? `Foto de ${review.user.full_name}` : "Avatar"}
+                      width={36}
+                      height={36}
+                      className="w-9 h-9 rounded-full object-cover"
+                    />
                   ) : (
                     <User className="h-4 w-4 text-accent" />
                   )}
@@ -430,7 +437,13 @@ export default function ModeracaoPage() {
                     style={{ background: "rgba(200,75,49,0.1)" }}
                   >
                     {comment.user?.avatar_url ? (
-                      <img src={comment.user.avatar_url} alt="" className="w-9 h-9 rounded-full object-cover" />
+                      <Image
+                        src={comment.user.avatar_url}
+                        alt={comment.user.full_name ? `Foto de ${comment.user.full_name}` : "Avatar"}
+                        width={36}
+                        height={36}
+                        className="w-9 h-9 rounded-full object-cover"
+                      />
                     ) : (
                       <User className="h-4 w-4 text-accent" />
                     )}

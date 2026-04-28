@@ -611,7 +611,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
     setSections((prev) => [
       ...prev,
       {
-        id: `new-${Date.now()}`,
+        id: `new-${crypto.randomUUID()}`,
         course_id: courseId || "",
         title: isExtra ? `Módulo Extra ${prev.filter(s => s.is_extra).length + 1}` : `Módulo ${prev.filter(s => !s.is_extra).length + 1}`,
         position: prev.length,
@@ -630,7 +630,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       section.lessons = [
         ...section.lessons,
         {
-          id: `new-${Date.now()}`,
+          id: `new-${crypto.randomUUID()}`,
           section_id: section.id,
           title: "",
           description: null,
@@ -809,7 +809,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
     setQuestions((prev) => [
       ...prev,
       {
-        id: `new-${Date.now()}`,
+        id: `new-${crypto.randomUUID()}`,
         course_id: courseId || "",
         question_text: "",
         options: [

@@ -31,15 +31,15 @@ export async function GET() {
   };
 
   if (!session) {
-    return Response.json({ session: null }, { headers });
+    return Response.json({ session: null, user: null }, { headers });
   }
 
+  // Não retornar refresh_token (XSS pode roubá-lo). Cookies HttpOnly já
+  // têm os tokens server-side; o cliente só precisa saber se há sessão.
   return Response.json(
     {
-      session: {
-        access_token: session.access_token,
-        refresh_token: session.refresh_token,
-      },
+      session: { active: true },
+      user: { id: session.user.id, email: session.user.email },
     },
     { headers }
   );

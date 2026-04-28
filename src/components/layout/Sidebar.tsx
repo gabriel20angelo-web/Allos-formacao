@@ -45,6 +45,9 @@ export default function Sidebar() {
     const next = !collapsed;
     setCollapsed(next);
     localStorage.setItem(STORAGE_KEY, String(next));
+    // Outras instâncias do hook na MESMA tab escutam isso (storage event
+    // só dispara entre tabs).
+    window.dispatchEvent(new Event("sidebar-collapse-toggle"));
   }
 
   const isActive = (href: string) => {
@@ -366,15 +369,23 @@ export function useSidebarWidth() {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === "true") setCollapsed(true);
 
-    // Listen for storage changes (same tab)
-    const interval = setInterval(() => {
-      const current = localStorage.getItem(STORAGE_KEY) === "true";
-      setCollapsed(current);
-    }, 200);
+    // Mesma tab: custom event disparado pelo toggle.
+    function onLocal() {
+      setCollapsed(localStorage.getItem(STORAGE_KEY) === "true");
+    }
+    // Outra tab: storage event nativo.
+    function onStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY) {
+        setCollapsed(e.newValue === "true");
+      }
+    }
+    window.addEventListener("sidebar-collapse-toggle", onLocal);
+    window.addEventListener("storage", onStorage);
 
     return () => {
       window.removeEventListener("resize", checkMobile);
-      clearInterval(interval);
+      window.removeEventListener("sidebar-collapse-toggle", onLocal);
+      window.removeEventListener("storage", onStorage);
     };
   }, []);
 

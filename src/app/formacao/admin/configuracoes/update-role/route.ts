@@ -1,11 +1,8 @@
-import { createServerClient } from "@supabase/ssr";
-import { cookies } from "next/headers";
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
 export async function POST(request: Request) {
-  const cookieStore = await cookies();
-
   const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!serviceRoleKey) {
     return Response.json(
@@ -14,29 +11,18 @@ export async function POST(request: Request) {
     );
   }
 
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    serviceRoleKey,
-    {
-      cookies: {
-        getAll() {
-          return cookieStore.getAll();
-        },
-        setAll() {},
-      },
-    }
-  );
-
-  // Verify the caller is an admin
-  const { data: { session } } = await supabase.auth.getSession();
-  if (!session) {
+  // Validação do caller via anon client com cookies do user (getUser faz
+  // round-trip ao Supabase, validando assinatura do JWT).
+  const userClient = await createServerSupabaseClient();
+  const { data: { user }, error: userErr } = await userClient.auth.getUser();
+  if (userErr || !user) {
     return Response.json({ error: "Não autenticado" }, { status: 401 });
   }
 
-  const { data: callerProfile } = await supabase
+  const { data: callerProfile } = await userClient
     .from("profiles")
     .select("role")
-    .eq("id", session.user.id)
+    .eq("id", user.id)
     .single();
 
   if (callerProfile?.role !== "admin") {
@@ -49,18 +35,20 @@ export async function POST(request: Request) {
     return Response.json({ error: "userId e role são obrigatórios" }, { status: 400 });
   }
 
-  // Prevent self-demotion
-  if (userId === session.user.id && role !== "admin") {
+  if (userId === user.id && role !== "admin") {
     return Response.json({ error: "Não pode remover sua própria permissão" }, { status: 400 });
   }
 
-  const { error } = await supabase
+  // Service role só agora, exclusivamente pra escrita (bypassa RLS).
+  const sb = await createServiceRoleClient();
+  const { error } = await sb
     .from("profiles")
     .update({ role })
     .eq("id", userId);
 
   if (error) {
-    return Response.json({ error: error.message }, { status: 500 });
+    console.error("[update-role]", error);
+    return Response.json({ error: "Erro interno" }, { status: 500 });
   }
 
   return Response.json({ success: true });

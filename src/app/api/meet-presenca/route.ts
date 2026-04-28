@@ -1,20 +1,27 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { buildCorsHeaders, isValidMeetSharedSecret } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, DELETE, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Content-Type": "application/json; charset=utf-8",
-};
-
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, {
+    headers: buildCorsHeaders(req.headers.get("origin"), {
+      methods: "GET, POST, DELETE, OPTIONS",
+    }),
+  });
 }
 
 export async function POST(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
+    methods: "GET, POST, DELETE, OPTIONS",
+  });
+  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const body = await req.json();
 
@@ -67,17 +74,19 @@ export async function POST(req: NextRequest) {
       { success: true, id: data.id },
       { headers: corsHeaders }
     );
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno";
-    console.error("[meet-presenca] Erro:", message);
+  } catch (err) {
+    console.error("[meet-presenca]", err);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno" },
       { status: 500, headers: corsHeaders }
     );
   }
 }
 
 export async function GET(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
+    methods: "GET, POST, DELETE, OPTIONS",
+  });
   try {
     const sb = await createServiceRoleClient();
     const slotId = req.nextUrl.searchParams.get("slot_id");
@@ -98,16 +107,25 @@ export async function GET(req: NextRequest) {
     if (error) throw error;
 
     return NextResponse.json(data, { headers: corsHeaders });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno";
+  } catch (err) {
+    console.error("[meet-presenca]", err);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno" },
       { status: 500, headers: corsHeaders }
     );
   }
 }
 
 export async function DELETE(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
+    methods: "GET, POST, DELETE, OPTIONS",
+  });
+  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const id = req.nextUrl.searchParams.get("id");
     if (!id) {
@@ -126,10 +144,10 @@ export async function DELETE(req: NextRequest) {
     if (error) throw error;
 
     return NextResponse.json({ success: true }, { headers: corsHeaders });
-  } catch (err: unknown) {
-    const message = err instanceof Error ? err.message : "Erro interno";
+  } catch (err) {
+    console.error("[meet-presenca]", err);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno" },
       { status: 500, headers: corsHeaders }
     );
   }

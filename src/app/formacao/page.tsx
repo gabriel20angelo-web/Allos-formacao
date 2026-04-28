@@ -52,9 +52,9 @@ export default function FormacaoPage() {
       try {
         // Same-origin server endpoint — bypasses any client-side block of
         // syiaushvzhgyhvsmoegt.supabase.co (Private Relay / adblock / ISP).
-        const res = await fetch("/formacao/api/home-data", {
-          cache: "no-store",
-        });
+        // Cache deixado como default — endpoint server tem
+        // s-maxage=30, stale-while-revalidate=300 que o CDN respeita.
+        const res = await fetch("/formacao/api/home-data");
         if (!res.ok) throw new Error(`home-data ${res.status}`);
         const payload: { courses: Course[]; categories: string[] } =
           await res.json();

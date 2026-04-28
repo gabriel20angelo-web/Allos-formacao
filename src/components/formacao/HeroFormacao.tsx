@@ -141,7 +141,7 @@ export default function HeroFormacao() {
     // "Participantes" = quem aparece via /certificado (eventos síncronos).
     // "Curseiros" = quem completa lições de cursos assíncronos (lesson_progress).
     const type = rankTab === "participantes" ? "sync" : "async";
-    fetch(`/formacao/api/ranking?period=${rankPeriod}&type=${type}&_t=${Date.now()}`)
+    fetch(`/formacao/api/ranking?period=${rankPeriod}&type=${type}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setRanking(d.slice(0, 5)); else setRanking([]); })
       .catch(() => setRanking([]))

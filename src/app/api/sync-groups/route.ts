@@ -1,16 +1,22 @@
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { buildCorsHeaders } from '@/lib/api/cors'
 
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, { headers: buildCorsHeaders(req.headers.get("origin"), { methods: "GET, OPTIONS" }) });
+}
+
+export async function GET(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"), { methods: "GET, OPTIONS" });
   try {
     const sb = await createServiceRoleClient()
 
     // Check visibility
     const { data: config } = await sb.from('formacao_cronograma').select('grupos_visiveis, duracao_minutos').limit(1).single()
     if (config && config.grupos_visiveis === false) {
-      return NextResponse.json({ visivel: false, horarios: [], slots: [], atividades: [] })
+      return NextResponse.json({ visivel: false, horarios: [], slots: [], atividades: [] }, { headers: corsHeaders })
     }
 
     // Fetch data in parallel
@@ -26,9 +32,9 @@ export async function GET() {
       horarios: horariosRes.data || [],
       slots: slotsRes.data || [],
       atividades: atividadesRes.data || [],
-    })
+    }, { headers: corsHeaders })
   } catch (e) {
     console.error('sync-groups error:', e)
-    return NextResponse.json({ visivel: false, horarios: [], slots: [], atividades: [] })
+    return NextResponse.json({ visivel: false, horarios: [], slots: [], atividades: [] }, { headers: corsHeaders })
   }
 }

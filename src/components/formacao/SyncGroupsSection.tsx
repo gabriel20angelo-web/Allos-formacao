@@ -141,7 +141,7 @@ export default function SyncGroupsSection() {
   }, []);
 
   useEffect(() => {
-    fetch(`/formacao/api/ranking?period=${rankingPeriod}&type=${rankingType}&_t=${Date.now()}`)
+    fetch(`/formacao/api/ranking?period=${rankingPeriod}&type=${rankingType}`)
       .then(r => r.json())
       .then(d => { if (Array.isArray(d)) setRankingData(d); })
       .catch(() => setRankingData([]));

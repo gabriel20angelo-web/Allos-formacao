@@ -199,7 +199,11 @@ export default function AdminCursosPage() {
   async function deleteCourse() {
     if (!deleteTarget) return;
     const supabase = createClient();
-    // Delete dependent data first (enrollments don't cascade)
+    // FKs em certificates/reviews/exam_attempts → courses NÃO têm
+    // ON DELETE CASCADE (000_full_schema), então apagar manualmente.
+    await supabase.from("certificates").delete().eq("course_id", deleteTarget.id);
+    await supabase.from("reviews").delete().eq("course_id", deleteTarget.id);
+    await supabase.from("exam_attempts").delete().eq("course_id", deleteTarget.id);
     await supabase.from("enrollments").delete().eq("course_id", deleteTarget.id);
     await supabase.from("exam_questions").delete().eq("course_id", deleteTarget.id);
 

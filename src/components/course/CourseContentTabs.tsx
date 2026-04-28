@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback, useRef } from "react";
 import ReactMarkdown from "react-markdown";
-import rehypeRaw from "rehype-raw";
 import remarkGfm from "remark-gfm";
 import { FileText, Download, MessageSquare, StickyNote, Cloud } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
@@ -200,10 +199,7 @@ export default function CourseContentTabs({
         >
           {activeTab === "description" && (
             <div className="prose-allos">
-              <ReactMarkdown
-                remarkPlugins={[remarkGfm]}
-                rehypePlugins={[rehypeRaw]}
-              >
+              <ReactMarkdown remarkPlugins={[remarkGfm]}>
                 {lesson.description!}
               </ReactMarkdown>
             </div>

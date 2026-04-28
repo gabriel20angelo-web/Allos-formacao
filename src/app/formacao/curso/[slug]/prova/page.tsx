@@ -29,7 +29,7 @@ export default function ProvaPage() {
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
-    async function fetch() {
+    async function loadExam() {
       if (!user) {
         setLoading(false);
         return;
@@ -62,16 +62,23 @@ export default function ProvaPage() {
         return;
       }
 
-      const { data: questionsData } = await createClient()
-        .from("exam_questions")
-        .select("*")
-        .eq("course_id", course.id)
-        .order("position");
-
-      if (questionsData) setQuestions(questionsData);
+      // Endpoint server-side devolve options sem o campo `is_correct`
+      // (vazaria as respostas no DevTools / Network tab).
+      try {
+        const qRes = await fetch(
+          `/formacao/api/exam-questions?course_id=${course.id}`,
+          { credentials: "include" },
+        );
+        if (qRes.ok) {
+          const data: ExamQuestion[] = await qRes.json();
+          setQuestions(data);
+        }
+      } catch (err) {
+        console.error("[prova] fetch questions error:", err);
+      }
       setLoading(false);
     }
-    fetch().catch(() => setLoading(false));
+    loadExam().catch(() => setLoading(false));
   }, [slug, user?.id, router]);
 
   async function handleSubmit(e: React.FormEvent) {

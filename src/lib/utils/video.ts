@@ -23,20 +23,25 @@ export function detectVideoSource(url: string): VideoSource {
   return "other";
 }
 
+function isSafeHttpUrl(url: string): boolean {
+  return url.startsWith("https://") || url.startsWith("http://");
+}
+
 export function getEmbedUrl(url: string, source: VideoSource): string {
   switch (source) {
     case "youtube": {
       const id = extractYouTubeId(url);
-      if (!id) return url;
+      if (!id) return isSafeHttpUrl(url) ? url : "";
       const params = "rel=0&modestbranding=1&playsinline=1";
       return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
     }
     case "google_drive": {
       const id = extractDriveId(url);
-      return id ? `https://drive.google.com/file/d/${id}/preview` : url;
+      if (id) return `https://drive.google.com/file/d/${id}/preview`;
+      return isSafeHttpUrl(url) ? url : "";
     }
     default:
-      return url;
+      return isSafeHttpUrl(url) ? url : "";
   }
 }
 
@@ -57,6 +62,6 @@ export function getExternalUrl(url: string, source: VideoSource): string | null 
     case "google_drive":
       return getDriveViewUrl(url);
     default:
-      return url || null;
+      return url && isSafeHttpUrl(url) ? url : null;
   }
 }
