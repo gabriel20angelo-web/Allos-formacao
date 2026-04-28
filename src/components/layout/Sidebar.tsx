@@ -152,7 +152,7 @@ export default function Sidebar() {
                   )}
                 </AnimatePresence>
                 {!collapsed && item.external && (
-                  <ExternalLink className="h-3 w-3 text-cream/20 ml-auto" />
+                  <ExternalLink className="h-3 w-3 text-cream/45 ml-auto" />
                 )}
               </Link>
             );
@@ -296,11 +296,12 @@ export default function Sidebar() {
 
       {/* Mobile bottom nav */}
       <nav
-        className="md:hidden fixed bottom-0 left-0 right-0 z-[90] flex items-center justify-around py-2 px-2 safe-area-pb"
+        className="md:hidden fixed bottom-0 left-0 right-0 z-[90] flex items-center justify-around py-2 px-2"
         style={{
           background: "rgba(17,17,17,0.95)",
           borderTop: "1px solid rgba(255,255,255,0.06)",
           backdropFilter: "blur(20px)",
+          paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         }}
       >
         {mainNav.filter((i) => !(i.auth && !user)).map((item) => {

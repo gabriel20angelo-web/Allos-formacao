@@ -108,7 +108,44 @@ export default function ContinueStudying() {
     fetchEnrolled().catch(() => setLoading(false));
   }, [user]);
 
-  if (loading || !user || courses.length === 0) return null;
+  if (!user) return null;
+
+  if (loading) {
+    return (
+      <section className="relative py-10 sm:py-14 px-5 sm:px-6 md:px-10">
+        <div className="max-w-[1200px] mx-auto">
+          <div className="flex items-center gap-3 mb-6">
+            <div
+              className="w-8 h-8 rounded-lg"
+              style={{ background: "rgba(46,158,143,0.12)" }}
+            />
+            <div className="h-5 w-40 rounded bg-white/5 animate-pulse" />
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="flex gap-4 rounded-2xl p-4 animate-pulse"
+                style={{
+                  background: "rgba(255,255,255,0.02)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                <div className="w-20 h-20 rounded-xl flex-shrink-0 bg-white/5" />
+                <div className="flex-1 space-y-2">
+                  <div className="h-4 w-3/4 rounded bg-white/5" />
+                  <div className="h-3 w-1/2 rounded bg-white/5" />
+                  <div className="h-1.5 w-full rounded-full bg-white/5" />
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (courses.length === 0) return null;
 
   return (
     <section className="relative py-10 sm:py-14 px-5 sm:px-6 md:px-10">

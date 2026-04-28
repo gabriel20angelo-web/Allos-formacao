@@ -249,7 +249,7 @@ export default function ReviewSection({
               {review.user?.avatar_url ? (
                 <Image
                   src={review.user.avatar_url}
-                  alt=""
+                  alt={review.user.full_name ? `Foto de ${review.user.full_name}` : "Avatar"}
                   width={32}
                   height={32}
                   className="w-8 h-8 rounded-full object-cover"

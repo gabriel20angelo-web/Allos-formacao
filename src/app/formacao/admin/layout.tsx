@@ -231,7 +231,7 @@ export default function AdminLayout({
           <div className="flex items-center gap-4">
             <button
               onClick={() => setSidebarOpen(true)}
-              className="lg:hidden p-2 text-cream"
+              className="lg:hidden p-3 -ml-2 text-cream"
               aria-label="Abrir menu"
             >
               <Menu className="h-5 w-5" />

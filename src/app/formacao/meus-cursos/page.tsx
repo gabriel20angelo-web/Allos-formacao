@@ -747,9 +747,31 @@ export default function MeusCursosPage() {
             {tab === "certificates" && (
               <div className="space-y-4">
                 {certificates.length === 0 ? (
-                  <p className="text-cream/30 text-sm py-10 text-center">
-                    Nenhum certificado emitido ainda.
-                  </p>
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div
+                      className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                      style={{ background: "rgba(200,75,49,0.08)", border: "1px solid rgba(200,75,49,0.18)" }}
+                    >
+                      <Award className="h-7 w-7 text-accent/60" />
+                    </div>
+                    <h3 className="font-fraunces font-bold text-cream text-lg mb-2">
+                      Nenhum certificado ainda
+                    </h3>
+                    <p className="text-cream/50 text-sm max-w-md mb-6">
+                      Quando você concluir um curso e for aprovado na prova, o
+                      certificado fica disponível aqui.
+                    </p>
+                    <Link
+                      href="/formacao"
+                      className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium text-cream"
+                      style={{
+                        background: "linear-gradient(135deg, #C84B31, #A33D27)",
+                        boxShadow: "0 2px 12px rgba(200,75,49,0.3)",
+                      }}
+                    >
+                      Explorar cursos <ArrowRight className="h-4 w-4" />
+                    </Link>
+                  </div>
                 ) : (
                   certificates.map((cert, i) => (
                     <motion.div

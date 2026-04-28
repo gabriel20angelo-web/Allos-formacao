@@ -1135,7 +1135,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                     value={certLessonsRequired ?? ""}
                     onChange={(e) => { setCertLessonsRequired(parseInt(e.target.value) || null); markDirty(); }}
                     placeholder="Ex: 10"
-                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none"
+                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                   />
                 </div>
@@ -1147,7 +1147,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                     value={certHoursValue ?? ""}
                     onChange={(e) => { setCertHoursValue(parseInt(e.target.value) || null); markDirty(); }}
                     placeholder="Ex: 20"
-                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none"
+                    className="w-full px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
                     style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                   />
                 </div>
@@ -1192,7 +1192,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                       markDirty();
                     }}
                     placeholder="Ex: Entender os fundamentos da psicoterapia"
-                    className="flex-1 px-4 py-2 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none transition-all duration-250"
+                    className="flex-1 px-4 py-2 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-all duration-250"
                     style={{
                       background: "rgba(255,255,255,0.04)",
                       border: "1.5px solid rgba(255,255,255,0.08)",
@@ -1241,7 +1241,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               type="number"
               value={defaultDuration}
               onChange={(e) => setDefaultDuration(parseInt(e.target.value) || 0)}
-              className="w-20 px-2.5 py-1.5 text-xs rounded-lg text-cream placeholder:text-cream/25 focus:outline-none"
+              className="w-20 px-2.5 py-1.5 text-xs rounded-lg text-cream placeholder:text-cream/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
               style={{ background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.1)", color: "rgba(253,251,247,0.9)" }}
               min="1"
             />
@@ -1305,7 +1305,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                       <input
                         value={section.title}
                         onChange={(e) => updateSection(si, e.target.value)}
-                        className="flex-1 font-semibold text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none py-1"
+                        className="flex-1 font-semibold text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1"
                         placeholder="Nome da seção"
                       />
                       {/* Toggle extra */}
@@ -1410,7 +1410,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                       updateLesson(si, li, "title", e.target.value)
                                     }
                                     placeholder="Título da aula"
-                                    className="flex-1 text-sm text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none py-1 placeholder:text-cream/25"
+                                    className="flex-1 text-sm text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1 placeholder:text-cream/25"
                                   />
                                   {/* Delete lesson with confirmation */}
                                   {deleteConfirmId === `lesson-${lesson.id}` ? (
@@ -1448,7 +1448,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                         updateLesson(si, li, "video_url", e.target.value)
                                       }
                                       placeholder="URL do vídeo (YouTube / Drive)"
-                                      className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                                      className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                                       style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                                     />
                                     {/* Video URL preview */}
@@ -1468,7 +1468,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                         )
                                       }
                                       placeholder="Ex: 45"
-                                      className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                                      className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                                       style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                                     />
                                   </div>
@@ -1480,7 +1480,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                     updateLesson(si, li, "thumbnail_url", e.target.value)
                                   }
                                   placeholder="Thumbnail da aula (opcional — sobrescreve o padrão do curso)"
-                                  className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                                  className="w-full px-3 py-2 text-xs rounded-button focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                                   style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                                 />
 
@@ -1491,7 +1491,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                   }
                                   placeholder="Descrição da aula (Markdown)"
                                   rows={2}
-                                  className="w-full px-3 py-2 text-xs rounded-button resize-y focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                                  className="w-full px-3 py-2 text-xs rounded-button resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                                   style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                                 />
 
@@ -1614,7 +1614,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                           onChange={(e) => updateQuestion(qi, e.target.value)}
                           placeholder="Texto da pergunta"
                           rows={2}
-                          className="w-full px-3 py-2 text-sm rounded-button resize-y focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                          className="w-full px-3 py-2 text-sm rounded-button resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                           style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                         />
                       </div>
@@ -1644,7 +1644,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                               updateOption(qi, oi, e.target.value)
                             }
                             placeholder={`Opção ${oi + 1}`}
-                            className="flex-1 px-3 py-1.5 text-sm rounded-button focus:outline-none focus:border-teal text-cream placeholder:text-cream/25"
+                            className="flex-1 px-3 py-1.5 text-sm rounded-button focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 focus:border-teal text-cream placeholder:text-cream/25"
                             style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
                           />
                           {q.options.length > 2 && (
@@ -1717,7 +1717,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                     markDirty();
                   }}
                   placeholder="Ex: 45"
-                  className="w-full max-w-[200px] px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none transition-all"
+                  className="w-full max-w-[200px] px-4 py-2.5 rounded-[10px] text-sm text-cream placeholder:text-cream/25 focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-all"
                   style={{
                     background: "rgba(255,255,255,0.04)",
                     border: "1.5px solid rgba(255,255,255,0.08)",
@@ -1739,7 +1739,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                   onChange={(e) => { setCertificateBodyText(e.target.value); markDirty(); }}
                   placeholder={'Certificamos que {nome} concluiu com aproveitamento o curso "{curso}", promovido pela Associação Allos, com carga horária total de {horas} horas, em {data}.'}
                   rows={4}
-                  className="w-full px-4 py-3 rounded-[10px] text-sm text-cream placeholder:text-cream/25 resize-y focus:outline-none transition-all"
+                  className="w-full px-4 py-3 rounded-[10px] text-sm text-cream placeholder:text-cream/25 resize-y focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 transition-all"
                   style={{
                     background: "rgba(255,255,255,0.04)",
                     border: "1.5px solid rgba(255,255,255,0.08)",

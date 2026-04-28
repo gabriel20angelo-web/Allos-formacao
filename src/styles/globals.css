@@ -5,6 +5,23 @@
 * { box-sizing: border-box; padding: 0; margin: 0; }
 html { scroll-behavior: smooth; scrollbar-width: auto; scrollbar-color: #C84B31 #111; }
 
+/* Respeita prefers-reduced-motion: zera scroll smooth e animações Tailwind. */
+@media (prefers-reduced-motion: reduce) {
+  html { scroll-behavior: auto; }
+  .animate-spin,
+  .animate-pulse,
+  .animate-bounce,
+  .animate-ping {
+    animation: none !important;
+  }
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Safe area for notched phones */
 @supports (padding: env(safe-area-inset-top)) {
   body { padding-top: env(safe-area-inset-top); padding-bottom: env(safe-area-inset-bottom); }
