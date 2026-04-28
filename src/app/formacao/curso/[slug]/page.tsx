@@ -658,12 +658,9 @@ export default function CourseOverviewPage() {
                   <h3 className="font-fraunces font-bold text-lg text-cream mb-4">
                     Sobre o curso
                   </h3>
-                  <div
-                    className="font-dm text-sm text-cream/60 leading-relaxed prose prose-invert prose-sm max-w-none"
-                    dangerouslySetInnerHTML={{
-                      __html: longDescription.replace(/\n/g, "<br />"),
-                    }}
-                  />
+                  <div className="font-dm text-sm text-cream/60 leading-relaxed prose prose-invert prose-sm max-w-none whitespace-pre-line">
+                    {longDescription}
+                  </div>
                 </div>
               )}
 

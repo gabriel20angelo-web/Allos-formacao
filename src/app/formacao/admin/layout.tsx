@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { useRouter, usePathname } from "next/navigation";
+import { usePathname } from "next/navigation";
 import Link from "next/link";
 import Image from "next/image";
 import { motion, AnimatePresence } from "framer-motion";
@@ -51,15 +51,10 @@ export default function AdminLayout({
   children: React.ReactNode;
 }) {
   const { profile, loading, signOut, isAdmin, isInstructor } = useAuth();
-  const router = useRouter();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
-
-  useEffect(() => {
-    if (!loading && !isAdmin && !isInstructor) {
-      router.push("/formacao");
-    }
-  }, [loading, isAdmin, isInstructor, router]);
+  // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
+  // (lines 100-112) — no client-side useEffect needed.
 
   const currentPageTitle =
     Object.entries(pageTitles).find(([path]) =>

@@ -3,18 +3,32 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type",
-  "Content-Type": "application/json; charset=utf-8",
-};
+const ALLOWED_ORIGINS = [
+  "https://allos.org.br",
+  "https://www.allos.org.br",
+  "https://allos-formacao.up.railway.app",
+  process.env.APP_URL,
+  process.env.NEXT_PUBLIC_APP_URL,
+  ...(process.env.NODE_ENV !== "production" ? ["http://localhost:3000"] : []),
+].filter((o): o is string => Boolean(o));
 
-export async function OPTIONS() {
-  return NextResponse.json({}, { headers: corsHeaders });
+function buildCorsHeaders(origin: string | null): Record<string, string> {
+  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : "";
+  return {
+    "Access-Control-Allow-Origin": allowedOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Vary": "Origin",
+    "Content-Type": "application/json; charset=utf-8",
+  };
+}
+
+export async function OPTIONS(req: NextRequest) {
+  return NextResponse.json({}, { headers: buildCorsHeaders(req.headers.get("origin")) });
 }
 
 export async function GET(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
   try {
     const sb = await createServiceRoleClient();
     const type = req.nextUrl.searchParams.get("type");
@@ -60,6 +74,7 @@ export async function GET(req: NextRequest) {
 }
 
 export async function POST(req: NextRequest) {
+  const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
   try {
     const sb = await createServiceRoleClient();
     const body = await req.json();
