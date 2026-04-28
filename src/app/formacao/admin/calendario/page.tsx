@@ -248,7 +248,7 @@ export default function CalendarioPage() {
 
     const bg = new window.Image();
     bg.crossOrigin = "anonymous";
-    bg.src = "/bg_allos_teal.png";
+    bg.src = "/bg_allos_teal.webp";
     bg.onload = () => { bgRef.current = bg; };
 
     // Load Cocogoose font for canvas
