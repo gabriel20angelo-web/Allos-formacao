@@ -18,7 +18,13 @@ export const runtime = "nodejs";
  *
  * Client is expected to only navigate after this call succeeds.
  */
+const CSRF_HEADER = "x-allos-auth";
+
 export async function POST(request: NextRequest) {
+  if (request.headers.get(CSRF_HEADER) !== "1") {
+    return NextResponse.json({ error: "CSRF check failed" }, { status: 403 });
+  }
+
   let body: { access_token?: string; refresh_token?: string };
   try {
     body = await request.json();

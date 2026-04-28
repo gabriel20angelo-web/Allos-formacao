@@ -9,6 +9,7 @@
 
 -- ── 1. Profiles: separar campos públicos vs privados ──
 DROP POLICY IF EXISTS "Public profiles are viewable" ON profiles;
+DROP POLICY IF EXISTS "select_profile_self_or_admin" ON profiles;
 
 -- Anon e usuários comuns leem apenas dados não sensíveis.
 -- Como Postgres RLS não filtra colunas, criamos uma view + policy de
@@ -31,6 +32,7 @@ GRANT SELECT ON public_profiles TO anon, authenticated;
 
 -- ── 2. Condutores: telefone não público ──
 DROP POLICY IF EXISTS "select_condutores" ON certificado_condutores;
+DROP POLICY IF EXISTS "select_condutores_admin" ON certificado_condutores;
 CREATE POLICY "select_condutores_admin" ON certificado_condutores
   FOR SELECT
   USING (
@@ -45,6 +47,7 @@ GRANT SELECT ON certificado_condutores_publica TO anon, authenticated;
 
 -- ── 3. lesson_comments DELETE: dono OR admin OR instructor do curso ──
 DROP POLICY IF EXISTS "Users can delete own comments or moderators can delete any" ON lesson_comments;
+DROP POLICY IF EXISTS "delete_lesson_comment_own_or_course_owner" ON lesson_comments;
 CREATE POLICY "delete_lesson_comment_own_or_course_owner" ON lesson_comments
   FOR DELETE
   USING (
@@ -70,7 +73,9 @@ CREATE POLICY "delete_lesson_comment_own_or_course_owner" ON lesson_comments
 -- O endpoint usa service_role, que bypassa RLS, então fechar policy não
 -- afeta a extensão; mas bloqueia tentativas via REST direto da Supabase.
 DROP POLICY IF EXISTS "insert_meet_presencas" ON formacao_meet_presencas;
+DROP POLICY IF EXISTS "insert_meet_presencas_admin" ON formacao_meet_presencas;
 DROP POLICY IF EXISTS "delete_meet_presencas" ON formacao_meet_presencas;
+DROP POLICY IF EXISTS "delete_meet_presencas_admin" ON formacao_meet_presencas;
 
 CREATE POLICY "insert_meet_presencas_admin" ON formacao_meet_presencas
   FOR INSERT

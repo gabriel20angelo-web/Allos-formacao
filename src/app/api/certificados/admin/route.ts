@@ -1,27 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { buildCorsHeaders, isAdminOrSharedSecret, escapeLikePattern } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
-
-const ALLOWED_ORIGINS = [
-  "https://allos.org.br",
-  "https://www.allos.org.br",
-  "https://allos-formacao.up.railway.app",
-  process.env.APP_URL,
-  process.env.NEXT_PUBLIC_APP_URL,
-  ...(process.env.NODE_ENV !== "production" ? ["http://localhost:3000"] : []),
-].filter((o): o is string => Boolean(o));
-
-function buildCorsHeaders(origin: string | null): Record<string, string> {
-  const allowedOrigin = origin && ALLOWED_ORIGINS.includes(origin) ? origin : "";
-  return {
-    "Access-Control-Allow-Origin": allowedOrigin,
-    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
-    "Access-Control-Allow-Headers": "Content-Type",
-    "Vary": "Origin",
-    "Content-Type": "application/json; charset=utf-8",
-  };
-}
 
 export async function OPTIONS(req: NextRequest) {
   return NextResponse.json({}, { headers: buildCorsHeaders(req.headers.get("origin")) });
@@ -29,6 +10,12 @@ export async function OPTIONS(req: NextRequest) {
 
 export async function GET(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
+  if (!(await isAdminOrSharedSecret(req))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const sb = await createServiceRoleClient();
     const type = req.nextUrl.searchParams.get("type");
@@ -75,6 +62,12 @@ export async function GET(req: NextRequest) {
 
 export async function POST(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"));
+  if (!(await isAdminOrSharedSecret(req))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const sb = await createServiceRoleClient();
     const body = await req.json();
@@ -282,10 +275,11 @@ export async function POST(req: NextRequest) {
     // --- Hours & Certificates ---
 
     if (action === "get_hours") {
+      const safeName = escapeLikePattern(String(body.nome ?? "").trim());
       const { data: submissions, error: subErr } = await sb
         .from("certificado_submissions")
         .select("atividade_nome, created_at")
-        .ilike("nome_completo", `%${body.nome.trim()}%`)
+        .ilike("nome_completo", `%${safeName}%`)
         .or("certificado_resgatado.is.null,certificado_resgatado.eq.false")
         .order("created_at", { ascending: true });
       if (subErr) throw subErr;
@@ -345,10 +339,11 @@ export async function POST(req: NextRequest) {
     }
 
     if (action === "claim_certificates") {
+      const safeName = escapeLikePattern(String(body.nome ?? "").trim());
       const { error } = await sb
         .from("certificado_submissions")
         .update({ certificado_resgatado: true })
-        .ilike("nome_completo", `%${body.nome.trim()}%`)
+        .ilike("nome_completo", `%${safeName}%`)
         .or("certificado_resgatado.is.null,certificado_resgatado.eq.false");
       if (error) throw error;
       return NextResponse.json({ success: true }, { headers: corsHeaders });

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { buildCorsHeaders, isValidMeetSharedSecret } from "@/lib/api/cors";
+import { buildCorsHeaders, isValidMeetSharedSecret, isAdminOrSharedSecret } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
@@ -87,6 +87,12 @@ export async function GET(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
     methods: "GET, POST, DELETE, OPTIONS",
   });
+  if (!(await isAdminOrSharedSecret(req))) {
+    return NextResponse.json(
+      { error: "Não autorizado" },
+      { status: 401, headers: corsHeaders },
+    );
+  }
   try {
     const sb = await createServiceRoleClient();
     const slotId = req.nextUrl.searchParams.get("slot_id");

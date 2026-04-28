@@ -233,15 +233,27 @@ export default function CoursePage() {
     try {
       const raw = localStorage.getItem(key);
       if (!raw) return;
-      const pending: { lessonId: string; completed: boolean; completedAt: string | null }[] = JSON.parse(raw);
-      if (pending.length === 0) return;
+      // Pendentes têm user_id pra evitar aplicar progresso de user antigo
+      // num login subsequente com user diferente.
+      const pending: { userId: string; lessonId: string; completed: boolean; completedAt: string | null }[] =
+        JSON.parse(raw);
+      const filtered = pending.filter((p) => p.userId === user.id);
+      if (filtered.length !== pending.length) {
+        // Tem entrada de outro user — ignora as órfãs
+        if (filtered.length === 0) {
+          localStorage.removeItem(key);
+          return;
+        }
+        localStorage.setItem(key, JSON.stringify(filtered));
+      }
+      if (filtered.length === 0) return;
 
       const client = createClient();
-      const remaining: typeof pending = [];
+      const remaining: typeof filtered = [];
 
       (async () => {
         try {
-          for (const item of pending) {
+          for (const item of filtered) {
             try {
               const { error } = await client.from("lesson_progress").upsert({
                 user_id: user.id,
@@ -330,9 +342,12 @@ export default function CoursePage() {
         try {
           const key = `allos_pending_progress_${course?.id}`;
           const raw = localStorage.getItem(key);
-          const pending = raw ? JSON.parse(raw) : [];
-          const idx = pending.findIndex((p: { lessonId: string }) => p.lessonId === lessonId);
-          const entry = { lessonId, completed: newCompleted, completedAt };
+          const pending: { userId: string; lessonId: string; completed: boolean; completedAt: string | null }[] =
+            raw ? JSON.parse(raw) : [];
+          const idx = pending.findIndex(
+            (p) => p.userId === user.id && p.lessonId === lessonId,
+          );
+          const entry = { userId: user.id, lessonId, completed: newCompleted, completedAt };
           if (idx >= 0) pending[idx] = entry; else pending.push(entry);
           localStorage.setItem(key, JSON.stringify(pending));
         } catch {

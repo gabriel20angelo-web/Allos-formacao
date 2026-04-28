@@ -62,9 +62,12 @@ async function getServerSession() {
       data: { session },
     } = await supabase.auth.getSession();
     if (session) {
+      // Não passar refresh_token pra hidratação SSR — XSS na primeira
+      // pintura captura. useAuth/AuthProvider só precisa do access_token
+      // pra decodificar o JWT no boot. Refresh segue nos cookies HttpOnly.
       return {
         access_token: session.access_token,
-        refresh_token: session.refresh_token,
+        refresh_token: "",
       };
     }
   } catch {

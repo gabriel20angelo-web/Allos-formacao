@@ -813,8 +813,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         course_id: courseId || "",
         question_text: "",
         options: [
-          { id: `opt-${Date.now()}-1`, text: "", is_correct: true },
-          { id: `opt-${Date.now()}-2`, text: "", is_correct: false },
+          { id: `opt-${crypto.randomUUID()}`, text: "", is_correct: true },
+          { id: `opt-${crypto.randomUUID()}`, text: "", is_correct: false },
         ],
         position: prev.length,
         created_at: new Date().toISOString(),
@@ -838,7 +838,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       const q = { ...next[qIndex] };
       q.options = [
         ...q.options,
-        { id: `opt-${Date.now()}`, text: "", is_correct: false },
+        { id: `opt-${crypto.randomUUID()}`, text: "", is_correct: false },
       ];
       next[qIndex] = q;
       return next;

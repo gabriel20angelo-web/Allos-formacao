@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { escapeLikePattern } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
@@ -35,7 +36,7 @@ export async function GET() {
     sb
       .from("certificado_submissions")
       .select("atividade_nome")
-      .ilike("nome_completo", `%${nameToMatch}%`),
+      .ilike("nome_completo", `%${escapeLikePattern(nameToMatch)}%`),
     sb
       .from("certificado_atividades")
       .select("nome, carga_horaria"),

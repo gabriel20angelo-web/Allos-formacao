@@ -18,8 +18,18 @@ export function extractDriveId(url: string): string | null {
 }
 
 export function detectVideoSource(url: string): VideoSource {
-  if (url.includes("youtube.com") || url.includes("youtu.be")) return "youtube";
-  if (url.includes("drive.google.com")) return "google_drive";
+  // Valida via URL parser pra evitar falso positivo em domínios atacantes
+  // tipo "evil.com/drive.google.com/...".
+  try {
+    const u = new URL(url);
+    if (u.hostname === "youtube.com" || u.hostname === "www.youtube.com" ||
+        u.hostname === "youtu.be" || u.hostname === "m.youtube.com") {
+      return "youtube";
+    }
+    if (u.hostname === "drive.google.com") return "google_drive";
+  } catch {
+    // URL inválida cai pra "other" e o whitelist em getEmbedUrl bloqueia
+  }
   return "other";
 }
 

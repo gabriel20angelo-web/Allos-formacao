@@ -8,7 +8,7 @@ import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import { Award, RotateCcw, CheckCircle, XCircle } from "lucide-react";
-import type { ExamQuestion, ExamOption } from "@/types";
+import type { ExamQuestion, ExamOptionPublic } from "@/types";
 
 export default function ProvaPage() {
   const params = useParams();
@@ -229,7 +229,7 @@ export default function ProvaPage() {
             </p>
 
             <div className="space-y-2">
-              {q.options.map((option: ExamOption) => (
+              {q.options.map((option: ExamOptionPublic) => (
                 <label
                   key={option.id}
                   className="flex items-center gap-3 p-3 rounded-[10px] cursor-pointer transition-all duration-200"

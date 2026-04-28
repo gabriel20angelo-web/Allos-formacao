@@ -60,7 +60,10 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
     try {
       const res = await fetch("/formacao/auth/set-session", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: {
+          "Content-Type": "application/json",
+          "X-Allos-Auth": "1",
+        },
         body: JSON.stringify({
           access_token: data.session.access_token,
           refresh_token: data.session.refresh_token,

@@ -140,6 +140,13 @@ export interface ExamOption {
   is_correct: boolean;
 }
 
+/**
+ * Versão sem `is_correct` — é o que o endpoint `/formacao/api/exam-questions`
+ * retorna pro client (não vaza respostas). Páginas de prova devem usar
+ * esse tipo em vez de `ExamOption` no client.
+ */
+export type ExamOptionPublic = Omit<ExamOption, "is_correct">;
+
 export interface ExamAttempt {
   id: string;
   user_id: string;

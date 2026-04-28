@@ -43,7 +43,10 @@ export default function GoogleButton({ redirectTo }: GoogleButtonProps) {
       if (parsed.length > 0) {
         await fetch("/formacao/auth/sync-cookies", {
           method: "POST",
-          headers: { "Content-Type": "application/json" },
+          headers: {
+            "Content-Type": "application/json",
+            "X-Allos-Auth": "1",
+          },
           body: JSON.stringify({ cookies: parsed }),
         });
       }

@@ -122,7 +122,7 @@ export function AuthProvider({
       try {
         const { data } = await supabase
           .from("profiles")
-          .select("*")
+          .select("id, full_name, email, avatar_url, role, certificate_name, created_at, updated_at")
           .eq("id", userId)
           .single();
         setProfile(data);

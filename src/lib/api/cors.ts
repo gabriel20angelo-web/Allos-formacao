@@ -57,3 +57,40 @@ export function isValidMeetSharedSecret(
   const token = authHeader.slice("Bearer ".length).trim();
   return token === expected;
 }
+
+/**
+ * Verifica se o request vem de um admin logado (via cookies sb-*) OU
+ * tem o shared secret válido. Usado em endpoints que servem tanto a UI
+ * admin (cookies) quanto a extensão Chrome (token).
+ */
+export async function isAdminOrSharedSecret(
+  req: { headers: { get: (name: string) => string | null } },
+): Promise<boolean> {
+  if (isValidMeetSharedSecret(req.headers.get("authorization"))) {
+    return true;
+  }
+  // Importação tardia pra evitar carregar `next/headers` em runtimes que
+  // não suportam (ex: edge), e pra não acoplar este helper a Supabase.
+  try {
+    const { createServerSupabaseClient } = await import("@/lib/supabase/server");
+    const sb = await createServerSupabaseClient();
+    const { data: { user } } = await sb.auth.getUser();
+    if (!user) return false;
+    const { data: profile } = await sb
+      .from("profiles")
+      .select("role")
+      .eq("id", user.id)
+      .single();
+    return profile?.role === "admin";
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * Escapa wildcards LIKE/ILIKE (`%` e `_`) em input do usuário pra evitar
+ * match acidental quando concatenamos com `%input%`.
+ */
+export function escapeLikePattern(input: string): string {
+  return input.replace(/[\\%_]/g, (m) => "\\" + m);
+}

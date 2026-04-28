@@ -35,6 +35,11 @@ export async function POST(request: Request) {
     return Response.json({ error: "userId e role são obrigatórios" }, { status: 400 });
   }
 
+  const ALLOWED_ROLES = ["student", "instructor", "admin", "associado"] as const;
+  if (!ALLOWED_ROLES.includes(role)) {
+    return Response.json({ error: "Role inválido" }, { status: 400 });
+  }
+
   if (userId === user.id && role !== "admin") {
     return Response.json({ error: "Não pode remover sua própria permissão" }, { status: 400 });
   }
