@@ -146,6 +146,9 @@ export default function QuorumPage() {
   useEffect(() => { setOffset(0); }, [periodo]);
 
   async function deletePresenca(id: string) {
+    if (!window.confirm("Apagar este registro de presença? Esta ação não pode ser desfeita.")) {
+      return;
+    }
     setDeleting(id);
     try {
       const sb = createClient();

@@ -202,15 +202,18 @@ export function AuthProvider({
     setProfile(null);
     try {
       localStorage.removeItem(STORAGE_KEY);
-      // Clear HTTP cookies by calling signOut endpoint or just clearing
-      document.cookie.split(";").forEach((c) => {
-        const name = c.trim().split("=")[0];
-        if (name.includes("auth-token")) {
-          document.cookie = `${name}=; path=/; max-age=0; secure; samesite=lax`;
-        }
-      });
     } catch {
       // ignore
+    }
+    // Server-side: invalida o refresh token no Supabase + limpa cookies
+    // HttpOnly que o JS não consegue clarear sozinho.
+    try {
+      await fetch("/formacao/auth/sign-out", {
+        method: "POST",
+        credentials: "include",
+      });
+    } catch (err) {
+      console.warn("[useAuth] sign-out endpoint failed:", err);
     }
     window.location.href = "/formacao/auth";
   }, []);

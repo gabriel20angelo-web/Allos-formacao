@@ -36,6 +36,8 @@ const PUBLIC_PATH_PREFIXES = [
   "/formacao/auth/callback",
   "/formacao/auth/set-session",
   "/formacao/auth/sync-cookies",
+  "/formacao/auth/forgot-password",
+  "/formacao/auth/reset-password",
 ];
 
 export async function updateSession(request: NextRequest) {

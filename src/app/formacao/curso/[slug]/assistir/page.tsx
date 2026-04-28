@@ -240,19 +240,28 @@ export default function CoursePage() {
       const remaining: typeof pending = [];
 
       (async () => {
-        for (const item of pending) {
-          const { error } = await client.from("lesson_progress").upsert({
-            user_id: user.id,
-            lesson_id: item.lessonId,
-            completed: item.completed,
-            completed_at: item.completedAt,
-          }, { onConflict: "user_id,lesson_id" });
-          if (error) remaining.push(item);
-        }
-        if (remaining.length === 0) {
-          localStorage.removeItem(key);
-        } else {
-          localStorage.setItem(key, JSON.stringify(remaining));
+        try {
+          for (const item of pending) {
+            try {
+              const { error } = await client.from("lesson_progress").upsert({
+                user_id: user.id,
+                lesson_id: item.lessonId,
+                completed: item.completed,
+                completed_at: item.completedAt,
+              }, { onConflict: "user_id,lesson_id" });
+              if (error) remaining.push(item);
+            } catch (itemErr) {
+              console.warn("[assistir] pending sync item failed:", itemErr);
+              remaining.push(item);
+            }
+          }
+          if (remaining.length === 0) {
+            localStorage.removeItem(key);
+          } else {
+            localStorage.setItem(key, JSON.stringify(remaining));
+          }
+        } catch (err) {
+          console.error("[assistir] pending sync IIFE error:", err);
         }
       })();
     } catch {

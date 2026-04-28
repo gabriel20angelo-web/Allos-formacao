@@ -739,12 +739,19 @@ export default function AdminDashboard() {
 
       if (!progress || progress.length === 0) return;
 
-      // Get lessons with sections and courses
+      // Lessons + profiles em paralelo (ambos só dependem de progress).
       const lessonIds = Array.from(new Set(progress.map(p => p.lesson_id)));
-      const { data: lessons } = await supabase
-        .from("lessons")
-        .select("id, section_id, duration_minutes")
-        .in("id", lessonIds);
+      const userIdsForProgress = Array.from(new Set(progress.map(p => p.user_id)));
+      const [{ data: lessons }, { data: profilesData }] = await Promise.all([
+        supabase
+          .from("lessons")
+          .select("id, section_id, duration_minutes")
+          .in("id", lessonIds),
+        supabase
+          .from("profiles")
+          .select("id, full_name")
+          .in("id", userIdsForProgress),
+      ]);
 
       if (!lessons) return;
 
@@ -832,14 +839,8 @@ export default function AdminDashboard() {
         .sort((a, b) => b.watchCount - a.watchCount)
         .slice(0, 5);
 
-      // Top viewers (users)
-      const userIds = Array.from(new Set(progress.map(p => p.user_id)));
-      const { data: profiles } = await supabase
-        .from("profiles")
-        .select("id, full_name")
-        .in("id", userIds);
-
-      const nameMap = new Map((profiles || []).map(p => [p.id, p.full_name]));
+      // Top viewers (users) — profiles já buscado em paralelo lá em cima.
+      const nameMap = new Map((profilesData || []).map(p => [p.id, p.full_name]));
 
       const userStats = new Map<string, { lessonsWatched: number; minutes: number }>();
       progress.filter(p => p.completed).forEach(p => {

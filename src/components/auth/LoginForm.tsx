@@ -103,26 +103,12 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
       />
 
       <div className="flex justify-end">
-        <button
-          type="button"
-          onClick={async () => {
-            if (!email) {
-              toast.error("Digite seu email primeiro.");
-              return;
-            }
-            const { error } = await supabase.auth.resetPasswordForEmail(email, {
-              redirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/formacao/auth`,
-            });
-            if (error) {
-              toast.error("Erro ao enviar email de recuperação.");
-            } else {
-              toast.success("Email de recuperação enviado!");
-            }
-          }}
+        <a
+          href="/formacao/auth/forgot-password"
           className="text-sm text-accent hover:text-accent-light transition-colors duration-200"
         >
           Esqueci minha senha
-        </button>
+        </a>
       </div>
 
       <Button type="submit" loading={loading} fullWidth size="lg">

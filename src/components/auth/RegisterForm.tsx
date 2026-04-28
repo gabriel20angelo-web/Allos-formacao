@@ -97,8 +97,17 @@ export default function RegisterForm({ redirectTo }: RegisterFormProps) {
       return;
     }
 
-    // If Supabase returned a session (email confirmation disabled), bridge
-    // it to HttpOnly server cookies so middleware/SSR see the user right away.
+    // Caso o Supabase exija confirmação de email, data.session é null e o
+    // usuário precisa abrir o link enviado por email antes de logar.
+    if (!data.session && data.user) {
+      toast.success(
+        "Conta criada! Verifique seu email para ativar e fazer login."
+      );
+      setLoading(false);
+      return;
+    }
+
+    // Confirmação desabilitada → bridge da sessão pra cookies HttpOnly.
     if (data.session) {
       try {
         await fetch("/formacao/auth/set-session", {

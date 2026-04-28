@@ -65,9 +65,9 @@ export async function GET(req: NextRequest) {
       { status: 400, headers: corsHeaders }
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[certificados/admin]", error);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno do servidor" },
       { status: 500, headers: corsHeaders }
     );
   }
@@ -359,9 +359,9 @@ export async function POST(req: NextRequest) {
       { status: 400, headers: corsHeaders }
     );
   } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : "Unknown error";
+    console.error("[certificados/admin]", error);
     return NextResponse.json(
-      { error: message },
+      { error: "Erro interno do servidor" },
       { status: 500, headers: corsHeaders }
     );
   }

@@ -86,32 +86,33 @@ export default function ProvaPage() {
 
     setSubmitting(true);
 
-    let correct = 0;
-    const examAnswers = questions.map((q) => {
-      const selectedId = answers[q.id];
-      const correctOption = q.options.find((o: ExamOption) => o.is_correct);
-      const isCorrect = selectedId === correctOption?.id;
-      if (isCorrect) correct++;
-      return {
-        question_id: q.id,
-        selected_option_id: selectedId,
-        correct: isCorrect,
-      };
-    });
-
-    const score = Math.round((correct / questions.length) * 100);
-    const passed = score >= passingScore;
-
-    await createClient().from("exam_attempts").insert({
-      user_id: user.id,
-      course_id: courseId,
-      score,
-      passed,
-      answers: examAnswers,
-    });
-
-    setResult({ score, passed, total: questions.length, correct });
-    setSubmitting(false);
+    try {
+      const res = await fetch("/formacao/api/exam-attempt", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({
+          course_id: courseId,
+          answers: questions.map((q) => ({
+            question_id: q.id,
+            selected_option_id: answers[q.id],
+          })),
+        }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        toast.error(err?.error || "Não foi possível enviar a prova.");
+        return;
+      }
+      const payload: { score: number; passed: boolean; total: number; correct: number } =
+        await res.json();
+      setResult(payload);
+    } catch (err) {
+      console.error("[prova] submit error:", err);
+      toast.error("Erro de rede ao enviar a prova.");
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   if (loading) {
@@ -255,7 +256,7 @@ export default function ProvaPage() {
         ))}
 
         <div className="flex justify-end pt-4">
-          <Button type="submit" size="lg" loading={submitting}>
+          <Button type="submit" size="lg" loading={submitting} disabled={submitting}>
             Enviar prova
           </Button>
         </div>
