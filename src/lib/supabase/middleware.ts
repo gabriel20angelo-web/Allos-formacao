@@ -32,7 +32,6 @@ function clearAuthRedirect(request: NextRequest, redirectPath: string) {
 const PUBLIC_PATH_PREFIXES = [
   "/formacao/api/home-data",
   "/formacao/api/ranking",
-  "/formacao/api/sb",
   "/formacao/auth/callback",
   "/formacao/auth/set-session",
   "/formacao/auth/sync-cookies",

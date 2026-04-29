@@ -17,8 +17,10 @@ function getSince(period: string): Date {
     case 'semester': return new Date(now.getFullYear(), now.getMonth() < 6 ? 0 : 6, 1)
     case 'year': return new Date(now.getFullYear(), 0, 1)
     default: {
+      // ISO 8601: domingo (getDay()=0) é o dia 7 da semana anterior.
       const d = new Date(now)
-      d.setDate(d.getDate() - d.getDay() + 1)
+      const day = d.getDay() || 7
+      d.setDate(d.getDate() - day + 1)
       d.setHours(0, 0, 0, 0)
       return d
     }

@@ -8,16 +8,23 @@ import RegisterForm from "@/components/auth/RegisterForm";
 import GoogleButton from "@/components/auth/GoogleButton";
 import { BookOpen } from "lucide-react";
 
+function safeRedirectPath(value: string | null): string {
+  if (!value) return "/formacao";
+  if (!value.startsWith("/") || value.startsWith("//")) return "/formacao";
+  if (value.includes("\\")) return "/formacao";
+  return value;
+}
+
 function AuthContent() {
   const [tab, setTab] = useState<"login" | "register">("login");
   const searchParams = useSearchParams();
-  const redirectTo = searchParams.get("redirect") || undefined;
+  const redirectTo = safeRedirectPath(searchParams.get("redirect"));
   const { user, loading } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
     if (!loading && user) {
-      router.replace(redirectTo || "/formacao");
+      router.replace(redirectTo);
     }
   }, [user, loading, router, redirectTo]);
 

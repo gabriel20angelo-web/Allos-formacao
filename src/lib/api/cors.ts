@@ -46,10 +46,17 @@ export function isValidMeetSharedSecret(
 ): boolean {
   const expected = process.env.MEET_PRESENCA_TOKEN;
   if (!expected) {
-    // Sem env definido: não força auth (modo legado pra não quebrar
-    // produção até a extensão ser atualizada). Avisa em log.
+    // Em produção: fail-closed. Se o env for removido por engano, NÃO
+    // queremos abrir o endpoint inteiro — melhor quebrar a extensão até
+    // configurarem direito.
+    if (process.env.NODE_ENV === "production") {
+      console.error(
+        "[meet-shared-secret] MEET_PRESENCA_TOKEN não configurado em produção. Endpoints fechados.",
+      );
+      return false;
+    }
     console.warn(
-      "[meet-shared-secret] MEET_PRESENCA_TOKEN não configurado; endpoint aceitando requisições sem auth.",
+      "[meet-shared-secret] MEET_PRESENCA_TOKEN não configurado (dev/teste).",
     );
     return true;
   }
@@ -93,4 +100,19 @@ export async function isAdminOrSharedSecret(
  */
 export function escapeLikePattern(input: string): string {
   return input.replace(/[\\%_]/g, (m) => "\\" + m);
+}
+
+/**
+ * Saneia um redirect path vindo da query string. Aceita só caminhos
+ * relativos same-origin (`/foo`). Bloqueia URLs absolutas
+ * (`https://evil.com`), protocol-relative (`//evil.com`), e
+ * data:/javascript: schemas.
+ */
+export function safeRedirectPath(value: string | null | undefined, fallback = "/formacao"): string {
+  if (!value) return fallback;
+  // Tem que começar com "/" e não "//" (protocol-relative).
+  if (!value.startsWith("/") || value.startsWith("//")) return fallback;
+  // Bloqueia "/\evil.com" e similares.
+  if (value.includes("\\")) return fallback;
+  return value;
 }

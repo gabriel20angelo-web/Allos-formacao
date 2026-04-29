@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { buildCorsHeaders, isValidMeetSharedSecret, isAdminOrSharedSecret } from "@/lib/api/cors";
+import { buildCorsHeaders, isAdminOrSharedSecret } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export async function POST(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
     methods: "GET, POST, DELETE, OPTIONS",
   });
-  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+  if (!(await isAdminOrSharedSecret(req))) {
     return NextResponse.json(
       { error: "Não autorizado" },
       { status: 401, headers: corsHeaders },
@@ -44,6 +44,28 @@ export async function POST(req: NextRequest) {
         { error: "Campos obrigatórios: condutor_nome, hora_inicio, hora_fim" },
         { status: 400, headers: corsHeaders }
       );
+    }
+
+    // Validação de tipos/limites pra evitar DB pollution caso shared
+    // secret vaze.
+    if (typeof condutor_nome !== "string" || condutor_nome.length > 200) {
+      return NextResponse.json({ error: "condutor_nome inválido" }, { status: 400, headers: corsHeaders });
+    }
+    const numericFields = { total_participantes, media_participantes, pico_participantes, duracao_minutos };
+    for (const [k, v] of Object.entries(numericFields)) {
+      if (v !== undefined && v !== null && (typeof v !== "number" || !Number.isFinite(v) || v < 0 || v > 100000)) {
+        return NextResponse.json({ error: `${k} inválido` }, { status: 400, headers: corsHeaders });
+      }
+    }
+    if (participantes !== undefined && participantes !== null) {
+      if (!Array.isArray(participantes) || participantes.length > 500) {
+        return NextResponse.json({ error: "participantes inválido" }, { status: 400, headers: corsHeaders });
+      }
+    }
+    if (atividade_nome !== undefined && atividade_nome !== null) {
+      if (typeof atividade_nome !== "string" || atividade_nome.length > 200) {
+        return NextResponse.json({ error: "atividade_nome inválido" }, { status: 400, headers: corsHeaders });
+      }
     }
 
     const dataReuniao = new Date(hora_inicio);
@@ -126,7 +148,7 @@ export async function DELETE(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
     methods: "GET, POST, DELETE, OPTIONS",
   });
-  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+  if (!(await isAdminOrSharedSecret(req))) {
     return NextResponse.json(
       { error: "Não autorizado" },
       { status: 401, headers: corsHeaders },

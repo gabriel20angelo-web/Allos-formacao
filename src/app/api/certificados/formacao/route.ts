@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { buildCorsHeaders, isValidMeetSharedSecret } from "@/lib/api/cors";
+import { buildCorsHeaders, isAdminOrSharedSecret } from "@/lib/api/cors";
 
 export const dynamic = "force-dynamic";
 
@@ -38,17 +38,26 @@ export async function GET(req: NextRequest) {
     }
 
     if (type === "alocacoes") {
+      // Telefone é PII (LGPD) — só admin/shared-secret recebe.
+      const isAdmin = await isAdminOrSharedSecret(req);
+      const condutoresFields = isAdmin
+        ? "id, nome, telefone, observacoes, ativo"
+        : "id, nome, ativo";
       const { data, error } = await sb
         .from("formacao_alocacoes")
-        .select("*, certificado_condutores(id, nome, telefone)");
+        .select(`*, certificado_condutores(${condutoresFields})`);
       if (error) throw error;
       return NextResponse.json(data, { headers: corsHeaders });
     }
 
     if (type === "condutores") {
+      const isAdmin = await isAdminOrSharedSecret(req);
+      const fields = isAdmin
+        ? "id, nome, telefone, observacoes, ativo"
+        : "id, nome, ativo";
       const { data, error } = await sb
         .from("certificado_condutores")
-        .select("*")
+        .select(fields)
         .eq("ativo", true)
         .order("nome");
       if (error) throw error;
@@ -180,7 +189,7 @@ export async function POST(req: NextRequest) {
   const corsHeaders = buildCorsHeaders(req.headers.get("origin"), {
     cacheControl: "no-store, no-cache, must-revalidate, max-age=0",
   });
-  if (!isValidMeetSharedSecret(req.headers.get("authorization"))) {
+  if (!(await isAdminOrSharedSecret(req))) {
     return NextResponse.json(
       { error: "Não autorizado" },
       { status: 401, headers: corsHeaders },

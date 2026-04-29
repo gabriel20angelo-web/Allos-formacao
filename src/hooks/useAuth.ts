@@ -211,6 +211,7 @@ export function AuthProvider({
       await fetch("/formacao/auth/sign-out", {
         method: "POST",
         credentials: "include",
+        headers: { "X-Allos-Auth": "1" },
       });
     } catch (err) {
       console.warn("[useAuth] sign-out endpoint failed:", err);

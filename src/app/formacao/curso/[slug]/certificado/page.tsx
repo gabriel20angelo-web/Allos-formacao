@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
-import { generateCertificateCode } from "@/lib/utils/certificate";
 import { formatDuration } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
@@ -459,29 +458,26 @@ export default function CertificadoPage() {
     if (!user || !course) return;
     setGenerating(true);
 
-    const code = generateCertificateCode();
-    const client = createClient();
-
-    const { data, error } = await client
-      .from("certificates")
-      .insert({
-        user_id: user.id,
-        course_id: course.id,
-        certificate_code: code,
-        issued_at: new Date().toISOString(),
-      })
-      .select()
-      .single();
-
-    if (error) {
-      toast.error("Erro ao gerar certificado. Tente novamente.");
+    try {
+      const res = await fetch("/formacao/api/issue-certificate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        credentials: "include",
+        body: JSON.stringify({ course_id: course.id }),
+      });
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(payload?.error || "Erro ao gerar certificado.");
+        return;
+      }
+      setCertificate(payload.certificate);
+      toast.success(payload.reused ? "Certificado já estava emitido." : "Certificado gerado com sucesso!");
+    } catch (err) {
+      console.error("[certificado]", err);
+      toast.error("Erro de rede ao gerar certificado.");
+    } finally {
       setGenerating(false);
-      return;
     }
-
-    setCertificate(data);
-    toast.success("Certificado gerado com sucesso!");
-    setGenerating(false);
   }
 
   if (loading) {

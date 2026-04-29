@@ -1,10 +1,17 @@
-import { NextResponse } from "next/server";
+import { type NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { cookies } from "next/headers";
 
 export const dynamic = "force-dynamic";
 
-export async function POST() {
+const CSRF_HEADER = "x-allos-auth";
+
+export async function POST(request: NextRequest) {
+  // CSRF guard: form submit cross-origin não consegue setar custom headers.
+  if (request.headers.get(CSRF_HEADER) !== "1") {
+    return NextResponse.json({ error: "CSRF check failed" }, { status: 403 });
+  }
+
   const supabase = await createServerSupabaseClient();
   // scope: 'global' invalida o refresh token do usuário em todas as sessões
   await supabase.auth.signOut({ scope: "global" });

@@ -291,6 +291,8 @@ export default function CoursePage() {
       if (!user) return;
 
       toggleInFlightRef.current = true;
+      try {
+
       const existing = progressMap[lessonId];
       const newCompleted = !existing?.completed;
       const completedAt = newCompleted ? new Date().toISOString() : null;
@@ -361,7 +363,9 @@ export default function CoursePage() {
         }
         toast("Progresso salvo localmente. Será sincronizado quando a conexão voltar.", { duration: 4000 });
       }
-      toggleInFlightRef.current = false;
+      } finally {
+        toggleInFlightRef.current = false;
+      }
     },
     [user, progressMap, course]
   );

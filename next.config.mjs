@@ -1,19 +1,11 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   assetPrefix: 'https://allos-formacao-production.up.railway.app',
+  // Proxy /_sb pra Supabase REST foi removido — expõe a API toda do
+  // Supabase pra qualquer caller externo. Cliente vai direto pro
+  // domínio Supabase (NEXT_PUBLIC_SUPABASE_URL).
   async rewrites() {
-    const supabaseUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || '').replace(/\/$/, '');
-    if (!supabaseUrl) return [];
-    return [
-      {
-        source: '/formacao/_sb/:path*',
-        destination: `${supabaseUrl}/:path*`,
-      },
-      {
-        source: '/_sb/:path*',
-        destination: `${supabaseUrl}/:path*`,
-      },
-    ];
+    return [];
   },
   async headers() {
     const securityHeaders = [

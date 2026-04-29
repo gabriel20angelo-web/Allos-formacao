@@ -75,7 +75,11 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
     }
 
     toast.success("Login realizado com sucesso!");
-    window.location.href = redirectTo || "/formacao";
+    // Saneia o redirect — só aceita caminhos relativos same-origin.
+    const target = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//") && !redirectTo.includes("\\")
+      ? redirectTo
+      : "/formacao";
+    window.location.href = target;
   }
 
   return (
