@@ -69,6 +69,11 @@ export default function CoursePage() {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
 
+  // True enquanto toggleComplete está aguardando o servidor — usado pra
+  // evitar que checkCompletion (effect) rode em paralelo e marque o
+  // enrollment como completed antes do toggle confirmar.
+  const toggleInFlightRef = useRef(false);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -285,6 +290,7 @@ export default function CoursePage() {
     async (lessonId: string) => {
       if (!user) return;
 
+      toggleInFlightRef.current = true;
       const existing = progressMap[lessonId];
       const newCompleted = !existing?.completed;
       const completedAt = newCompleted ? new Date().toISOString() : null;
@@ -355,6 +361,7 @@ export default function CoursePage() {
         }
         toast("Progresso salvo localmente. Será sincronizado quando a conexão voltar.", { duration: 4000 });
       }
+      toggleInFlightRef.current = false;
     },
     [user, progressMap, course]
   );
@@ -368,6 +375,10 @@ export default function CoursePage() {
       if (enrollment.status === "completed") return;
       // Sync and collection courses don't auto-complete
       if (course.course_type === "sync" || course.course_type === "collection") return;
+      // Bloqueia race com toggleComplete: se a última toggle ainda não
+      // confirmou (servidor pode rejeitar e reverter o progressMap),
+      // não dispara o "completed" do enrollment ainda.
+      if (toggleInFlightRef.current) return;
 
       const client = createClient();
       await client

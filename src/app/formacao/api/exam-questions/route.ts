@@ -38,15 +38,37 @@ export async function GET(req: NextRequest) {
       is_correct?: boolean;
     }
 
-    const sanitized = (data || []).map((q: { id: string; question_text: string; options: ExamOptionRaw[] | null; position: number }) => ({
+    // Fisher-Yates shuffle determinístico por (question_id, user_id) — duas
+    // vezes a mesma sessão tem a mesma ordem (não confunde quem está
+    // respondendo), mas alunos diferentes veem ordens diferentes.
+    const seededShuffle = <T,>(arr: T[], seed: string): T[] => {
+      let h = 2166136261;
+      for (let i = 0; i < seed.length; i++) {
+        h ^= seed.charCodeAt(i);
+        h = Math.imul(h, 16777619) >>> 0;
+      }
+      const out = arr.slice();
+      for (let i = out.length - 1; i > 0; i--) {
+        h = Math.imul(h ^ (h >>> 15), 0x85ebca6b) >>> 0;
+        const j = h % (i + 1);
+        [out[i], out[j]] = [out[j], out[i]];
+      }
+      return out;
+    };
+
+    const questions = (data || []).map((q: { id: string; question_text: string; options: ExamOptionRaw[] | null; position: number }) => ({
       id: q.id,
       question_text: q.question_text,
       position: q.position,
       options: Array.isArray(q.options)
-        ? q.options.map((o) => ({ id: o.id, text: o.text }))
+        ? seededShuffle(
+            q.options.map((o) => ({ id: o.id, text: o.text })),
+            `${user.id}:${q.id}`,
+          )
         : [],
     }));
 
+    const sanitized = seededShuffle(questions, `${user.id}:${courseId}`);
     return NextResponse.json(sanitized);
   } catch (err) {
     console.error("[exam-questions]", err);

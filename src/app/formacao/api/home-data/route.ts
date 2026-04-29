@@ -58,26 +58,27 @@ const getHomeData = unstable_cache(
 
     if (courses.length > 0) {
       const ids = courses.map((c) => c.id);
-      // Cap enrollments/reviews to keep payload bounded as the tables grow.
-      // 5000 covers ~250 cursos × 20 alunos médios; plenty for the home
-      // aggregates and avoids a multi-MB transfer when the base scales.
-      const [enrRes, revRes] = await Promise.all([
+
+      // Counts agregados via head:exact por curso — escala sem cap.
+      const enrollPromises = ids.map((id) =>
         supabase
           .from("enrollments")
-          .select("course_id")
-          .in("course_id", ids)
-          .limit(5000),
+          .select("course_id", { count: "exact", head: true })
+          .eq("course_id", id)
+          .then(({ count }) => [id, count ?? 0] as const),
+      );
+
+      // Reviews ainda por linha (precisamos do rating pra média) mas
+      // limitado e com agregação manual.
+      const [enrollPairs, revRes] = await Promise.all([
+        Promise.all(enrollPromises),
         supabase
           .from("reviews")
           .select("course_id,rating")
-          .in("course_id", ids)
-          .limit(2000),
+          .in("course_id", ids),
       ]);
 
-      const enrollCounts: Record<string, number> = {};
-      (enrRes.data ?? []).forEach((e: { course_id: string }) => {
-        enrollCounts[e.course_id] = (enrollCounts[e.course_id] || 0) + 1;
-      });
+      const enrollCounts: Record<string, number> = Object.fromEntries(enrollPairs);
 
       const reviewAgg: Record<string, { sum: number; count: number }> = {};
       (revRes.data ?? []).forEach(

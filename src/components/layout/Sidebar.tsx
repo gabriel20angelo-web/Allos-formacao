@@ -39,6 +39,23 @@ export default function Sidebar() {
   useEffect(() => {
     const saved = localStorage.getItem(STORAGE_KEY);
     if (saved === "true") setCollapsed(true);
+
+    // Sincroniza o estado quando outra tab muda OU quando o hook
+    // useSidebarWidth dispara o custom event na mesma tab.
+    function onStorage(e: StorageEvent) {
+      if (e.key === STORAGE_KEY) {
+        setCollapsed(e.newValue === "true");
+      }
+    }
+    function onLocal() {
+      setCollapsed(localStorage.getItem(STORAGE_KEY) === "true");
+    }
+    window.addEventListener("storage", onStorage);
+    window.addEventListener("sidebar-collapse-toggle", onLocal);
+    return () => {
+      window.removeEventListener("storage", onStorage);
+      window.removeEventListener("sidebar-collapse-toggle", onLocal);
+    };
   }, []);
 
   function toggle() {

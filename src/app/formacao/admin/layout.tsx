@@ -73,6 +73,16 @@ export default function AdminLayout({
     };
   }, []);
 
+  // Esc fecha o drawer mobile.
+  useEffect(() => {
+    if (!sidebarOpen) return;
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "Escape") setSidebarOpen(false);
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [sidebarOpen]);
+
   const currentPageTitle =
     Object.entries(pageTitles).find(([path]) =>
       pathname === path || (path !== "/formacao/admin" && pathname.startsWith(path))
@@ -98,7 +108,30 @@ export default function AdminLayout({
     );
   }
 
-  if (!profile || (!isAdmin && !isInstructor)) return null;
+  if (!profile || (!isAdmin && !isInstructor)) {
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#111111" }}>
+        <div className="max-w-md text-center space-y-4">
+          <h1 className="font-fraunces font-bold text-2xl text-cream">
+            Acesso restrito
+          </h1>
+          <p className="text-cream/50 text-sm">
+            Você precisa de uma conta de administrador ou instrutor pra acessar esta área.
+          </p>
+          <Link
+            href="/formacao"
+            className="inline-flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium text-cream"
+            style={{
+              background: "linear-gradient(135deg, #C84B31, #A33D27)",
+              boxShadow: "0 2px 12px rgba(200,75,49,0.3)",
+            }}
+          >
+            Voltar para o site
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   const sidebar = (
     <div className="flex flex-col h-full">
