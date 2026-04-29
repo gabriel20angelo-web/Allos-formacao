@@ -175,22 +175,32 @@ export default function QuorumPage() {
       const horaInicio = new Date(`${manualData}T${manualHora}:00`);
       const horaFim = new Date(horaInicio.getTime() + parseInt(manualDuracao) * 60000);
       const total = parseInt(manualTotal);
-      const res = await fetch("/api/meet-presenca", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          meet_link: "manual", condutor_nome: manualCondutor, atividade_nome: manualAtividade,
-          slot_id: null, hora_inicio: horaInicio.toISOString(), hora_fim: horaFim.toISOString(),
-          duracao_minutos: parseInt(manualDuracao), participantes: [],
-          total_participantes: total, media_participantes: total, pico_participantes: total,
-        }),
+      const diaSemana = horaInicio.getDay();
+      const diaSemanaAjustado = diaSemana === 0 ? 6 : diaSemana - 1;
+      const sb = createClient();
+      // Insert direto via Supabase — RLS exige role=admin (migration 027).
+      const { error } = await sb.from("formacao_meet_presencas").insert({
+        slot_id: null,
+        meet_link: "manual",
+        condutor_nome: manualCondutor,
+        atividade_nome: manualAtividade,
+        data_reuniao: horaInicio.toISOString().split("T")[0],
+        dia_semana: diaSemanaAjustado,
+        hora_inicio: horaInicio.toISOString(),
+        hora_fim: horaFim.toISOString(),
+        duracao_minutos: parseInt(manualDuracao),
+        participantes: [],
+        total_participantes: total,
+        media_participantes: total,
+        pico_participantes: total,
       });
-      if (!res.ok) throw new Error();
+      if (error) throw error;
       toast.success("Registro manual salvo!");
       setShowManualForm(false);
       setManualAtividade(""); setManualCondutor(""); setManualTotal("");
       loadData();
-    } catch {
+    } catch (err) {
+      console.error("[quorum] submitManual:", err);
       toast.error("Erro ao salvar.");
     } finally {
       setSubmitting(false);

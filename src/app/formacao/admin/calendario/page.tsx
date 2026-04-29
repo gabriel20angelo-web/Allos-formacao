@@ -573,23 +573,23 @@ export default function CalendarioPage() {
     if (error || !data) { toast.error("Erro ao atualizar slot."); return; }
     setSlots((prev) => prev.map((s) => (s.id === id ? data : s)));
 
-    // Log status change (fire-and-forget)
+    // Log status change (fire-and-forget) via Supabase direto.
     if (fields.status && currentSlot && fields.status !== currentSlot.status) {
       const condutorIds = alocacoes
         .filter((a) => a.slot_id === id)
         .map((a) => a.condutor_id);
-      fetch("/api/certificados/formacao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "log_status_change",
+      createClient()
+        .from("formacao_slot_logs")
+        .insert({
           slot_id: id,
           status_anterior: currentSlot.status,
           status_novo: fields.status,
           atividade_nome: data.atividade_nome,
           condutor_ids: condutorIds,
-        }),
-      }).catch(() => {});
+        })
+        .then(({ error }) => {
+          if (error) console.warn("[calendario] log_status_change:", error);
+        });
     }
   }
 
@@ -654,22 +654,36 @@ export default function CalendarioPage() {
         })),
     }));
 
-    // 2. Save snapshot via API (before reset)
-    try {
-      const res = await fetch("/api/certificados/formacao", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          action: "create_snapshot",
-          semana_inicio: fmt(monday),
-          semana_fim: fmt(friday),
-          slots: snapshotSlots,
-        }),
-      });
-      if (!res.ok) throw new Error("Snapshot failed");
-    } catch {
+    // 2. Save snapshot via Supabase direto (RLS admin já cobre).
+    const { data: snapshot, error: snapErr } = await supabase
+      .from("formacao_snapshots")
+      .insert({ semana_inicio: fmt(monday), semana_fim: fmt(friday) })
+      .select()
+      .single();
+    if (snapErr || !snapshot) {
+      console.error("[calendario] snapshot:", snapErr);
       toast.error("Erro ao salvar snapshot da semana. Reset cancelado.");
       return;
+    }
+    if (snapshotSlots.length > 0) {
+      const rows = snapshotSlots.map((s) => ({
+        snapshot_id: snapshot.id,
+        slot_id: s.slot_id,
+        dia_semana: s.dia_semana,
+        horario_hora: s.horario_hora,
+        atividade_nome: s.atividade_nome,
+        status: s.status,
+        meet_link: s.meet_link,
+        condutores: s.condutores,
+      }));
+      const { error: slotsErr } = await supabase
+        .from("formacao_snapshot_slots")
+        .insert(rows);
+      if (slotsErr) {
+        console.error("[calendario] snapshot_slots:", slotsErr);
+        toast.error("Erro ao salvar slots do snapshot. Reset cancelado.");
+        return;
+      }
     }
 
     // 3. Reset statuses
