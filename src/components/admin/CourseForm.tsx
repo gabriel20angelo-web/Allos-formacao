@@ -51,7 +51,7 @@ interface CourseFormProps {
   courseId?: string;
 }
 
-type Step = "info" | "content" | "exam" | "certificate";
+type Step = "info" | "content" | "meetings" | "exam" | "certificate";
 
 const ALL_STEPS: { id: Step; label: string }[] = [
   { id: "info", label: "Informações" },
@@ -63,6 +63,7 @@ const ALL_STEPS: { id: Step; label: string }[] = [
 const SYNC_STEPS: { id: Step; label: string }[] = [
   { id: "info", label: "Informações" },
   { id: "content", label: "Conteúdo" },
+  { id: "meetings", label: "Encontros & Comunidade" },
 ];
 
 const COLLECTION_STEPS: { id: Step; label: string }[] = [
@@ -202,6 +203,21 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const STEPS = courseType === "collection" ? COLLECTION_STEPS : courseType === "sync" ? SYNC_STEPS : ALL_STEPS;
   const [learningPoints, setLearningPoints] = useState<string[]>([""]);
 
+  // Sync course: comunidade + encontros
+  const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
+  const [meetUrl, setMeetUrl] = useState("");
+  const [instructorBio, setInstructorBio] = useState("");
+  const [liveSessionDuration, setLiveSessionDuration] = useState(120);
+  type MeetingDraft = {
+    id: string;
+    starts_at: string;
+    title: string;
+    meet_url_override: string;
+    _new?: boolean;
+  };
+  const [meetings, setMeetings] = useState<MeetingDraft[]>([]);
+  const [deletedMeetingIds, setDeletedMeetingIds] = useState<string[]>([]);
+
   // Content
   const [sections, setSections] = useState<
     (Section & { lessons: (Lesson & { _new?: boolean })[] })[]
@@ -324,6 +340,28 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       setShowInstructor(course.show_instructor ?? false);
       setDefaultLessonThumbnail(course.default_lesson_thumbnail_url || "");
       setLearningPoints(course.learning_points || [""]);
+      setWhatsappGroupUrl(course.whatsapp_group_url || "");
+      setMeetUrl(course.meet_url || "");
+      setInstructorBio(course.instructor_bio || "");
+      setLiveSessionDuration(course.live_session_duration_minutes ?? 120);
+
+      // Load meetings agendados pra cursos sync
+      const { data: meetingsData } = await createClient()
+        .from("course_meetings")
+        .select("id, starts_at, title, meet_url_override")
+        .eq("course_id", courseId)
+        .order("starts_at", { ascending: true });
+
+      if (meetingsData) {
+        setMeetings(
+          meetingsData.map((m: { id: string; starts_at: string; title: string | null; meet_url_override: string | null }) => ({
+            id: m.id,
+            starts_at: m.starts_at,
+            title: m.title || "",
+            meet_url_override: m.meet_url_override || "",
+          })),
+        );
+      }
 
       // Load sections + lessons
       const { data: sectionsData } = await createClient()
@@ -409,6 +447,10 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         cert_hours_value: courseType === "collection" ? (certHoursValue || null) : null,
         default_lesson_thumbnail_url: defaultLessonThumbnail || null,
         learning_points: learningPoints.filter((p) => p.trim()),
+        whatsapp_group_url: courseType === "sync" ? (whatsappGroupUrl.trim() || null) : null,
+        meet_url: courseType === "sync" ? (meetUrl.trim() || null) : null,
+        instructor_bio: courseType === "sync" ? (instructorBio.trim() || null) : null,
+        live_session_duration_minutes: courseType === "sync" ? (liveSessionDuration || 120) : null,
       };
 
       let savedCourseId = courseId;
@@ -584,6 +626,46 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               options: q.options,
               position: qi,
             });
+          }
+        }
+
+        // Save course_meetings (apenas pra cursos sync)
+        if (courseType === "sync") {
+          if (deletedMeetingIds.length > 0) {
+            await createClient()
+              .from("course_meetings")
+              .delete()
+              .in("id", deletedMeetingIds);
+            setDeletedMeetingIds([]);
+          }
+
+          const meetingIdMap = new Map<string, string>();
+          for (const m of meetings) {
+            if (!m.starts_at) continue;
+            const payload = {
+              course_id: savedCourseId,
+              starts_at: m.starts_at,
+              title: m.title.trim() || null,
+              meet_url_override: m.meet_url_override.trim() || null,
+            };
+            if (m.id.startsWith("new-")) {
+              const { data } = await createClient()
+                .from("course_meetings")
+                .insert(payload)
+                .select("id")
+                .single();
+              if (data) meetingIdMap.set(m.id, data.id);
+            } else {
+              await createClient()
+                .from("course_meetings")
+                .update(payload)
+                .eq("id", m.id);
+            }
+          }
+          if (meetingIdMap.size > 0) {
+            setMeetings((prev) =>
+              prev.map((m) => ({ ...m, id: meetingIdMap.get(m.id) || m.id })),
+            );
           }
         }
       }
@@ -1106,7 +1188,11 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               const val = e.target.value as "async" | "sync" | "collection";
               setCourseType(val);
               markDirty();
-              if ((val === "sync" || val === "collection") && ["exam", "certificate"].includes(step)) {
+              const currentStep: string = step;
+              if ((val === "sync" || val === "collection") && ["exam", "certificate"].includes(currentStep)) {
+                setStep("content");
+              }
+              if (val !== "sync" && currentStep === "meetings") {
                 setStep("content");
               }
             }}
@@ -1559,6 +1645,172 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Meetings & Community step (apenas sync) */}
+      {step === "meetings" && courseType === "sync" && (
+        <div className="space-y-8 max-w-3xl">
+          {/* Bloco Comunidade */}
+          <div
+            className="p-5 rounded-[12px] space-y-4"
+            style={{ background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.18)" }}
+          >
+            <div>
+              <p className="text-sm font-semibold mb-1" style={{ color: "rgb(167,139,250)" }}>
+                Comunidade
+              </p>
+              <p className="text-xs text-cream/40">
+                Esses links aparecem clicáveis no card do curso na página /formacao.
+              </p>
+            </div>
+
+            <Input
+              label="Link do grupo do WhatsApp"
+              placeholder="https://chat.whatsapp.com/..."
+              value={whatsappGroupUrl}
+              onChange={(e) => { setWhatsappGroupUrl(e.target.value); markDirty(); }}
+            />
+
+            <Input
+              label="Link do Meet padrão"
+              placeholder="https://meet.google.com/..."
+              value={meetUrl}
+              onChange={(e) => { setMeetUrl(e.target.value); markDirty(); }}
+            />
+
+            <Textarea
+              label="Sobre o(a) professor(a) (opcional)"
+              placeholder="Bio livre do professor pra contexto desse curso. Aceita parágrafos."
+              rows={5}
+              value={instructorBio}
+              onChange={(e) => { setInstructorBio(e.target.value); markDirty(); }}
+            />
+          </div>
+
+          {/* Bloco Encontros */}
+          <div
+            className="p-5 rounded-[12px] space-y-4"
+            style={{ background: "rgba(139,92,246,0.04)", border: "1px solid rgba(139,92,246,0.18)" }}
+          >
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-sm font-semibold mb-1" style={{ color: "rgb(167,139,250)" }}>
+                  Próximos encontros
+                </p>
+                <p className="text-xs text-cream/40">
+                  Quando o horário de um encontro chega, o curso sobe automaticamente pro destaque "AO VIVO AGORA" pelo tempo definido abaixo.
+                </p>
+              </div>
+              <div className="w-32 flex-shrink-0">
+                <label className="text-xs text-cream/50 block mb-1.5">Duração (min)</label>
+                <input
+                  type="number"
+                  min="15"
+                  step="15"
+                  value={liveSessionDuration}
+                  onChange={(e) => { setLiveSessionDuration(parseInt(e.target.value) || 120); markDirty(); }}
+                  className="w-full px-3 py-2 rounded-[10px] text-sm focus:outline-none focus-visible:ring-2"
+                  style={{ background: "rgba(255,255,255,0.04)", border: "1.5px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {meetings.length === 0 && (
+                <p className="text-xs text-cream/30 italic py-3 text-center">
+                  Nenhum encontro agendado. Adicione um abaixo.
+                </p>
+              )}
+              {meetings.map((m, idx) => (
+                <div
+                  key={m.id}
+                  className="grid grid-cols-12 gap-2 items-start p-3 rounded-[10px]"
+                  style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
+                >
+                  <div className="col-span-12 sm:col-span-4">
+                    <label className="text-[10px] text-cream/40 uppercase tracking-wider block mb-1">Data e hora</label>
+                    <input
+                      type="datetime-local"
+                      value={m.starts_at ? m.starts_at.slice(0, 16) : ""}
+                      onChange={(e) => {
+                        const iso = e.target.value ? new Date(e.target.value).toISOString() : "";
+                        setMeetings((prev) => prev.map((x, i) => i === idx ? { ...x, starts_at: iso } : x));
+                        markDirty();
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-[8px] text-xs focus:outline-none focus-visible:ring-2"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                    />
+                  </div>
+                  <div className="col-span-12 sm:col-span-4">
+                    <label className="text-[10px] text-cream/40 uppercase tracking-wider block mb-1">Título (opcional)</label>
+                    <input
+                      type="text"
+                      value={m.title}
+                      placeholder="Ex: Aula 5 — Casos clínicos"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setMeetings((prev) => prev.map((x, i) => i === idx ? { ...x, title: v } : x));
+                        markDirty();
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-[8px] text-xs focus:outline-none focus-visible:ring-2"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                    />
+                  </div>
+                  <div className="col-span-11 sm:col-span-3">
+                    <label className="text-[10px] text-cream/40 uppercase tracking-wider block mb-1">Meet específico (opcional)</label>
+                    <input
+                      type="text"
+                      value={m.meet_url_override}
+                      placeholder="Override do Meet padrão"
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setMeetings((prev) => prev.map((x, i) => i === idx ? { ...x, meet_url_override: v } : x));
+                        markDirty();
+                      }}
+                      className="w-full px-2.5 py-1.5 rounded-[8px] text-xs focus:outline-none focus-visible:ring-2"
+                      style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "rgba(253,251,247,0.9)" }}
+                    />
+                  </div>
+                  <div className="col-span-1 flex items-end justify-end h-full">
+                    <button
+                      onClick={() => {
+                        if (!m.id.startsWith("new-")) {
+                          setDeletedMeetingIds((prev) => [...prev, m.id]);
+                        }
+                        setMeetings((prev) => prev.filter((_, i) => i !== idx));
+                        markDirty();
+                      }}
+                      className="p-1.5 rounded-md hover:bg-red-500/10 transition-colors"
+                      title="Remover encontro"
+                    >
+                      <Trash2 size={14} className="text-cream/40 hover:text-red-400" />
+                    </button>
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <button
+              onClick={() => {
+                const newId = `new-${Date.now()}`;
+                const inOneHour = new Date(Date.now() + 60 * 60 * 1000);
+                inOneHour.setMinutes(0, 0, 0);
+                setMeetings((prev) => [...prev, {
+                  id: newId,
+                  starts_at: inOneHour.toISOString(),
+                  title: "",
+                  meet_url_override: "",
+                  _new: true,
+                }]);
+                markDirty();
+              }}
+              className="w-full py-2.5 rounded-[10px] text-sm font-medium flex items-center justify-center gap-2 transition-all"
+              style={{ background: "rgba(139,92,246,0.08)", border: "1px dashed rgba(139,92,246,0.3)", color: "rgb(167,139,250)" }}
+            >
+              <Plus size={14} /> Adicionar encontro
+            </button>
+          </div>
         </div>
       )}
 

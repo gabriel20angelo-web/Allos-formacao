@@ -45,6 +45,10 @@ export interface Course {
   whatsapp_number: string | null;
   learning_points: string[] | null;
   course_type: CourseType;
+  whatsapp_group_url?: string | null;
+  meet_url?: string | null;
+  instructor_bio?: string | null;
+  live_session_duration_minutes?: number | null;
   is_discontinued?: boolean;
   cert_lessons_required?: number | null;
   cert_hours_value?: number | null;
@@ -62,6 +66,15 @@ export interface Course {
   enrollments_count?: number;
   average_rating?: number;
   reviews_count?: number;
+}
+
+export interface CourseMeeting {
+  id: string;
+  course_id: string;
+  starts_at: string;
+  title: string | null;
+  meet_url_override: string | null;
+  created_at: string;
 }
 
 export interface Section {

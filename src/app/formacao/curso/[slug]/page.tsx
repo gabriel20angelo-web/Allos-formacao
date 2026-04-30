@@ -24,8 +24,12 @@ import {
   Lock,
   Sparkles,
   GraduationCap,
+  Radio,
+  Video,
+  MessageCircle,
+  Calendar,
 } from "lucide-react";
-import type { Course, Section, Lesson, LessonProgress, Enrollment } from "@/types";
+import type { Course, Section, Lesson, LessonProgress, Enrollment, CourseMeeting } from "@/types";
 import { formatDuration } from "@/lib/utils/format";
 
 export default function CourseOverviewPage() {
@@ -43,6 +47,8 @@ export default function CourseOverviewPage() {
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
   const [activeTab, setActiveTab] = useState<"conteudos" | "sobre">("conteudos");
+  const [meetings, setMeetings] = useState<CourseMeeting[]>([]);
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
   const allLessons = useMemo(
     () => sections.flatMap((s) => s.lessons || []),
@@ -110,6 +116,19 @@ export default function CourseOverviewPage() {
           setExpandedSections(expanded);
         }
 
+        // Sync course: carrega encontros (passados+futuros) pra detectar
+        // "ao vivo agora" e mostrar a lista de próximos.
+        if (courseData.course_type === "sync") {
+          const past24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+          const { data: meetingsData } = await client
+            .from("course_meetings")
+            .select("*")
+            .eq("course_id", courseData.id)
+            .gte("starts_at", past24h)
+            .order("starts_at", { ascending: true });
+          if (!cancelled && meetingsData) setMeetings(meetingsData as CourseMeeting[]);
+        }
+
         const userId = user?.id;
         if (userId) {
           const { data: enrollData } = await client
@@ -155,6 +174,37 @@ export default function CourseOverviewPage() {
     fetchData();
     return () => { cancelled = true; };
   }, [slug, user?.id, router]);
+
+  // Tick do relógio pro estado "ao vivo agora" — atualiza a cada 30s
+  useEffect(() => {
+    if (course?.course_type !== "sync") return;
+    const i = setInterval(() => setNowMs(Date.now()), 30_000);
+    return () => clearInterval(i);
+  }, [course?.course_type]);
+
+  const isSync = course?.course_type === "sync";
+  const liveDurationMs = (course?.live_session_duration_minutes ?? 120) * 60 * 1000;
+
+  const { liveMeeting, nextMeeting, futureMeetings } = useMemo(() => {
+    let live: CourseMeeting | null = null;
+    let next: CourseMeeting | null = null;
+    const future: CourseMeeting[] = [];
+    for (const m of meetings) {
+      const startMs = new Date(m.starts_at).getTime();
+      const endMs = startMs + liveDurationMs;
+      if (startMs <= nowMs && nowMs < endMs) {
+        live = m;
+      } else if (startMs > nowMs) {
+        future.push(m);
+        if (!next || startMs < new Date(next.starts_at).getTime()) next = m;
+      }
+    }
+    return { liveMeeting: live, nextMeeting: next, futureMeetings: future };
+  }, [meetings, nowMs, liveDurationMs]);
+
+  const liveEndsAt = liveMeeting
+    ? new Date(new Date(liveMeeting.starts_at).getTime() + liveDurationMs)
+    : null;
 
   const handleAssistir = () => {
     if (!user) {
@@ -211,13 +261,68 @@ export default function CourseOverviewPage() {
   const longDescription = course.long_description || "";
   const isDescriptionLong = description.length > 200;
   const isEnrolled = !!enrollment;
-  const isPremium = course.featured || course.is_structured;
+  // Sync tem precedência sobre premium gold — identidade roxa exclusiva.
+  const isPremium = !isSync && (course.featured || course.is_structured);
+  const meetHrefForLive = liveMeeting?.meet_url_override || course.meet_url || null;
 
   return (
     <div className="relative min-h-screen">
       <CourseBackground />
 
       <div className="relative z-10">
+        {/* Banner "AO VIVO AGORA" — só pra cursos sync com encontro ativo */}
+        {isSync && liveMeeting && (
+          <div
+            className="relative w-full px-5 sm:px-10 py-3"
+            style={{
+              background: "linear-gradient(90deg, rgba(139,92,246,0.18) 0%, rgba(139,92,246,0.04) 60%)",
+              borderBottom: "1px solid rgba(139,92,246,0.3)",
+            }}
+          >
+            <div className="max-w-4xl mx-auto flex flex-wrap items-center gap-3">
+              <span
+                className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.18em]"
+                style={{
+                  background: "rgba(139,92,246,0.85)",
+                  color: "#FFFFFF",
+                }}
+              >
+                <Radio size={10} className="animate-pulse" />
+                Ao vivo agora
+              </span>
+              {liveMeeting.title && (
+                <span className="font-dm text-sm" style={{ color: "rgba(253,251,247,0.85)" }}>
+                  {liveMeeting.title}
+                </span>
+              )}
+              {liveEndsAt && (
+                <span className="font-dm text-xs" style={{ color: "rgba(167,139,250,0.7)" }}>
+                  {(() => {
+                    const remainingMin = Math.max(0, Math.floor((liveEndsAt.getTime() - nowMs) / 60_000));
+                    if (remainingMin >= 60) return `Termina em ${Math.floor(remainingMin / 60)}h${remainingMin % 60 ? `${remainingMin % 60}min` : ""}`;
+                    return `Termina em ${remainingMin}min`;
+                  })()}
+                </span>
+              )}
+              {meetHrefForLive && (
+                <a
+                  href={meetHrefForLive}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="ml-auto inline-flex items-center gap-1.5 px-4 py-1.5 rounded-lg font-dm text-xs font-bold transition-all hover:-translate-y-0.5"
+                  style={{
+                    background: "#8B5CF6",
+                    color: "#FFFFFF",
+                    boxShadow: "0 4px 14px rgba(139,92,246,0.4)",
+                  }}
+                >
+                  <Video size={12} /> Entrar no Meet
+                </a>
+              )}
+            </div>
+          </div>
+        )}
+
         {/* ─── Hero Banner ─── */}
         <div className="relative w-full h-[420px] sm:h-[500px] overflow-hidden">
           {/* Background image */}
@@ -332,6 +437,29 @@ export default function CourseOverviewPage() {
               </motion.div>
             )}
 
+            {/* Sync badge — identidade roxa */}
+            {isSync && (
+              <motion.div
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.4, delay: 0.05 }}
+                className="mb-4"
+              >
+                <span
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[11px] font-bold uppercase tracking-wider"
+                  style={{
+                    background: "rgba(139,92,246,0.15)",
+                    color: "#A78BFA",
+                    border: "1px solid rgba(139,92,246,0.35)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                >
+                  <Radio className="h-3 w-3" />
+                  Ao vivo + Gravação
+                </span>
+              </motion.div>
+            )}
+
             {/* Course title */}
             <motion.h1
               initial={{ opacity: 0, y: 16 }}
@@ -340,6 +468,10 @@ export default function CourseOverviewPage() {
               className="font-fraunces font-bold text-2xl sm:text-3xl md:text-4xl leading-tight mb-4"
               style={isPremium ? {
                 background: "linear-gradient(135deg, #FDFBF7 30%, #d4af37 100%)",
+                WebkitBackgroundClip: "text",
+                WebkitTextFillColor: "transparent",
+              } : isSync ? {
+                background: "linear-gradient(135deg, #FDFBF7 30%, #A78BFA 100%)",
                 WebkitBackgroundClip: "text",
                 WebkitTextFillColor: "transparent",
               } : { color: "white" }}
@@ -400,7 +532,7 @@ export default function CourseOverviewPage() {
               initial={{ opacity: 0, y: 16 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ duration: 0.5, delay: 0.4 }}
-              className="flex items-center gap-5"
+              className="flex flex-wrap items-center gap-3 sm:gap-5"
             >
               {isPremium ? (
                 <button
@@ -415,11 +547,57 @@ export default function CourseOverviewPage() {
                   <Play className="h-4 w-4" />
                   Assistir
                 </button>
+              ) : isSync ? (
+                <button
+                  onClick={handleAssistir}
+                  className="inline-flex items-center gap-2 px-6 py-3 rounded-xl font-dm font-semibold text-sm text-white transition-all hover:scale-[1.03] active:scale-[0.97]"
+                  style={{
+                    background: "#8B5CF6",
+                    boxShadow: "0 4px 20px rgba(139,92,246,0.35)",
+                  }}
+                >
+                  <Play className="h-4 w-4" />
+                  {sections.length > 0 ? "Ver gravações" : "Acessar curso"}
+                </button>
               ) : (
                 <Button onClick={handleAssistir} size="md">
                   <Play className="h-4 w-4" />
                   Assistir
                 </Button>
+              )}
+
+              {/* Botões de comunidade pro sync */}
+              {isSync && course.whatsapp_group_url && (
+                <a
+                  href={course.whatsapp_group_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:-translate-y-0.5"
+                  style={{
+                    background: "rgba(37,211,102,0.12)",
+                    color: "#25D366",
+                    border: "1px solid rgba(37,211,102,0.25)",
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4" />
+                  Grupo WhatsApp
+                </a>
+              )}
+              {isSync && !liveMeeting && course.meet_url && (
+                <a
+                  href={course.meet_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:-translate-y-0.5"
+                  style={{
+                    background: "rgba(139,92,246,0.12)",
+                    color: "#A78BFA",
+                    border: "1px solid rgba(139,92,246,0.3)",
+                  }}
+                >
+                  <Video className="h-4 w-4" />
+                  Link do Meet
+                </a>
               )}
 
               {course.certificate_enabled && isEnrolled && (
@@ -469,10 +647,84 @@ export default function CourseOverviewPage() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
+              {/* Próximos encontros — só pra cursos sync */}
+              {isSync && futureMeetings.length > 0 && (
+                <div
+                  className="mb-8 rounded-2xl overflow-hidden"
+                  style={{
+                    background: "rgba(139,92,246,0.04)",
+                    border: "1px solid rgba(139,92,246,0.18)",
+                  }}
+                >
+                  <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(139,92,246,0.12)" }}>
+                    <Calendar size={14} style={{ color: "#A78BFA" }} />
+                    <h3 className="font-dm font-semibold text-sm text-cream">Próximos encontros</h3>
+                    <span className="ml-auto font-dm text-[11px]" style={{ color: "rgba(167,139,250,0.6)" }}>
+                      {course.live_session_duration_minutes ?? 120}min cada
+                    </span>
+                  </div>
+                  <div className="divide-y" style={{ borderColor: "rgba(139,92,246,0.1)" }}>
+                    {futureMeetings.slice(0, 6).map((m) => {
+                      const date = new Date(m.starts_at);
+                      const dia = date.toLocaleDateString("pt-BR", {
+                        weekday: "short", day: "2-digit", month: "short",
+                        timeZone: "America/Sao_Paulo",
+                      });
+                      const hora = date.toLocaleTimeString("pt-BR", {
+                        hour: "2-digit", minute: "2-digit",
+                        timeZone: "America/Sao_Paulo",
+                      });
+                      return (
+                        <div key={m.id} className="px-5 py-3 flex items-center gap-4">
+                          <div className="min-w-[80px]">
+                            <p className="font-dm text-[10px] uppercase tracking-wider" style={{ color: "rgba(167,139,250,0.6)" }}>
+                              {dia.replace(".", "")}
+                            </p>
+                            <p className="font-fraunces font-bold text-base text-cream">{hora}</p>
+                          </div>
+                          <div className="flex-1">
+                            <p className="font-dm text-sm text-cream/80">
+                              {m.title || "Encontro ao vivo"}
+                            </p>
+                          </div>
+                          {(m.meet_url_override || course.meet_url) && (
+                            <a
+                              href={m.meet_url_override || course.meet_url || "#"}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-dm text-xs font-semibold transition-all hover:-translate-y-0.5"
+                              style={{ background: "rgba(139,92,246,0.12)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.3)" }}
+                            >
+                              <Video size={11} /> Link
+                            </a>
+                          )}
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
+
+              {/* Modelo do curso sync — explicação rápida */}
+              {isSync && (
+                <div
+                  className="mb-8 px-5 py-4 rounded-2xl flex items-start gap-3"
+                  style={{
+                    background: "rgba(139,92,246,0.025)",
+                    border: "1px solid rgba(139,92,246,0.1)",
+                  }}
+                >
+                  <Radio size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#A78BFA" }} />
+                  <div className="font-dm text-xs leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
+                    <span className="font-semibold" style={{ color: "#A78BFA" }}>Como funciona:</span> os encontros acontecem ao vivo no Google Meet. As gravações sobem aqui após cada encontro pra você assistir no seu tempo.
+                  </div>
+                </div>
+              )}
+
               {/* Header + search */}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-fraunces font-bold text-lg text-cream">
-                  Todos os conteúdos
+                  {isSync ? "Gravações no acervo" : "Todos os conteúdos"}
                 </h2>
                 <div
                   className="flex items-center gap-2 px-3 py-2 rounded-xl w-64"
@@ -685,29 +937,37 @@ export default function CourseOverviewPage() {
               {course.instructor && (
                 <div>
                   <h3 className="font-fraunces font-bold text-lg text-cream mb-4">
-                    Instrutor
+                    {isSync ? "Sobre o(a) professor(a)" : "Instrutor"}
                   </h3>
-                  <div className="flex items-center gap-4">
+                  <div className="flex items-start gap-4">
                     {course.instructor.avatar_url ? (
                       <Image
                         src={course.instructor.avatar_url}
                         alt={course.instructor.full_name || ""}
-                        width={48}
-                        height={48}
-                        className="rounded-full object-cover"
+                        width={56}
+                        height={56}
+                        className="rounded-full object-cover flex-shrink-0"
                       />
                     ) : (
                       <div
-                        className="w-12 h-12 rounded-full flex items-center justify-center"
-                        style={{ background: "rgba(200,75,49,0.1)" }}
+                        className="w-14 h-14 rounded-full flex items-center justify-center flex-shrink-0"
+                        style={{ background: isSync ? "rgba(139,92,246,0.1)" : "rgba(200,75,49,0.1)" }}
                       >
-                        <BookOpen className="h-5 w-5 text-accent/50" />
+                        <BookOpen
+                          className="h-5 w-5"
+                          style={{ color: isSync ? "rgba(167,139,250,0.5)" : "rgba(200,75,49,0.5)" }}
+                        />
                       </div>
                     )}
-                    <div>
-                      <p className="font-dm font-semibold text-sm text-cream">
+                    <div className="flex-1">
+                      <p className="font-dm font-semibold text-sm text-cream mb-1">
                         {course.instructor.full_name}
                       </p>
+                      {course.instructor_bio && (
+                        <div className="font-dm text-sm leading-relaxed whitespace-pre-line" style={{ color: "rgba(253,251,247,0.55)" }}>
+                          {course.instructor_bio}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>

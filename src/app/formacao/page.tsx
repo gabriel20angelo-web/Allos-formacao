@@ -24,6 +24,10 @@ const SyncGroupsSection = dynamic(
   () => import("@/components/formacao/SyncGroupsSection"),
   { ssr: false }
 );
+const LiveCoursesShowcase = dynamic(
+  () => import("@/components/formacao/LiveCoursesShowcase"),
+  { ssr: false }
+);
 const DownloadAppCard = dynamic(
   () => import("@/components/formacao/DownloadAppCard"),
   { ssr: false }
@@ -91,21 +95,28 @@ export default function FormacaoPage() {
     return () => { cancelled = true; };
   }, []);
 
-  // Separate structured courses from the rest
-  const structuredCourses = useMemo(
-    () => courses.filter((c) => c.is_structured),
+  // Cursos sync ("Ao vivo + Gravação") aparecem só no LiveCoursesShowcase pra
+  // não duplicarem nas outras seções com identidade visual conflitante.
+  const nonSyncCourses = useMemo(
+    () => courses.filter((c) => c.course_type !== "sync"),
     [courses]
   );
 
+  // Separate structured courses from the rest
+  const structuredCourses = useMemo(
+    () => nonSyncCourses.filter((c) => c.is_structured),
+    [nonSyncCourses]
+  );
+
   const regularCourses = useMemo(
-    () => courses.filter((c) => !c.is_structured),
-    [courses]
+    () => nonSyncCourses.filter((c) => !c.is_structured),
+    [nonSyncCourses]
   );
 
   // Featured courses (from all courses, not just regular)
   const featuredCourses = useMemo(
-    () => courses.filter((c) => c.featured),
-    [courses]
+    () => nonSyncCourses.filter((c) => c.featured),
+    [nonSyncCourses]
   );
 
   // Group regular courses by category (excluding featured)
@@ -156,6 +167,9 @@ export default function FormacaoPage() {
       {/* Hero */}
       <div className="relative z-10">
         <HeroFormacao />
+
+        {/* Live courses (sync) — Zona 1 (AGORA) + Zona 2 (próximos) */}
+        <LiveCoursesShowcase />
 
         {/* Featured courses - premium gold section */}
         {!loading && featuredCourses.length > 0 && (
