@@ -26,6 +26,8 @@ import {
   Send,
   MessageCircle,
   Copy,
+  ArrowUp,
+  ArrowDown,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -729,6 +731,40 @@ export default function CalendarioPage() {
     setHorarios((prev) => prev.map((h) => (h.id === id ? { ...h, ativo } : h)));
   }
 
+  async function moveHorario(id: string, direction: "up" | "down") {
+    // Reordena pelo campo `ordem`. Trabalha sobre a lista atual ordenada pra
+    // achar o vizinho e troca os valores de ordem entre os dois — duas linhas
+    // updates em paralelo.
+    const sorted = [...horarios].sort((a, b) => a.ordem - b.ordem);
+    const idx = sorted.findIndex((h) => h.id === id);
+    if (idx === -1) return;
+    const swapIdx = direction === "up" ? idx - 1 : idx + 1;
+    if (swapIdx < 0 || swapIdx >= sorted.length) return;
+
+    const a = sorted[idx];
+    const b = sorted[swapIdx];
+
+    // Otimista: atualiza estado local primeiro
+    const optimistic = horarios.map((h) => {
+      if (h.id === a.id) return { ...h, ordem: b.ordem };
+      if (h.id === b.id) return { ...h, ordem: a.ordem };
+      return h;
+    });
+    setHorarios(optimistic);
+
+    const supabase = createClient();
+    // Estratégia em 2 passos pra contornar UNIQUE constraint caso exista:
+    // primeiro joga `a` num valor temporário (negativo, fora do range), depois
+    // troca os dois.
+    const tempOrdem = -(Math.max(...horarios.map((h) => h.ordem)) + 1);
+    const r1 = await supabase.from("formacao_horarios").update({ ordem: tempOrdem }).eq("id", a.id);
+    if (r1.error) { toast.error("Erro ao reordenar."); setHorarios(horarios); return; }
+    const r2 = await supabase.from("formacao_horarios").update({ ordem: a.ordem }).eq("id", b.id);
+    if (r2.error) { toast.error("Erro ao reordenar."); setHorarios(horarios); return; }
+    const r3 = await supabase.from("formacao_horarios").update({ ordem: b.ordem }).eq("id", a.id);
+    if (r3.error) { toast.error("Erro ao reordenar."); setHorarios(horarios); return; }
+  }
+
   // ─── Evento CRUD ──────────────────────────────────────────────────────────
   async function handleAddEvento() {
     if (!eventoForm.titulo.trim() || !eventoForm.data_inicio || !eventoForm.data_fim) {
@@ -1179,9 +1215,9 @@ export default function CalendarioPage() {
 
             {/* List */}
             <div className="space-y-2">
-              {horarios
-                .sort((a, b) => a.ordem - b.ordem)
-                .map((h) => (
+              {(() => {
+                const sortedHorarios = [...horarios].sort((a, b) => a.ordem - b.ordem);
+                return sortedHorarios.map((h, idx) => (
                   <motion.div
                     key={h.id}
                     layout
@@ -1193,15 +1229,30 @@ export default function CalendarioPage() {
                       <span className="text-sm font-dm font-semibold" style={{ color: "#FDFBF7" }}>
                         {h.hora}
                       </span>
-                      <span className="text-xs font-dm" style={{ color: "rgba(253,251,247,0.3)" }}>
-                        Ordem: {h.ordem}
-                      </span>
                     </div>
-                    <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-1.5">
+                      {/* Reorder up */}
+                      <button
+                        onClick={() => moveHorario(h.id, "up")}
+                        disabled={idx === 0}
+                        className="p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
+                        title="Mover pra cima"
+                      >
+                        <ArrowUp className="h-4 w-4" style={{ color: "rgba(253,251,247,0.5)" }} />
+                      </button>
+                      {/* Reorder down */}
+                      <button
+                        onClick={() => moveHorario(h.id, "down")}
+                        disabled={idx === sortedHorarios.length - 1}
+                        className="p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
+                        title="Mover pra baixo"
+                      >
+                        <ArrowDown className="h-4 w-4" style={{ color: "rgba(253,251,247,0.5)" }} />
+                      </button>
                       {/* Toggle ativo */}
                       <button
                         onClick={() => toggleHorario(h.id, !h.ativo)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors"
+                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors ml-1"
                         style={{
                           background: h.ativo ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.05)",
                           color: h.ativo ? "#22c55e" : "rgba(253,251,247,0.4)",
@@ -1220,7 +1271,8 @@ export default function CalendarioPage() {
                       </button>
                     </div>
                   </motion.div>
-                ))}
+                ));
+              })()}
 
               {horarios.length === 0 && (
                 <div className="text-center py-16">
