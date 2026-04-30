@@ -458,6 +458,52 @@ export default function CalendarioPage() {
     const ROWS_H = FRAME_H - BORDER * 2 - HEADER_H;
     const ROW_H = ROWS_H / 5;
     const DAY_COL_W = 215;
+    const cellInnerW = headerW - DAY_COL_W - BORDER;
+    const cellInnerX = headerX + DAY_COL_W + BORDER;
+
+    // ── Pré-calcula layout GLOBAL dos itens pra alinhar todas as cells na
+    // mesma coluna X (hora + bullet + atividade). Sem isso cada cell
+    // centraliza o próprio bloco e as horas dançam entre dias. ──
+    const globalLayout = (() => {
+      const allItems = dayItemsByIdx.flat();
+      const maxItemsPerDay = Math.max(1, ...dayItemsByIdx.map((arr) => arr.length));
+      const maxTextH = ROW_H - 28;
+      const maxBlockW = cellInnerW - 56;
+
+      const measure = (fs: number) => {
+        ctx.font = `500 ${fs}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
+        let mh = 0, ma = 0;
+        for (const it of allItems) {
+          const hw = ctx.measureText(it.hora).width;
+          const aw = ctx.measureText(it.atividade).width;
+          if (hw > mh) mh = hw;
+          if (aw > ma) ma = aw;
+        }
+        const bw = ctx.measureText("  •  ").width;
+        return { maxHora: mh, maxAtiv: ma, bulletW: bw, totalW: mh + bw + ma };
+      };
+
+      let fontSize = 22;
+      let lineH = fontSize * 1.3;
+      let block = measure(fontSize);
+      while (
+        (maxItemsPerDay * lineH > maxTextH || block.totalW > maxBlockW) &&
+        fontSize > 11
+      ) {
+        fontSize -= 1;
+        lineH = fontSize * 1.3;
+        block = measure(fontSize);
+      }
+
+      const blockX = cellInnerX + (cellInnerW - block.totalW) / 2;
+      return {
+        fontSize,
+        lineH,
+        horaEndX: blockX + block.maxHora,
+        bulletCenterX: blockX + block.maxHora + block.bulletW / 2,
+        ativStartX: blockX + block.maxHora + block.bulletW,
+      };
+    })();
 
     DIAS.forEach((dia, i) => {
       const ry = ROWS_TOP + i * ROW_H;
@@ -541,48 +587,15 @@ export default function CalendarioPage() {
       ctx.fillStyle = cellGloss;
       ctx.fillRect(cellX, ry, cellW, rh);
 
-      // Conteúdo dinâmico: hora + bullet + atividade com hora alinhada
-      // verticalmente em coluna (textAlign right pra hora, left pra atividade).
+      // Conteúdo dinâmico: usa globalLayout pra alinhar TODAS as cells na
+      // mesma coluna X (hora + bullet + atividade), independente do dia.
       const items = dayItemsByIdx[i];
       if (items.length > 0) {
-        // Auto-fit fonte: começa em 22, decrementa até caber em rh-28
-        const maxTextH = rh - 28;
-        const maxBlockW = cellW - 56; // padding lateral mínimo de 28px de cada lado
-        let fontSize = 22;
-        let lineH = fontSize * 1.3;
-        ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
-
-        // Calcula o bloco e diminui fonte se ultrapassar altura ou largura
-        const measureBlock = () => {
-          ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
-          let mh = 0, ma = 0;
-          for (const it of items) {
-            const hw = ctx.measureText(it.hora).width;
-            const aw = ctx.measureText(it.atividade).width;
-            if (hw > mh) mh = hw;
-            if (aw > ma) ma = aw;
-          }
-          const bw = ctx.measureText("  •  ").width;
-          return { maxHora: mh, maxAtiv: ma, bulletW: bw, totalW: mh + bw + ma };
-        };
-
-        let block = measureBlock();
-        while (
-          (items.length * lineH > maxTextH || block.totalW > maxBlockW) &&
-          fontSize > 11
-        ) {
-          fontSize -= 1;
-          lineH = fontSize * 1.3;
-          block = measureBlock();
-        }
-
+        const { fontSize, lineH, horaEndX, bulletCenterX, ativStartX } = globalLayout;
         const totalH = items.length * lineH;
         const startY = ry + (rh - totalH) / 2 + lineH / 2;
-        const blockX = cellX + (cellW - block.totalW) / 2;
-        const horaEndX = blockX + block.maxHora;
-        const bulletCenterX = horaEndX + block.bulletW / 2;
-        const ativStartX = horaEndX + block.bulletW;
 
+        ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
         ctx.textBaseline = "middle";
         ctx.fillStyle = "#1a1a1a";
 
