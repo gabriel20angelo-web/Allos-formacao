@@ -28,6 +28,8 @@ import {
   Copy,
   ArrowUp,
   ArrowDown,
+  UserCheck,
+  Users,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -200,6 +202,13 @@ export default function CalendarioPage() {
   const [newHora, setNewHora] = useState("08:00");
   const [addingHorario, setAddingHorario] = useState(false);
 
+  // Quórum rápido por slot
+  type LatestPresenca = { slot_id: string; total_participantes: number; data_reuniao: string };
+  const [latestPresencas, setLatestPresencas] = useState<Record<string, LatestPresenca>>({});
+  const [quorumDraftSlot, setQuorumDraftSlot] = useState<string | null>(null);
+  const [quorumDraftValue, setQuorumDraftValue] = useState("");
+  const [savingQuorum, setSavingQuorum] = useState(false);
+
   // Eventos tab
   const [eventoForm, setEventoForm] = useState({ titulo: "", descricao: "", link: "", data_inicio: "", data_fim: "" });
   const [addingEvento, setAddingEvento] = useState(false);
@@ -218,7 +227,11 @@ export default function CalendarioPage() {
   // ─── Fetch all data ───────────────────────────────────────────────────────
   const fetchAll = useCallback(async () => {
     const supabase = createClient();
-    const [hRes, sRes, aRes, cRes, atRes, eRes, cfgRes] = await Promise.all([
+    // Janela de 60 dias atrás cobre férias/feriados sem trazer histórico
+    // antigo demais. A query já volta ordenada DESC pra reduzir lógica
+    // client-side.
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const [hRes, sRes, aRes, cRes, atRes, eRes, cfgRes, pRes] = await Promise.all([
       supabase.from("formacao_horarios").select("*").eq("ativo", true).order("ordem"),
       supabase.from("formacao_slots").select("*, formacao_horarios(hora, ordem)"),
       supabase.from("formacao_alocacoes").select("*, certificado_condutores(id, nome, telefone)"),
@@ -226,6 +239,12 @@ export default function CalendarioPage() {
       supabase.from("certificado_atividades").select("*").eq("ativo", true).order("nome"),
       supabase.from("certificado_eventos").select("*").order("data_inicio", { ascending: false }),
       supabase.from("formacao_cronograma").select("*").limit(1).single(),
+      supabase
+        .from("formacao_meet_presencas")
+        .select("slot_id, total_participantes, data_reuniao")
+        .gte("data_reuniao", sixtyDaysAgo)
+        .not("slot_id", "is", null)
+        .order("data_reuniao", { ascending: false }),
     ]);
     if (hRes.data) setHorarios(hRes.data);
     if (sRes.data) setSlots(sRes.data);
@@ -234,6 +253,14 @@ export default function CalendarioPage() {
     if (atRes.data) setAtividades(atRes.data);
     if (eRes.data) setEventos(eRes.data);
     if (cfgRes.data) setConfig(cfgRes.data);
+    if (pRes.data) {
+      // Como vem ordenado DESC, a primeira ocorrência por slot_id é a mais recente.
+      const latest: Record<string, LatestPresenca> = {};
+      for (const p of pRes.data as LatestPresenca[]) {
+        if (p.slot_id && !latest[p.slot_id]) latest[p.slot_id] = p;
+      }
+      setLatestPresencas(latest);
+    }
     setLoading(false);
   }, []);
 
@@ -731,6 +758,68 @@ export default function CalendarioPage() {
     setHorarios((prev) => prev.map((h) => (h.id === id ? { ...h, ativo } : h)));
   }
 
+  // ─── Quórum rápido ─────────────────────────────────────────────────────────
+  function whatsappUrl(telefone: string | null): string | null {
+    if (!telefone) return null;
+    const digits = telefone.replace(/\D/g, "");
+    if (digits.length === 0) return null;
+    // Se já vem com código do país (12-13 dígitos), usa direto. Senão prefixa 55.
+    const withCountry = digits.length >= 12 ? digits : `55${digits}`;
+    return `https://wa.me/${withCountry}`;
+  }
+
+  async function registrarQuorum(slot: FormacaoSlot, horario: { hora: string }) {
+    const total = parseInt(quorumDraftValue);
+    if (!total || total < 0) {
+      toast.error("Informe um número válido.");
+      return;
+    }
+    setSavingQuorum(true);
+    try {
+      const supabase = createClient();
+      const slotAlocs = getSlotAlocacoes(slot.id);
+      const condutorNome = slotAlocs[0]?.certificado_condutores?.nome || "—";
+      const today = new Date();
+      const [hh, mm] = horario.hora.split(":").map(Number);
+      const horaInicio = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hh, mm);
+      const duracao = config?.duracao_minutos ?? 90;
+      const horaFim = new Date(horaInicio.getTime() + duracao * 60_000);
+
+      const { error } = await supabase.from("formacao_meet_presencas").insert({
+        slot_id: slot.id,
+        meet_link: slot.meet_link || "manual",
+        condutor_nome: condutorNome,
+        atividade_nome: slot.atividade_nome,
+        data_reuniao: horaInicio.toISOString().split("T")[0],
+        dia_semana: slot.dia_semana,
+        hora_inicio: horaInicio.toISOString(),
+        hora_fim: horaFim.toISOString(),
+        duracao_minutos: duracao,
+        participantes: [],
+        total_participantes: total,
+        media_participantes: total,
+        pico_participantes: total,
+      });
+      if (error) throw error;
+      setLatestPresencas((prev) => ({
+        ...prev,
+        [slot.id]: {
+          slot_id: slot.id,
+          total_participantes: total,
+          data_reuniao: horaInicio.toISOString().split("T")[0],
+        },
+      }));
+      toast.success(`Quórum registrado: ${total} participantes`);
+      setQuorumDraftSlot(null);
+      setQuorumDraftValue("");
+    } catch (err) {
+      console.error("[registrarQuorum]", err);
+      toast.error("Erro ao registrar quórum.");
+    } finally {
+      setSavingQuorum(false);
+    }
+  }
+
   async function moveHorario(id: string, direction: "up" | "down") {
     // Reordena pelo campo `ordem`. Trabalha sobre a lista atual ordenada pra
     // achar o vizinho e troca os valores de ordem entre os dois — duas linhas
@@ -1102,21 +1191,102 @@ export default function CalendarioPage() {
                             </button>
                           )}
 
+                          {/* Quórum: chip do último registrado + form pra registrar */}
+                          {(() => {
+                            const lastPres = latestPresencas[slot.id];
+                            const isOpen = quorumDraftSlot === slot.id;
+                            return (
+                              <div className="flex flex-col gap-1">
+                                {lastPres && !isOpen && (
+                                  <div
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-dm font-semibold w-fit"
+                                    style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.18)" }}
+                                    title={`Último registro em ${new Date(lastPres.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`}
+                                  >
+                                    <Users className="h-2.5 w-2.5" />
+                                    {lastPres.total_participantes}
+                                  </div>
+                                )}
+                                {isOpen ? (
+                                  <div className="flex items-center gap-1">
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      autoFocus
+                                      value={quorumDraftValue}
+                                      onChange={(e) => setQuorumDraftValue(e.target.value)}
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") registrarQuorum(slot, horario);
+                                        if (e.key === "Escape") { setQuorumDraftSlot(null); setQuorumDraftValue(""); }
+                                      }}
+                                      placeholder="Total"
+                                      className="flex-1 min-w-0 px-1.5 py-1 rounded text-[10px] font-dm"
+                                      style={{
+                                        background: "rgba(34,197,94,0.06)",
+                                        border: "1px solid rgba(34,197,94,0.25)",
+                                        color: "#FDFBF7",
+                                      }}
+                                    />
+                                    <button
+                                      onClick={() => registrarQuorum(slot, horario)}
+                                      disabled={savingQuorum}
+                                      className="p-1 rounded hover:bg-white/5 disabled:opacity-40"
+                                    >
+                                      <Check className="h-3 w-3" style={{ color: "#22c55e" }} />
+                                    </button>
+                                    <button
+                                      onClick={() => { setQuorumDraftSlot(null); setQuorumDraftValue(""); }}
+                                      className="p-1 rounded hover:bg-white/5"
+                                    >
+                                      <X className="h-3 w-3" style={{ color: "rgba(253,251,247,0.3)" }} />
+                                    </button>
+                                  </div>
+                                ) : (
+                                  <button
+                                    onClick={() => {
+                                      setQuorumDraftSlot(slot.id);
+                                      setQuorumDraftValue("");
+                                    }}
+                                    className="flex items-center gap-1 text-[10px] font-dm transition-colors hover:opacity-80 w-fit"
+                                    style={{ color: "rgba(34,197,94,0.7)" }}
+                                  >
+                                    <UserCheck className="h-3 w-3" />
+                                    {lastPres ? "Novo registro" : "Registrar quórum"}
+                                  </button>
+                                )}
+                              </div>
+                            );
+                          })()}
+
                           {/* Condutores */}
                           <div className="space-y-1 mt-auto">
-                            {slotAlocacoes.map((aloc) => (
-                              <div key={aloc.id} className="flex items-center justify-between gap-1">
-                                <span className="text-[10px] font-dm truncate" style={{ color: "rgba(253,251,247,0.7)" }}>
-                                  {aloc.certificado_condutores?.nome || "—"}
-                                </span>
-                                <button
-                                  onClick={() => removeAlocacao(aloc.id)}
-                                  className="p-0.5 rounded hover:bg-red-500/10 flex-shrink-0"
-                                >
-                                  <X className="h-2.5 w-2.5" style={{ color: "rgba(239,68,68,0.5)" }} />
-                                </button>
-                              </div>
-                            ))}
+                            {slotAlocacoes.map((aloc) => {
+                              const waUrl = whatsappUrl(aloc.certificado_condutores?.telefone || null);
+                              return (
+                                <div key={aloc.id} className="flex items-center justify-between gap-1">
+                                  <span className="text-[10px] font-dm truncate flex-1" style={{ color: "rgba(253,251,247,0.7)" }}>
+                                    {aloc.certificado_condutores?.nome || "—"}
+                                  </span>
+                                  {waUrl && (
+                                    <a
+                                      href={waUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-0.5 rounded hover:bg-green-500/10 flex-shrink-0"
+                                      title={`WhatsApp ${aloc.certificado_condutores?.telefone}`}
+                                    >
+                                      <MessageCircle className="h-2.5 w-2.5" style={{ color: "#22c55e" }} />
+                                    </a>
+                                  )}
+                                  <button
+                                    onClick={() => removeAlocacao(aloc.id)}
+                                    className="p-0.5 rounded hover:bg-red-500/10 flex-shrink-0"
+                                  >
+                                    <X className="h-2.5 w-2.5" style={{ color: "rgba(239,68,68,0.5)" }} />
+                                  </button>
+                                </div>
+                              );
+                            })}
 
                             {/* Add condutor */}
                             {addCondutorSlotId === slot.id ? (
