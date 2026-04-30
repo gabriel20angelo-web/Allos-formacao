@@ -345,12 +345,16 @@ export default function CalendarioPage() {
     const activeH = [...horarios].sort((a, b) => a.ordem - b.ordem);
     const activeSlots = slots.filter((s) => s.ativo && s.atividade_nome);
 
-    const dayItemsByIdx: string[][] = DIAS.map((_, diaIdx) => {
-      const items: string[] = [];
+    type DayItem = { hora: string; atividade: string };
+    const dayItemsByIdx: DayItem[][] = DIAS.map((_, diaIdx) => {
+      const items: DayItem[] = [];
       activeH.forEach((h) => {
         const slot = activeSlots.find((s) => s.dia_semana === diaIdx && s.horario_id === h.id);
         if (slot && slot.atividade_nome) {
-          items.push(`${h.hora.replace(":00", "h").replace(":", "h")}  •  ${slot.atividade_nome}`);
+          items.push({
+            hora: h.hora.replace(":00", "h").replace(":", "h"),
+            atividade: slot.atividade_nome,
+          });
         }
       });
       return items;
@@ -537,27 +541,59 @@ export default function CalendarioPage() {
       ctx.fillStyle = cellGloss;
       ctx.fillRect(cellX, ry, cellW, rh);
 
-      // Conteúdo dinâmico: lista de items centralizados
+      // Conteúdo dinâmico: hora + bullet + atividade com hora alinhada
+      // verticalmente em coluna (textAlign right pra hora, left pra atividade).
       const items = dayItemsByIdx[i];
       if (items.length > 0) {
-        // Auto-fit fonte: começa em 22, decrementa até caber em rh-32
+        // Auto-fit fonte: começa em 22, decrementa até caber em rh-28
         const maxTextH = rh - 28;
+        const maxBlockW = cellW - 56; // padding lateral mínimo de 28px de cada lado
         let fontSize = 22;
         let lineH = fontSize * 1.3;
-        while (items.length * lineH > maxTextH && fontSize > 12) {
+        ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
+
+        // Calcula o bloco e diminui fonte se ultrapassar altura ou largura
+        const measureBlock = () => {
+          ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
+          let mh = 0, ma = 0;
+          for (const it of items) {
+            const hw = ctx.measureText(it.hora).width;
+            const aw = ctx.measureText(it.atividade).width;
+            if (hw > mh) mh = hw;
+            if (aw > ma) ma = aw;
+          }
+          const bw = ctx.measureText("  •  ").width;
+          return { maxHora: mh, maxAtiv: ma, bulletW: bw, totalW: mh + bw + ma };
+        };
+
+        let block = measureBlock();
+        while (
+          (items.length * lineH > maxTextH || block.totalW > maxBlockW) &&
+          fontSize > 11
+        ) {
           fontSize -= 1;
           lineH = fontSize * 1.3;
+          block = measureBlock();
         }
 
         const totalH = items.length * lineH;
         const startY = ry + (rh - totalH) / 2 + lineH / 2;
+        const blockX = cellX + (cellW - block.totalW) / 2;
+        const horaEndX = blockX + block.maxHora;
+        const bulletCenterX = horaEndX + block.bulletW / 2;
+        const ativStartX = horaEndX + block.bulletW;
 
-        ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
         ctx.fillStyle = "#1a1a1a";
-        items.forEach((item, idx) => {
-          ctx.fillText(item, cellX + cellW / 2, startY + idx * lineH);
+
+        items.forEach((it, idx) => {
+          const y = startY + idx * lineH;
+          ctx.textAlign = "right";
+          ctx.fillText(it.hora, horaEndX, y);
+          ctx.textAlign = "center";
+          ctx.fillText("•", bulletCenterX, y);
+          ctx.textAlign = "left";
+          ctx.fillText(it.atividade, ativStartX, y);
         });
       }
 
