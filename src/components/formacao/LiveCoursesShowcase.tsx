@@ -140,8 +140,8 @@ export default function LiveCoursesShowcase() {
       )}
 
       {scheduled.length > 0 && (
-        <section className="relative px-5 sm:px-6 md:px-10 pt-8 pb-10">
-          <div className="max-w-[1200px] mx-auto">
+        <section className="relative pt-8 pb-10">
+          <div className="max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
             <motion.div
               initial={{ opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -167,8 +167,21 @@ export default function LiveCoursesShowcase() {
                 Acompanhe ao vivo pelo Meet ou assista as gravações no seu tempo.
               </p>
             </motion.div>
+          </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+          {/* Carousel mobile (snap-x) → grid no desktop */}
+          <div
+            className="md:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-3 px-5"
+            style={{ scrollbarWidth: "none" }}
+          >
+            {scheduled.map((c) => (
+              <div key={c.id} className="snap-start flex-shrink-0 w-[88%] xs:w-[82%]">
+                <ScheduledCard course={c} />
+              </div>
+            ))}
+          </div>
+          <div className="hidden md:block max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {scheduled.map((c) => (
                 <ScheduledCard key={c.id} course={c} />
               ))}
@@ -189,26 +202,20 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
       transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
       className="relative rounded-2xl overflow-hidden"
       style={{
-        background: "linear-gradient(135deg, rgba(139,92,246,0.10), rgba(139,92,246,0.02) 60%, rgba(0,0,0,0.4))",
         border: `1.5px solid ${PURPLE_BORDER}`,
         boxShadow: `0 0 0 1px rgba(139,92,246,0.2), 0 20px 60px -20px rgba(139,92,246,0.4)`,
       }}
     >
-      <div
-        className="absolute inset-0 pointer-events-none"
-        style={{
-          boxShadow: `inset 0 0 100px rgba(139,92,246,0.08)`,
-        }}
-      />
-      <div className="grid grid-cols-1 sm:grid-cols-12 gap-0 relative">
-        <div className="sm:col-span-5 relative aspect-[16/9] sm:aspect-auto sm:min-h-[260px] overflow-hidden">
+      <Link href={`/formacao/curso/${course.slug}`} className="block group">
+        <div className="relative w-full aspect-[16/10] sm:aspect-[21/9] overflow-hidden">
           {course.thumbnail_url ? (
             <Image
               src={course.thumbnail_url}
               alt={course.title}
               fill
-              sizes="(max-width: 640px) 100vw, 480px"
-              className="object-cover"
+              sizes="(max-width: 1200px) 100vw, 1200px"
+              className="object-cover transition-transform duration-700 group-hover:scale-[1.02]"
+              priority
             />
           ) : (
             <div
@@ -218,91 +225,121 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
               }}
             />
           )}
+
+          {/* Overlay esquerdo (degradê pra texto) + base escura */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(90deg, rgba(0,0,0,0) 40%, rgba(15,10,24,0.92) 100%)",
+                "linear-gradient(90deg, rgba(8,5,15,0.92) 0%, rgba(8,5,15,0.7) 35%, rgba(8,5,15,0.25) 65%, rgba(8,5,15,0) 100%)",
             }}
           />
-          <div className="absolute top-4 left-4 flex items-center gap-2">
+          <div
+            className="absolute inset-0"
+            style={{
+              background: "linear-gradient(180deg, rgba(0,0,0,0) 60%, rgba(8,5,15,0.6) 100%)",
+            }}
+          />
+          {/* Glow roxo difuso */}
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(circle at 80% 100%, rgba(139,92,246,0.18) 0%, transparent 50%)",
+            }}
+          />
+
+          {/* Badge AGORA — top left */}
+          <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 z-10">
             <span
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.16em]"
-              style={{ background: "rgba(139,92,246,0.85)", color: "#FFFFFF", backdropFilter: "blur(8px)" }}
+              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-dm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.18em]"
+              style={{ background: "rgba(139,92,246,0.92)", color: "#FFFFFF", backdropFilter: "blur(10px)" }}
             >
-              <Radio size={10} className="animate-pulse" />
-              Agora
+              <Radio size={11} className="animate-pulse" />
+              Ao vivo agora
             </span>
+            {course.live_ends_at && (
+              <span
+                className="hidden sm:inline-flex font-dm text-[11px]"
+                style={{ color: "rgba(253,251,247,0.7)" }}
+              >
+                · <CountdownToEnd endsAt={course.live_ends_at} />
+              </span>
+            )}
+          </div>
+
+          {/* Conteúdo bottom-left */}
+          <div className="absolute left-0 right-0 bottom-0 p-5 sm:p-8 md:p-10 z-10">
+            <div className="max-w-[640px]">
+              {course.current_meeting?.title && (
+                <p
+                  className="font-dm text-[11px] sm:text-xs uppercase tracking-[0.18em] mb-1.5 sm:mb-2"
+                  style={{ color: "rgba(167,139,250,0.95)" }}
+                >
+                  {course.current_meeting.title}
+                </p>
+              )}
+              <h3
+                className="font-fraunces font-bold text-[#FDFBF7] mb-2 sm:mb-3 drop-shadow-lg"
+                style={{ fontSize: "clamp(22px,3.2vw,38px)", lineHeight: 1.05 }}
+              >
+                {course.title}
+              </h3>
+              {course.instructor && (
+                <p
+                  className="font-dm text-xs sm:text-sm mb-4 sm:mb-5"
+                  style={{ color: "rgba(253,251,247,0.7)" }}
+                >
+                  {course.instructor.full_name}
+                </p>
+              )}
+              {course.live_ends_at && (
+                <p
+                  className="sm:hidden font-dm text-[11px] mb-3"
+                  style={{ color: "rgba(167,139,250,0.85)" }}
+                >
+                  <CountdownToEnd endsAt={course.live_ends_at} />
+                </p>
+              )}
+
+              <div className="flex flex-wrap items-center gap-2 sm:gap-2.5">
+                {meetHref && (
+                  <a
+                    href={meetHref}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 rounded-xl font-dm text-xs sm:text-sm font-bold transition-all hover:-translate-y-0.5"
+                    style={{
+                      background: PURPLE,
+                      color: "#FFFFFF",
+                      boxShadow: "0 8px 24px rgba(139,92,246,0.45)",
+                    }}
+                  >
+                    <Video size={14} /> Entrar no Meet <ChevronRight size={12} />
+                  </a>
+                )}
+                {course.whatsapp_group_url && (
+                  <a
+                    href={course.whatsapp_group_url}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    onClick={(e) => e.stopPropagation()}
+                    className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-dm text-xs sm:text-sm font-semibold transition-all hover:-translate-y-0.5"
+                    style={{
+                      background: "rgba(37,211,102,0.18)",
+                      color: "#3DDB7C",
+                      border: "1px solid rgba(37,211,102,0.3)",
+                      backdropFilter: "blur(8px)",
+                    }}
+                  >
+                    <MessageCircle size={14} /> Grupo
+                  </a>
+                )}
+              </div>
+            </div>
           </div>
         </div>
-
-        <div className="sm:col-span-7 p-6 sm:p-8 flex flex-col justify-center">
-          {course.current_meeting?.title && (
-            <p
-              className="font-dm text-[11px] uppercase tracking-[0.18em] mb-1.5"
-              style={{ color: "rgba(167,139,250,0.85)" }}
-            >
-              {course.current_meeting.title}
-            </p>
-          )}
-          <h3
-            className="font-fraunces font-bold text-[#FDFBF7] mb-2"
-            style={{ fontSize: "clamp(22px,2.4vw,30px)", lineHeight: 1.1 }}
-          >
-            {course.title}
-          </h3>
-          {course.instructor && (
-            <p className="font-dm text-sm mb-1" style={{ color: "rgba(253,251,247,0.6)" }}>
-              {course.instructor.full_name}
-            </p>
-          )}
-          {course.live_ends_at && (
-            <p className="font-dm text-xs mb-5" style={{ color: "rgba(167,139,250,0.7)" }}>
-              <CountdownToEnd endsAt={course.live_ends_at} />
-            </p>
-          )}
-
-          <div className="flex flex-wrap items-center gap-2.5">
-            {meetHref && (
-              <a
-                href={meetHref}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl font-dm text-sm font-bold transition-all hover:-translate-y-0.5"
-                style={{
-                  background: PURPLE,
-                  color: "#FFFFFF",
-                  boxShadow: "0 8px 24px rgba(139,92,246,0.4)",
-                }}
-              >
-                <Video size={16} /> Entrar no Meet <ChevronRight size={14} />
-              </a>
-            )}
-            {course.whatsapp_group_url && (
-              <a
-                href={course.whatsapp_group_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl font-dm text-sm font-semibold transition-all hover:-translate-y-0.5"
-                style={{
-                  background: "rgba(37,211,102,0.1)",
-                  color: "#25D366",
-                  border: "1px solid rgba(37,211,102,0.2)",
-                }}
-              >
-                <MessageCircle size={14} /> Grupo
-              </a>
-            )}
-            <Link
-              href={`/formacao/curso/${course.slug}`}
-              className="inline-flex items-center gap-1.5 px-4 py-2.5 rounded-xl font-dm text-sm font-medium transition-all hover:bg-white/5"
-              style={{ color: "rgba(253,251,247,0.65)" }}
-            >
-              Detalhes <ChevronRight size={14} />
-            </Link>
-          </div>
-        </div>
-      </div>
+      </Link>
     </motion.div>
   );
 }
@@ -313,23 +350,21 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
       initial={{ opacity: 0, y: 12 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.5 }}
-      className="group relative rounded-2xl overflow-hidden flex flex-col"
+      className="group relative rounded-2xl overflow-hidden"
       style={{
-        background: "rgba(139,92,246,0.025)",
-        border: "1px solid rgba(139,92,246,0.18)",
-        borderLeftWidth: 3,
-        borderLeftColor: PURPLE,
+        border: `1px solid rgba(139,92,246,0.25)`,
+        boxShadow: "0 12px 40px -16px rgba(139,92,246,0.25)",
       }}
     >
       <Link href={`/formacao/curso/${course.slug}`} className="block">
-        <div className="relative aspect-[16/9] overflow-hidden">
+        <div className="relative w-full aspect-[16/10] overflow-hidden">
           {course.thumbnail_url ? (
             <Image
               src={course.thumbnail_url}
               alt={course.title}
               fill
-              sizes="(max-width: 768px) 100vw, 400px"
-              className="object-cover transition-transform duration-500 group-hover:scale-105"
+              sizes="(max-width: 768px) 90vw, 600px"
+              className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
             />
           ) : (
             <div
@@ -337,102 +372,121 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
               style={{ background: "linear-gradient(135deg, #2a1a3a, #1a1424)" }}
             />
           )}
+
+          {/* Overlay degradê pra texto */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(180deg, rgba(0,0,0,0.05) 0%, rgba(0,0,0,0.6) 100%)",
+                "linear-gradient(180deg, rgba(8,5,15,0.05) 0%, rgba(8,5,15,0.35) 40%, rgba(8,5,15,0.92) 100%)",
             }}
           />
-          <div className="absolute top-3 left-3">
+          <div
+            className="absolute inset-0 pointer-events-none"
+            style={{
+              background: "radial-gradient(circle at 90% 100%, rgba(139,92,246,0.16) 0%, transparent 55%)",
+            }}
+          />
+
+          {/* Badge top-left */}
+          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10">
             <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.14em]"
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.14em]"
               style={{
                 background: "rgba(139,92,246,0.85)",
                 color: "#FFFFFF",
-                backdropFilter: "blur(8px)",
+                backdropFilter: "blur(10px)",
               }}
             >
               <Play size={9} fill="#FFFFFF" />
               Ao vivo + Gravação
             </span>
           </div>
+
+          {/* Ícones quick-access top-right */}
+          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 z-10">
+            {course.whatsapp_group_url && (
+              <a
+                href={course.whatsapp_group_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-full transition-all hover:scale-110"
+                style={{
+                  background: "rgba(37,211,102,0.85)",
+                  color: "#FFFFFF",
+                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 4px 14px rgba(37,211,102,0.35)",
+                }}
+                title="Grupo do WhatsApp"
+                aria-label="Entrar no grupo do WhatsApp"
+              >
+                <MessageCircle size={14} />
+              </a>
+            )}
+            {course.meet_url && (
+              <a
+                href={course.meet_url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={(e) => e.stopPropagation()}
+                className="inline-flex items-center justify-center w-9 h-9 rounded-full transition-all hover:scale-110"
+                style={{
+                  background: "rgba(139,92,246,0.92)",
+                  color: "#FFFFFF",
+                  backdropFilter: "blur(10px)",
+                  boxShadow: "0 4px 14px rgba(139,92,246,0.4)",
+                }}
+                title="Link do Meet"
+                aria-label="Abrir link do Meet"
+              >
+                <Video size={14} />
+              </a>
+            )}
+          </div>
+
+          {/* Conteúdo bottom — sobreposto à imagem */}
+          <div className="absolute left-0 right-0 bottom-0 p-4 sm:p-5 z-10">
+            <h3
+              className="font-fraunces font-bold text-[#FDFBF7] line-clamp-2 leading-tight mb-1 drop-shadow-lg"
+              style={{ fontSize: "clamp(16px,1.6vw,20px)" }}
+            >
+              {course.title}
+            </h3>
+            {course.instructor && (
+              <p
+                className="font-dm text-[11px] sm:text-xs mb-2.5"
+                style={{ color: "rgba(253,251,247,0.65)" }}
+              >
+                {course.instructor.full_name}
+              </p>
+            )}
+
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+              {course.next_meeting && (
+                <div
+                  className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
+                  style={{ color: "#A78BFA" }}
+                >
+                  <Calendar size={11} />
+                  <span>{formatNextMeeting(course.next_meeting.starts_at)}</span>
+                </div>
+              )}
+              {course.total_recordings > 0 && (
+                <div
+                  className="flex items-center gap-1.5 font-dm text-[11px]"
+                  style={{ color: "rgba(253,251,247,0.55)" }}
+                >
+                  <Play size={10} />
+                  <span>
+                    {course.total_recordings} {course.total_recordings === 1 ? "gravação" : "gravações"}
+                  </span>
+                </div>
+              )}
+            </div>
+          </div>
         </div>
       </Link>
-
-      <div className="p-4 flex-1 flex flex-col">
-        <Link href={`/formacao/curso/${course.slug}`} className="block group/title">
-          <h3 className="font-fraunces font-bold text-base text-[#FDFBF7] mb-1 line-clamp-2 leading-tight group-hover/title:text-white">
-            {course.title}
-          </h3>
-        </Link>
-        {course.instructor && (
-          <p className="font-dm text-xs mb-3" style={{ color: "rgba(253,251,247,0.45)" }}>
-            {course.instructor.full_name}
-          </p>
-        )}
-
-        <div className="space-y-1.5 mb-4">
-          {course.next_meeting && (
-            <div className="flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(167,139,250,0.85)" }}>
-              <Calendar size={11} />
-              <span>Próximo: {formatNextMeeting(course.next_meeting.starts_at)}</span>
-            </div>
-          )}
-          {course.total_recordings > 0 && (
-            <div className="flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.4)" }}>
-              <Play size={10} />
-              <span>{course.total_recordings} {course.total_recordings === 1 ? "gravação" : "gravações"} no acervo</span>
-            </div>
-          )}
-        </div>
-
-        <div className="mt-auto flex items-center gap-2">
-          {course.whatsapp_group_url && (
-            <a
-              href={course.whatsapp_group_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg transition-all hover:-translate-y-0.5"
-              style={{
-                background: "rgba(37,211,102,0.1)",
-                color: "#25D366",
-                border: "1px solid rgba(37,211,102,0.2)",
-              }}
-              title="Grupo do WhatsApp"
-              aria-label="Entrar no grupo do WhatsApp"
-            >
-              <MessageCircle size={14} />
-            </a>
-          )}
-          {course.meet_url && (
-            <a
-              href={course.meet_url}
-              target="_blank"
-              rel="noopener noreferrer"
-              onClick={(e) => e.stopPropagation()}
-              className="inline-flex items-center justify-center w-9 h-9 rounded-lg transition-all hover:-translate-y-0.5"
-              style={{
-                background: PURPLE_SOFT,
-                color: PURPLE,
-                border: `1px solid ${PURPLE_BORDER}`,
-              }}
-              title="Link do Meet"
-              aria-label="Abrir link do Meet"
-            >
-              <Video size={14} />
-            </a>
-          )}
-          <Link
-            href={`/formacao/curso/${course.slug}`}
-            className="ml-auto inline-flex items-center gap-1 font-dm text-xs font-semibold transition-all hover:gap-2"
-            style={{ color: PURPLE }}
-          >
-            Ver curso <ChevronRight size={12} />
-          </Link>
-        </div>
-      </div>
     </motion.div>
   );
 }
