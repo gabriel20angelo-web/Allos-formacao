@@ -17,6 +17,7 @@ interface SyncCourse {
   meet_url: string | null;
   instructor_bio: string | null;
   live_session_duration_minutes: number | null;
+  show_instructor: boolean | null;
   instructor: { id: string; full_name: string; avatar_url: string | null } | null;
   is_live_now: boolean;
   current_meeting: { id: string; starts_at: string; title: string | null; meet_url_override: string | null } | null;
@@ -284,7 +285,7 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
               >
                 {course.title}
               </h3>
-              {course.instructor && (
+              {course.instructor && course.show_instructor && (
                 <p
                   className="font-dm text-xs sm:text-sm mb-4 sm:mb-5"
                   style={{ color: "rgba(253,251,247,0.7)" }}
@@ -453,7 +454,7 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
             >
               {course.title}
             </h3>
-            {course.instructor && (
+            {course.instructor && course.show_instructor && (
               <p
                 className="font-dm text-[11px] sm:text-xs mb-2.5"
                 style={{ color: "rgba(253,251,247,0.65)" }}

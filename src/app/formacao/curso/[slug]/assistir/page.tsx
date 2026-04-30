@@ -566,7 +566,7 @@ export default function CoursePage() {
                 <h1 className="font-fraunces font-bold text-xl sm:text-2xl text-cream tracking-tight">
                   {currentLesson.title}
                 </h1>
-                {course.instructor && (
+                {course.instructor && course.show_instructor && (
                   <p className="text-sm text-cream/35 mt-1 font-dm">
                     {course.instructor.full_name}
                   </p>

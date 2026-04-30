@@ -934,7 +934,7 @@ export default function CourseOverviewPage() {
               )}
 
               {/* Instructor */}
-              {course.instructor && (
+              {course.instructor && course.show_instructor && (
                 <div>
                   <h3 className="font-fraunces font-bold text-lg text-cream mb-4">
                     {isSync ? "Sobre o(a) professor(a)" : "Instrutor"}

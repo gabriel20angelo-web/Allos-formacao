@@ -31,6 +31,7 @@ type CourseRow = {
   meet_url: string | null;
   instructor_bio: string | null;
   live_session_duration_minutes: number | null;
+  show_instructor: boolean | null;
   instructor: { id: string; full_name: string; avatar_url: string | null } | null;
 };
 
@@ -61,7 +62,7 @@ export async function GET() {
       .select(
         `id, title, slug, description, thumbnail_url, category,
          whatsapp_group_url, meet_url, instructor_bio,
-         live_session_duration_minutes,
+         live_session_duration_minutes, show_instructor,
          instructor:profiles!courses_instructor_id_fkey(id, full_name, avatar_url)`,
       )
       .eq("status", "published")
