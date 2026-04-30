@@ -218,6 +218,8 @@ export default function CalendarioPage() {
   const cronogramaCanvasRef = useRef<HTMLCanvasElement>(null);
   const logoRef = useRef<HTMLImageElement | null>(null);
   const bgRef = useRef<HTMLImageElement | null>(null);
+  const bgLightRef = useRef<HTMLImageElement | null>(null);
+  const drawCronogramaRef = useRef<(() => void) | null>(null);
 
   // WhatsApp
   const [whatsappCopied, setWhatsappCopied] = useState(false);
@@ -268,24 +270,36 @@ export default function CalendarioPage() {
     fetchAll().catch(() => setLoading(false));
   }, [fetchAll]);
 
-  // Load assets for canvas (logo, background, fonts)
+  // Load assets for canvas (logo, backgrounds, fonts)
   useEffect(() => {
+    // Cada onload dispara um redraw — drawCronograma faz early return se o
+    // canvas ainda não montou (aba diferente), então é seguro chamar sempre.
+    const triggerRedraw = () => {
+      setTimeout(() => drawCronogramaRef.current?.(), 30);
+    };
+
     const img = new window.Image();
     img.crossOrigin = "anonymous";
-    img.src = "/Logo_Allos_Light.png";
-    img.onload = () => { logoRef.current = img; };
+    img.src = "/Logo_Dark_Alternativo.png";
+    img.onload = () => { logoRef.current = img; triggerRedraw(); };
 
     const bg = new window.Image();
     bg.crossOrigin = "anonymous";
-    bg.src = "/bg_allos_teal.webp";
-    bg.onload = () => { bgRef.current = bg; };
+    bg.src = "/cronograma_bg_color.png";
+    bg.onload = () => { bgRef.current = bg; triggerRedraw(); };
 
-    // Load Cocogoose font for canvas
+    const bgL = new window.Image();
+    bgL.crossOrigin = "anonymous";
+    bgL.src = "/cronograma_bg_light.png";
+    bgL.onload = () => { bgLightRef.current = bgL; triggerRedraw(); };
+
+    // Load Cocogoose family for canvas
     const cocoBold = new FontFace("CocogoosePro", "url(/fonts/CocogoosePro.ttf)");
-    const cocoLight = new FontFace("CocogooseProSemilight", "url(/fonts/CocogooseProSemilight.ttf)");
-    Promise.all([cocoBold.load(), cocoLight.load()]).then(([b, l]) => {
-      document.fonts.add(b);
-      document.fonts.add(l);
+    const cocoSemi = new FontFace("CocogooseProSemilight", "url(/fonts/CocogooseProSemilight.ttf)");
+    const cocoLight = new FontFace("CocogooseProLight", "url(/fonts/CocogooseProLight.ttf)");
+    Promise.all([cocoBold.load(), cocoSemi.load(), cocoLight.load()]).then((fonts) => {
+      fonts.forEach((f) => document.fonts.add(f));
+      triggerRedraw();
     }).catch(() => {});
   }, []);
 
@@ -318,172 +332,259 @@ export default function CalendarioPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // ── Reproduz o design Cronograma.html: stage 1080x1080 quadrado ──
+    // Frame branco (956x712) com header preto + 5 rows iguais (SEG-SEX),
+    // coluna esquerda teal (#2E9E8F) e cell direita mármore claro. Logo
+    // dark alternativo no topo, footer "Cronograma Geral" abaixo.
+
+    const W = 1080;
+    const H = 1080;
+    canvas.width = W;
+    canvas.height = H;
+
     const activeH = [...horarios].sort((a, b) => a.ordem - b.ordem);
     const activeSlots = slots.filter((s) => s.ativo && s.atividade_nome);
 
-    const dayData: { dia: string; items: string[] }[] = [];
-    DIAS.forEach((dia, diaIdx) => {
+    const dayItemsByIdx: string[][] = DIAS.map((_, diaIdx) => {
       const items: string[] = [];
       activeH.forEach((h) => {
         const slot = activeSlots.find((s) => s.dia_semana === diaIdx && s.horario_id === h.id);
         if (slot && slot.atividade_nome) {
-          items.push(`${h.hora.replace(":00", "h")}:  ${slot.atividade_nome}`);
+          items.push(`${h.hora.replace(":00", "h").replace(":", "h")}  •  ${slot.atividade_nome}`);
         }
       });
-      if (items.length > 0) dayData.push({ dia, items });
+      return items;
     });
 
-    // ── Layout constants (1080 square, Instagram-ready) ──
-    const W = 1080;
-    const sidePad = 80;
-    const tableW = W - sidePad * 2;
-    const logoZoneH = 230;
-    const titleBarH = 52;
-    const dayColW = 180;
-    const lineH = 40;
-    const rowPadY = 18;
-    const footerZoneH = 110;
-
-    let tableBodyH = 0;
-    if (dayData.length === 0) {
-      tableBodyH = 120;
-    } else {
-      dayData.forEach((d) => { tableBodyH += rowPadY * 2 + d.items.length * lineH; });
-    }
-    const H = logoZoneH + titleBarH + tableBodyH + footerZoneH;
-
-    canvas.width = W;
-    canvas.height = H;
-
-    // ── 1. Background: texture image, cover-crop ──
+    // ── 1. Background: texture image, cover-crop centralizado ──
     if (bgRef.current) {
       const bi = bgRef.current;
-      const ir = bi.width / bi.height, cr = W / H;
+      const ir = bi.width / bi.height;
+      const cr = W / H;
       let sx = 0, sy = 0, sw = bi.width, sh = bi.height;
       if (ir > cr) { sw = bi.height * cr; sx = (bi.width - sw) / 2; }
-      else { sh = bi.width / cr; sy = 0; }
+      else { sh = bi.width / cr; sy = (bi.height - sh) / 2; }
       ctx.drawImage(bi, sx, sy, sw, sh, 0, 0, W, H);
     } else {
-      // Fallback: paint the teal manually with noise
+      // Fallback teal sólido com gradiente
       const g = ctx.createRadialGradient(W * 0.35, H * 0.3, 0, W * 0.5, H * 0.5, W * 0.8);
       g.addColorStop(0, "#35AFA0");
       g.addColorStop(0.5, "#2A9486");
       g.addColorStop(1, "#1C6B62");
       ctx.fillStyle = g;
       ctx.fillRect(0, 0, W, H);
-      // Noise
-      for (let i = 0; i < 8000; i++) {
-        ctx.fillStyle = `rgba(${Math.random() > 0.5 ? 255 : 0},${Math.random() > 0.5 ? 255 : 0},${Math.random() > 0.5 ? 255 : 0},${Math.random() * 0.015})`;
-        ctx.fillRect(Math.random() * W, Math.random() * H, 1, 1);
-      }
     }
 
-    // Very soft corner darkening
-    const vig = ctx.createRadialGradient(W * 0.4, H * 0.35, W * 0.2, W * 0.5, H * 0.5, W * 0.85);
+    // Vinheta sutil pra dar profundidade
+    const vig = ctx.createRadialGradient(W / 2, H / 2, W * 0.55, W / 2, H / 2, W * 0.85);
     vig.addColorStop(0, "rgba(0,0,0,0)");
-    vig.addColorStop(1, "rgba(0,0,0,0.08)");
+    vig.addColorStop(1, "rgba(0,0,0,0.18)");
     ctx.fillStyle = vig;
     ctx.fillRect(0, 0, W, H);
 
-    // ── 2. Logo (centered, breathing room) ──
+    // ── 2. Logo Allos Dark Alternativo (centralizado, top 54px, w 230px) ──
     if (logoRef.current) {
       const img = logoRef.current;
-      const targetW = 320;
+      const targetW = 230;
       const r = img.width / img.height;
       const lw = targetW;
       const lh = lw / r;
-      ctx.drawImage(img, (W - lw) / 2, (logoZoneH - lh) / 2, lw, lh);
+      // Drop shadow sutil
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,0.18)";
+      ctx.shadowBlur = 8;
+      ctx.shadowOffsetY = 2;
+      ctx.drawImage(img, (W - lw) / 2, 54, lw, lh);
+      ctx.restore();
     }
 
-    // ── 3. "QUADRO DE HORÁRIOS" title bar ──
-    const ty = logoZoneH;
-    ctx.fillStyle = "rgba(12,18,16,0.85)";
-    ctx.fillRect(sidePad, ty, tableW, titleBarH);
+    // ── 3. Frame (956x712 branco com borda preta 5px) ──
+    const FRAME_X = 62;
+    const FRAME_Y = 228;
+    const FRAME_W = W - 62 * 2; // 956
+    const FRAME_H = H - 228 - 140; // 712
+    const BORDER = 5;
 
+    // Sombra do frame
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.25)";
+    ctx.shadowBlur = 60;
+    ctx.shadowOffsetY = 24;
+    ctx.fillStyle = "#000";
+    ctx.fillRect(FRAME_X, FRAME_Y, FRAME_W, FRAME_H);
+    ctx.restore();
+
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(FRAME_X + BORDER, FRAME_Y + BORDER, FRAME_W - BORDER * 2, FRAME_H - BORDER * 2);
+
+    // ── 4. Header preto "QUADRO DE HORÁRIOS" (78px) ──
+    const HEADER_H = 78;
+    const headerX = FRAME_X + BORDER;
+    const headerY = FRAME_Y + BORDER;
+    const headerW = FRAME_W - BORDER * 2;
+
+    // Fundo preto com gradiente sutil
+    const headerGrad = ctx.createLinearGradient(0, headerY, 0, headerY + HEADER_H);
+    headerGrad.addColorStop(0, "#1a1a1a");
+    headerGrad.addColorStop(0.5, "#050505");
+    headerGrad.addColorStop(1, "#111");
+    ctx.fillStyle = headerGrad;
+    ctx.fillRect(headerX, headerY, headerW, HEADER_H);
+    // Highlight sutil top + sombra interior bottom
+    const headerSheen = ctx.createLinearGradient(0, headerY, 0, headerY + HEADER_H);
+    headerSheen.addColorStop(0, "rgba(255,255,255,0.05)");
+    headerSheen.addColorStop(1, "rgba(0,0,0,0.25)");
+    ctx.fillStyle = headerSheen;
+    ctx.fillRect(headerX, headerY, headerW, HEADER_H);
+
+    // Borda inferior preta
+    ctx.fillStyle = "#000";
+    ctx.fillRect(headerX, headerY + HEADER_H - BORDER, headerW, BORDER);
+
+    // Título
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = 'bold 20px CocogoosePro, "Helvetica Neue", sans-serif';
-    ctx.fillStyle = "#FDFBF7";
-    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, ty + titleBarH / 2 + 1);
+    ctx.font = 'bold 26px CocogoosePro, "Helvetica Neue", sans-serif';
+    ctx.fillStyle = "#fff";
+    // letter-spacing simulado via espaçamento (canvas 2D não suporta direto)
+    ctx.fillText("QUADRO DE HORÁRIOS", W / 2, headerY + HEADER_H / 2 + 1);
 
-    // ── 4. Table rows ──
-    let cy = logoZoneH + titleBarH;
+    // ── 5. 5 rows iguais (SEGUNDA-SEXTA) ──
+    const ROWS_TOP = headerY + HEADER_H;
+    const ROWS_H = FRAME_H - BORDER * 2 - HEADER_H;
+    const ROW_H = ROWS_H / 5;
+    const DAY_COL_W = 215;
 
-    if (dayData.length === 0) {
-      ctx.fillStyle = "rgba(0,0,0,0.18)";
-      ctx.fillRect(sidePad, cy, tableW, 120);
+    DIAS.forEach((dia, i) => {
+      const ry = ROWS_TOP + i * ROW_H;
+      const rh = ROW_H;
+      const isLast = i === DIAS.length - 1;
+
+      // ─── Day cell (esquerda, teal sólido com mármore overlay) ───
+      ctx.fillStyle = "#2E9E8F";
+      ctx.fillRect(headerX, ry, DAY_COL_W, rh);
+
+      // Highlight diagonal sutil
+      const dayHi = ctx.createRadialGradient(
+        headerX + DAY_COL_W * 0.3, ry + rh * 0.2, 0,
+        headerX + DAY_COL_W * 0.3, ry + rh * 0.2, DAY_COL_W * 1.2,
+      );
+      dayHi.addColorStop(0, "rgba(255,255,255,0.10)");
+      dayHi.addColorStop(0.6, "rgba(255,255,255,0)");
+      ctx.fillStyle = dayHi;
+      ctx.fillRect(headerX, ry, DAY_COL_W, rh);
+      const dayShadow = ctx.createRadialGradient(
+        headerX + DAY_COL_W * 0.8, ry + rh * 0.9, 0,
+        headerX + DAY_COL_W * 0.8, ry + rh * 0.9, DAY_COL_W * 1.2,
+      );
+      dayShadow.addColorStop(0, "rgba(0,0,0,0.18)");
+      dayShadow.addColorStop(0.6, "rgba(0,0,0,0)");
+      ctx.fillStyle = dayShadow;
+      ctx.fillRect(headerX, ry, DAY_COL_W, rh);
+
+      // Sobreposição mármore (bg color com multiply parcial)
+      if (bgRef.current) {
+        ctx.save();
+        ctx.globalAlpha = 0.55;
+        ctx.globalCompositeOperation = "multiply";
+        const bi = bgRef.current;
+        const targetAR = DAY_COL_W / rh;
+        const srcAR = bi.width / bi.height;
+        let sx = 0, sy = 0, sw = bi.width, sh = bi.height;
+        if (srcAR > targetAR) { sw = bi.height * targetAR; sx = (bi.width - sw) / 2; }
+        else { sh = bi.width / targetAR; sy = (bi.height - sh) / 2; }
+        ctx.drawImage(bi, sx, sy, sw, sh, headerX, ry, DAY_COL_W, rh);
+        ctx.restore();
+      }
+
+      // Borda direita preta (separa day/cell)
+      ctx.fillStyle = "#000";
+      ctx.fillRect(headerX + DAY_COL_W, ry, BORDER, rh);
+
+      // Texto do dia
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
-      ctx.font = '18px CocogooseProSemilight, "Helvetica Neue", sans-serif';
-      ctx.fillStyle = "rgba(253,251,247,0.3)";
-      ctx.fillText("Nenhum grupo cadastrado no calendário", W / 2, cy + 60);
-      cy += 120;
-    } else {
-      dayData.forEach((day) => {
-        const rh = rowPadY * 2 + day.items.length * lineH;
+      ctx.font = 'bold 26px CocogoosePro, "Helvetica Neue", sans-serif';
+      ctx.fillStyle = "#fff";
+      ctx.shadowColor = "rgba(0,0,0,0.3)";
+      ctx.shadowBlur = 4;
+      ctx.fillText(dia.toUpperCase(), headerX + DAY_COL_W / 2, ry + rh / 2 + 1);
+      ctx.shadowBlur = 0;
+      ctx.shadowColor = "transparent";
 
-        // Row background — uniform semi-transparent dark
-        ctx.fillStyle = "rgba(0,0,0,0.18)";
-        ctx.fillRect(sidePad, cy, tableW, rh);
+      // ─── Cell direita (mármore claro) ───
+      const cellX = headerX + DAY_COL_W + BORDER;
+      const cellW = headerW - DAY_COL_W - BORDER;
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(cellX, ry, cellW, rh);
 
-        // Top separator — thin white line
-        ctx.strokeStyle = "rgba(253,251,247,0.15)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(sidePad, cy + 0.5);
-        ctx.lineTo(sidePad + tableW, cy + 0.5);
-        ctx.stroke();
+      if (bgLightRef.current) {
+        const bi = bgLightRef.current;
+        const targetAR = cellW / rh;
+        const srcAR = bi.width / bi.height;
+        let sx = 0, sy = 0, sw = bi.width, sh = bi.height;
+        if (srcAR > targetAR) { sw = bi.height * targetAR; sx = (bi.width - sw) / 2; }
+        else { sh = bi.width / targetAR; sy = (bi.height - sh) / 2; }
+        ctx.drawImage(bi, sx, sy, sw, sh, cellX, ry, cellW, rh);
+      }
 
-        // Vertical separator
-        ctx.strokeStyle = "rgba(253,251,247,0.12)";
-        ctx.lineWidth = 1;
-        ctx.beginPath();
-        ctx.moveTo(sidePad + dayColW, cy);
-        ctx.lineTo(sidePad + dayColW, cy + rh);
-        ctx.stroke();
+      // Inner highlight gradient (top branco→transparente, bottom subtle dark)
+      const cellGloss = ctx.createLinearGradient(0, ry, 0, ry + rh);
+      cellGloss.addColorStop(0, "rgba(255,255,255,0.35)");
+      cellGloss.addColorStop(0.4, "rgba(255,255,255,0)");
+      cellGloss.addColorStop(0.6, "rgba(255,255,255,0)");
+      cellGloss.addColorStop(1, "rgba(0,0,0,0.04)");
+      ctx.fillStyle = cellGloss;
+      ctx.fillRect(cellX, ry, cellW, rh);
 
-        // Day label
+      // Conteúdo dinâmico: lista de items centralizados
+      const items = dayItemsByIdx[i];
+      if (items.length > 0) {
+        // Auto-fit fonte: começa em 22, decrementa até caber em rh-32
+        const maxTextH = rh - 28;
+        let fontSize = 22;
+        let lineH = fontSize * 1.3;
+        while (items.length * lineH > maxTextH && fontSize > 12) {
+          fontSize -= 1;
+          lineH = fontSize * 1.3;
+        }
+
+        const totalH = items.length * lineH;
+        const startY = ry + (rh - totalH) / 2 + lineH / 2;
+
         ctx.textAlign = "center";
         ctx.textBaseline = "middle";
-        ctx.font = 'bold 18px CocogoosePro, "Helvetica Neue", sans-serif';
-        ctx.fillStyle = "#FDFBF7";
-        ctx.fillText(day.dia.toUpperCase(), sidePad + dayColW / 2, cy + rh / 2 + 1);
-
-        // Activity items
-        ctx.textAlign = "left";
-        ctx.textBaseline = "middle";
-        day.items.forEach((item, i) => {
-          const iy = cy + rowPadY + i * lineH + lineH / 2;
-
-          // Bullet — small filled square
-          ctx.fillStyle = "#FDFBF7";
-          ctx.fillRect(sidePad + dayColW + 26, iy - 3, 6, 6);
-
-          // Text
-          ctx.font = '17px Inter, "Helvetica Neue", sans-serif';
-          ctx.fillStyle = "rgba(253,251,247,0.92)";
-          ctx.fillText(item, sidePad + dayColW + 46, iy + 1);
+        ctx.font = `500 ${fontSize}px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif`;
+        ctx.fillStyle = "#1a1a1a";
+        items.forEach((item, idx) => {
+          ctx.fillText(item, cellX + cellW / 2, startY + idx * lineH);
         });
+      }
 
-        cy += rh;
-      });
+      // Borda inferior preta entre rows
+      if (!isLast) {
+        ctx.fillStyle = "#000";
+        ctx.fillRect(headerX, ry + rh - BORDER / 2, headerW, BORDER);
+      }
+    });
 
-      // Bottom border of last row
-      ctx.strokeStyle = "rgba(253,251,247,0.15)";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(sidePad, cy + 0.5);
-      ctx.lineTo(sidePad + tableW, cy + 0.5);
-      ctx.stroke();
-    }
-
-    // ── 5. Footer ──
+    // ── 6. Footer "Cronograma Geral" (bottom 62px, branco) ──
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = '20px CocogooseProSemilight, "Helvetica Neue", sans-serif';
-    ctx.fillStyle = "rgba(46,158,143,0.75)";
-    ctx.fillText("Cronograma Geral", W / 2, H - footerZoneH / 2 + 8);
+    ctx.font = '500 30px CocogooseProSemilight, CocogoosePro, "Helvetica Neue", sans-serif';
+    ctx.fillStyle = "#fff";
+    ctx.shadowColor = "rgba(0,0,0,0.18)";
+    ctx.shadowBlur = 8;
+    ctx.shadowOffsetY = 2;
+    ctx.fillText("Cronograma Geral", W / 2, H - 62 - 15);
+    ctx.shadowBlur = 0;
+    ctx.shadowOffsetY = 0;
+    ctx.shadowColor = "transparent";
   }, [horarios, slots]);
+
+  // Mantém ref atualizada pra triggerRedraw chamar a versão mais recente
+  // sem dependência circular no useEffect dos assets.
+  drawCronogramaRef.current = drawCronograma;
 
   // Auto-draw cronograma when tab is active or data changes
   useEffect(() => {
