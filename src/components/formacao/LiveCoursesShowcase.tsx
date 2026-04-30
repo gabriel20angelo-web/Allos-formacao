@@ -176,13 +176,13 @@ export default function LiveCoursesShowcase() {
             style={{ scrollbarWidth: "none" }}
           >
             {scheduled.map((c) => (
-              <div key={c.id} className="snap-start flex-shrink-0 w-[88%] xs:w-[82%]">
+              <div key={c.id} className="snap-start flex-shrink-0 w-[60%] xs:w-[55%]">
                 <ScheduledCard course={c} />
               </div>
             ))}
           </div>
           <div className="hidden md:block max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
               {scheduled.map((c) => (
                 <ScheduledCard key={c.id} course={c} />
               ))}
@@ -346,6 +346,8 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
 }
 
 function ScheduledCard({ course }: { course: SyncCourse }) {
+  // Vertical, igual aos outros CourseCards porém um pouco maior
+  // (aspect 3/4 vs 9/13 dos regulares — mais quadrado, mais presença).
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -353,18 +355,18 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
       transition={{ duration: 0.5 }}
       className="group relative rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid rgba(139,92,246,0.25)`,
-        boxShadow: "0 12px 40px -16px rgba(139,92,246,0.25)",
+        border: `1px solid rgba(139,92,246,0.3)`,
+        boxShadow: "0 12px 40px -16px rgba(139,92,246,0.3)",
       }}
     >
       <Link href={`/formacao/curso/${course.slug}`} className="block">
-        <div className="relative w-full aspect-[16/10] overflow-hidden">
+        <div className="relative w-full aspect-[3/4] overflow-hidden">
           {course.thumbnail_url ? (
             <Image
               src={course.thumbnail_url}
               alt={course.title}
               fill
-              sizes="(max-width: 768px) 90vw, 600px"
+              sizes="(max-width: 768px) 60vw, 380px"
               className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
             />
           ) : (
@@ -374,55 +376,56 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
             />
           )}
 
-          {/* Overlay degradê pra texto */}
+          {/* Overlay degradê de baixo pra cima pro texto */}
           <div
             className="absolute inset-0"
             style={{
               background:
-                "linear-gradient(180deg, rgba(8,5,15,0.05) 0%, rgba(8,5,15,0.35) 40%, rgba(8,5,15,0.92) 100%)",
+                "linear-gradient(180deg, rgba(8,5,15,0.05) 0%, rgba(8,5,15,0.25) 45%, rgba(8,5,15,0.95) 100%)",
             }}
           />
+          {/* Glow roxo difuso */}
           <div
             className="absolute inset-0 pointer-events-none"
             style={{
-              background: "radial-gradient(circle at 90% 100%, rgba(139,92,246,0.16) 0%, transparent 55%)",
+              background: "radial-gradient(circle at 80% 100%, rgba(139,92,246,0.18) 0%, transparent 55%)",
             }}
           />
 
           {/* Badge top-left */}
-          <div className="absolute top-3 left-3 sm:top-4 sm:left-4 z-10">
+          <div className="absolute top-3 left-3 z-10">
             <span
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.14em]"
+              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.12em]"
               style={{
-                background: "rgba(139,92,246,0.85)",
+                background: "rgba(139,92,246,0.88)",
                 color: "#FFFFFF",
                 backdropFilter: "blur(10px)",
               }}
             >
-              <Play size={9} fill="#FFFFFF" />
+              <Play size={8} fill="#FFFFFF" />
               Ao vivo + Gravação
             </span>
           </div>
 
           {/* Ícones quick-access top-right */}
-          <div className="absolute top-3 right-3 sm:top-4 sm:right-4 flex items-center gap-1.5 z-10">
+          <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
             {course.whatsapp_group_url && (
               <a
                 href={course.whatsapp_group_url}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full transition-all hover:scale-110"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-all hover:scale-110"
                 style={{
-                  background: "rgba(37,211,102,0.85)",
+                  background: "rgba(37,211,102,0.9)",
                   color: "#FFFFFF",
                   backdropFilter: "blur(10px)",
-                  boxShadow: "0 4px 14px rgba(37,211,102,0.35)",
+                  boxShadow: "0 4px 14px rgba(37,211,102,0.4)",
                 }}
                 title="Grupo do WhatsApp"
                 aria-label="Entrar no grupo do WhatsApp"
               >
-                <MessageCircle size={14} />
+                <MessageCircle size={13} />
               </a>
             )}
             {course.meet_url && (
@@ -431,17 +434,17 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center w-9 h-9 rounded-full transition-all hover:scale-110"
+                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-all hover:scale-110"
                 style={{
                   background: "rgba(139,92,246,0.92)",
                   color: "#FFFFFF",
                   backdropFilter: "blur(10px)",
-                  boxShadow: "0 4px 14px rgba(139,92,246,0.4)",
+                  boxShadow: "0 4px 14px rgba(139,92,246,0.45)",
                 }}
                 title="Link do Meet"
                 aria-label="Abrir link do Meet"
               >
-                <Video size={14} />
+                <Video size={13} />
               </a>
             )}
           </div>
@@ -449,21 +452,21 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
           {/* Conteúdo bottom — sobreposto à imagem */}
           <div className="absolute left-0 right-0 bottom-0 p-4 sm:p-5 z-10">
             <h3
-              className="font-fraunces font-bold text-[#FDFBF7] line-clamp-2 leading-tight mb-1 drop-shadow-lg"
-              style={{ fontSize: "clamp(16px,1.6vw,20px)" }}
+              className="font-fraunces font-bold text-[#FDFBF7] line-clamp-2 leading-tight mb-1.5 drop-shadow-lg"
+              style={{ fontSize: "clamp(15px,1.4vw,18px)" }}
             >
               {course.title}
             </h3>
             {course.instructor && course.show_instructor && (
               <p
-                className="font-dm text-[11px] sm:text-xs mb-2.5"
-                style={{ color: "rgba(253,251,247,0.65)" }}
+                className="font-dm text-[11px] mb-2"
+                style={{ color: "rgba(253,251,247,0.6)" }}
               >
                 {course.instructor.full_name}
               </p>
             )}
 
-            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+            <div className="flex flex-col gap-1">
               {course.next_meeting && (
                 <div
                   className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
@@ -475,10 +478,10 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
               )}
               {course.total_recordings > 0 && (
                 <div
-                  className="flex items-center gap-1.5 font-dm text-[11px]"
-                  style={{ color: "rgba(253,251,247,0.55)" }}
+                  className="flex items-center gap-1.5 font-dm text-[10px]"
+                  style={{ color: "rgba(253,251,247,0.5)" }}
                 >
-                  <Play size={10} />
+                  <Play size={9} />
                   <span>
                     {course.total_recordings} {course.total_recordings === 1 ? "gravação" : "gravações"}
                   </span>
