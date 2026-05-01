@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
 import WhatsAppTemplates from "@/components/admin/WhatsAppTemplates";
 import EventosTab from "@/components/admin/calendario/EventosTab";
@@ -1712,24 +1712,19 @@ export default function CalendarioPage() {
         {subTab === "eventos" && <EventosTab />}
       </AnimatePresence>
 
-      {/* Reset modal */}
-      <Modal open={resetModalOpen} onClose={() => setResetModalOpen(false)} title="Nova Semana">
-        <div className="space-y-4">
-          <p className="text-sm font-dm" style={{ color: "rgba(253,251,247,0.7)" }}>
-            Tem certeza que deseja iniciar uma nova semana? Todos os status dos slots ativos serão
-            resetados para <strong style={{ color: "#9ca3af" }}>&quot;Pendente&quot;</strong>.
+      <ConfirmDialog
+        open={resetModalOpen}
+        onClose={() => setResetModalOpen(false)}
+        onConfirm={handleNovaSemana}
+        title="Nova Semana"
+        description={
+          <p className="font-dm text-cream-70">
+            Tem certeza que deseja iniciar uma nova semana? Todos os status dos slots
+            ativos serão resetados para{" "}
+            <strong className="text-[#9ca3af]">&quot;Pendente&quot;</strong>.
           </p>
-          <div className="flex gap-3 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => setResetModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button variant="primary" size="sm" onClick={handleNovaSemana}>
-              <RefreshCw className="h-4 w-4" />
-              Confirmar
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        }
+      />
 
     </div>
   );

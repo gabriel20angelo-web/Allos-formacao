@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
 import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import { toast } from "sonner";
 import {
   Plus,
@@ -248,39 +248,23 @@ export default function EventosTab() {
         )}
       </div>
 
-      {/* Delete confirmation modal */}
-      <Modal
+      <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
+        onConfirm={() => deleteTarget && handleDelete(deleteTarget.id)}
         title="Remover Evento"
-      >
-        <div className="space-y-4">
-          <p className="text-sm font-dm text-cream-70">
+        confirmLabel="Remover"
+        variant="danger"
+        description={
+          <p className="font-dm">
             Deseja remover o evento{" "}
             <strong className="text-cream">
               &quot;{deleteTarget?.titulo}&quot;
             </strong>
             ? Esta ação não pode ser desfeita.
           </p>
-          <div className="flex gap-3 justify-end">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => setDeleteTarget(null)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => deleteTarget && handleDelete(deleteTarget.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Remover
-            </Button>
-          </div>
-        </div>
-      </Modal>
+        }
+      />
     </motion.div>
   );
 }

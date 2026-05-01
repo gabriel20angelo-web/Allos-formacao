@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
-import Modal from "@/components/ui/Modal";
+import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
 import {
   Plus,
@@ -978,45 +978,42 @@ export default function AdminCursosPage() {
         </div>
       </div>
 
-      {/* Archive confirmation modal */}
-      <Modal
+      <ConfirmDialog
         open={!!archiveTarget}
         onClose={() => setArchiveTarget(null)}
+        onConfirm={archiveCourse}
         title="Arquivar curso"
-      >
-        {archiveTarget && (
-          <div className="space-y-4">
-            <p className="text-sm text-cream/50">
-              Tem certeza que deseja arquivar <span className="font-medium text-cream">{archiveTarget.title}</span>?
+        confirmLabel="Arquivar"
+        variant="danger"
+        description={
+          archiveTarget && (
+            <p>
+              Tem certeza que deseja arquivar{" "}
+              <span className="font-medium text-cream">{archiveTarget.title}</span>?
               O curso não aparecerá mais no catálogo.
             </p>
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setArchiveTarget(null)}>Cancelar</Button>
-              <Button variant="danger" onClick={archiveCourse}>Arquivar</Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+          )
+        }
+      />
 
-      {/* Delete confirmation modal */}
-      <Modal
+      <ConfirmDialog
         open={!!deleteTarget}
         onClose={() => setDeleteTarget(null)}
+        onConfirm={deleteCourse}
         title="Apagar curso"
-      >
-        {deleteTarget && (
-          <div className="space-y-4">
-            <p className="text-sm text-cream/50">
-              Tem certeza que deseja apagar permanentemente <span className="font-medium text-red-400">{deleteTarget.title}</span>?
-              Todos os módulos, aulas, matrículas e dados relacionados serão perdidos. Esta ação não pode ser desfeita.
+        confirmLabel="Apagar permanentemente"
+        variant="danger"
+        description={
+          deleteTarget && (
+            <p>
+              Tem certeza que deseja apagar permanentemente{" "}
+              <span className="font-medium text-red-400">{deleteTarget.title}</span>?
+              Todos os módulos, aulas, matrículas e dados relacionados serão perdidos.
+              Esta ação não pode ser desfeita.
             </p>
-            <div className="flex justify-end gap-3">
-              <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
-              <Button variant="danger" onClick={deleteCourse}>Apagar permanentemente</Button>
-            </div>
-          </div>
-        )}
-      </Modal>
+          )
+        }
+      />
     </div>
   );
 }
