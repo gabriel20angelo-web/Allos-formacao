@@ -23,7 +23,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   metadataBase: new URL("https://allos.org.br"),
-  title: "Allos Formação",
+  title: "Formação Allos",
   description:
     "Plataforma de cursos e formacao continuada da Associacao Allos. Psicologia, pesquisa e formacao de excelencia.",
 };

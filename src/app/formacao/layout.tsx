@@ -7,7 +7,7 @@ import type { Metadata } from "next";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Allos Formação",
+  title: "Formação Allos",
   description:
     "Explore nossos cursos de psicologia, pesquisa e formação continuada. Cursos gravados, ao vivo e formação síncrona contínua pela Associação Allos.",
   keywords: [
@@ -15,15 +15,15 @@ export const metadata: Metadata = {
     "psicoterapia", "Allos", "certificado", "clínica",
   ],
   openGraph: {
-    title: "Allos Formação",
+    title: "Formação Allos",
     description: "Formação clínica crítica e existencial. Cursos de psicologia e áreas correlatas pela Associação Allos.",
     type: "website",
     locale: "pt_BR",
-    siteName: "Allos Formação",
+    siteName: "Formação Allos",
   },
   twitter: {
     card: "summary_large_image",
-    title: "Allos Formação",
+    title: "Formação Allos",
     description: "Formação clínica crítica e existencial. Cursos pela Associação Allos.",
   },
 };
