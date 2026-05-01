@@ -6,6 +6,7 @@ import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import WhatsAppTemplates from "@/components/admin/WhatsAppTemplates";
+import EventosTab from "@/components/admin/calendario/EventosTab";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -38,7 +39,6 @@ import type {
   FormacaoAlocacao,
   CertificadoCondutor,
   CertificadoAtividade,
-  CertificadoEvento,
   FormacaoCronograma,
 } from "@/types";
 
@@ -187,7 +187,6 @@ export default function CalendarioPage() {
   const [alocacoes, setAlocacoes] = useState<FormacaoAlocacao[]>([]);
   const [condutores, setCondutores] = useState<CertificadoCondutor[]>([]);
   const [atividades, setAtividades] = useState<CertificadoAtividade[]>([]);
-  const [eventos, setEventos] = useState<CertificadoEvento[]>([]);
   const [config, setConfig] = useState<FormacaoCronograma | null>(null);
 
   // UI state
@@ -208,9 +207,6 @@ export default function CalendarioPage() {
   const [savingQuorum, setSavingQuorum] = useState(false);
 
   // Eventos tab
-  const [eventoForm, setEventoForm] = useState({ titulo: "", descricao: "", link: "", data_inicio: "", data_fim: "" });
-  const [addingEvento, setAddingEvento] = useState(false);
-  const [deleteEventoTarget, setDeleteEventoTarget] = useState<CertificadoEvento | null>(null);
 
   // Cronograma canvas
   const cronogramaCanvasRef = useRef<HTMLCanvasElement>(null);
@@ -231,13 +227,12 @@ export default function CalendarioPage() {
     // antigo demais. A query já volta ordenada DESC pra reduzir lógica
     // client-side.
     const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
-    const [hRes, sRes, aRes, cRes, atRes, eRes, cfgRes, pRes] = await Promise.all([
+    const [hRes, sRes, aRes, cRes, atRes, cfgRes, pRes] = await Promise.all([
       supabase.from("formacao_horarios").select("*").eq("ativo", true).order("ordem"),
       supabase.from("formacao_slots").select("*, formacao_horarios(hora, ordem)"),
       supabase.from("formacao_alocacoes").select("*, certificado_condutores(id, nome, telefone)"),
       supabase.from("certificado_condutores").select("*").eq("ativo", true).order("nome"),
       supabase.from("certificado_atividades").select("*").eq("ativo", true).order("nome"),
-      supabase.from("certificado_eventos").select("*").order("data_inicio", { ascending: false }),
       supabase.from("formacao_cronograma").select("*").limit(1).single(),
       supabase
         .from("formacao_meet_presencas")
@@ -251,7 +246,6 @@ export default function CalendarioPage() {
     if (aRes.data) setAlocacoes(aRes.data);
     if (cRes.data) setCondutores(cRes.data);
     if (atRes.data) setAtividades(atRes.data);
-    if (eRes.data) setEventos(eRes.data);
     if (cfgRes.data) setConfig(cfgRes.data);
     if (pRes.data) {
       // Como vem ordenado DESC, a primeira ocorrência por slot_id é a mais recente.
@@ -1002,49 +996,6 @@ export default function CalendarioPage() {
     if (r3.error) { toast.error("Erro ao reordenar."); setHorarios(horarios); return; }
   }
 
-  // ─── Evento CRUD ──────────────────────────────────────────────────────────
-  async function handleAddEvento() {
-    if (!eventoForm.titulo.trim() || !eventoForm.data_inicio || !eventoForm.data_fim) {
-      toast.error("Preencha título, data de início e data de fim.");
-      return;
-    }
-    setAddingEvento(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("certificado_eventos")
-      .insert({
-        titulo: eventoForm.titulo.trim(),
-        descricao: eventoForm.descricao.trim() || null,
-        link: eventoForm.link.trim() || null,
-        data_inicio: eventoForm.data_inicio,
-        data_fim: eventoForm.data_fim,
-        ativo: true,
-      })
-      .select("*")
-      .single();
-    if (error || !data) { toast.error("Erro ao criar evento."); setAddingEvento(false); return; }
-    setEventos((prev) => [data, ...prev]);
-    setEventoForm({ titulo: "", descricao: "", link: "", data_inicio: "", data_fim: "" });
-    setAddingEvento(false);
-    toast.success("Evento criado!");
-  }
-
-  async function toggleEvento(id: string, ativo: boolean) {
-    const supabase = createClient();
-    const { error } = await supabase.from("certificado_eventos").update({ ativo }).eq("id", id);
-    if (error) { toast.error("Erro ao atualizar evento."); return; }
-    setEventos((prev) => prev.map((e) => (e.id === id ? { ...e, ativo } : e)));
-  }
-
-  async function deleteEvento(id: string) {
-    const supabase = createClient();
-    const { error } = await supabase.from("certificado_eventos").delete().eq("id", id);
-    if (error) { toast.error("Erro ao remover evento."); return; }
-    setEventos((prev) => prev.filter((e) => e.id !== id));
-    setDeleteEventoTarget(null);
-    toast.success("Evento removido!");
-  }
-
   // ─── Stats ────────────────────────────────────────────────────────────────
   const activeSlots = slots.filter((s) => s.ativo);
   const stats = {
@@ -1758,167 +1709,7 @@ export default function CalendarioPage() {
           </motion.div>
         )}
 
-        {subTab === "eventos" && (
-          <motion.div
-            key="eventos"
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -12 }}
-            transition={{ duration: 0.2 }}
-            className="space-y-5"
-          >
-            {/* Create form */}
-            <div
-              className="p-5 rounded-xl space-y-4"
-              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-            >
-              <h3 className="font-fraunces font-semibold text-base" style={{ color: "#FDFBF7" }}>
-                Novo Evento
-              </h3>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                <input
-                  type="text"
-                  placeholder="Título"
-                  value={eventoForm.titulo}
-                  onChange={(e) => setEventoForm((f) => ({ ...f, titulo: e.target.value }))}
-                  className="px-3 py-2 rounded-lg text-sm font-dm col-span-full"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "#FDFBF7",
-                  }}
-                />
-                <input
-                  type="text"
-                  placeholder="Descrição (opcional)"
-                  value={eventoForm.descricao}
-                  onChange={(e) => setEventoForm((f) => ({ ...f, descricao: e.target.value }))}
-                  className="px-3 py-2 rounded-lg text-sm font-dm col-span-full"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "#FDFBF7",
-                  }}
-                />
-                <input
-                  type="url"
-                  placeholder="Link do evento (YouTube, Meet, etc.)"
-                  value={eventoForm.link}
-                  onChange={(e) => setEventoForm((f) => ({ ...f, link: e.target.value }))}
-                  className="px-3 py-2 rounded-lg text-sm font-dm col-span-full"
-                  style={{
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    color: "#FDFBF7",
-                  }}
-                />
-                <div className="space-y-1">
-                  <label className="text-xs font-dm" style={{ color: "rgba(253,251,247,0.4)" }}>Início</label>
-                  <input
-                    type="datetime-local"
-                    value={eventoForm.data_inicio}
-                    onChange={(e) => setEventoForm((f) => ({ ...f, data_inicio: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm font-dm"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "#FDFBF7",
-                      colorScheme: "dark",
-                    }}
-                  />
-                </div>
-                <div className="space-y-1">
-                  <label className="text-xs font-dm" style={{ color: "rgba(253,251,247,0.4)" }}>Fim</label>
-                  <input
-                    type="datetime-local"
-                    value={eventoForm.data_fim}
-                    onChange={(e) => setEventoForm((f) => ({ ...f, data_fim: e.target.value }))}
-                    className="w-full px-3 py-2 rounded-lg text-sm font-dm"
-                    style={{
-                      background: "rgba(255,255,255,0.05)",
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "#FDFBF7",
-                      colorScheme: "dark",
-                    }}
-                  />
-                </div>
-              </div>
-              <Button size="sm" onClick={handleAddEvento} loading={addingEvento}>
-                <Plus className="h-4 w-4" />
-                Criar Evento
-              </Button>
-            </div>
-
-            {/* Events list */}
-            <div className="space-y-2">
-              {eventos.map((evento) => (
-                <motion.div
-                  key={evento.id}
-                  layout
-                  className="flex items-center justify-between px-4 py-3 rounded-xl"
-                  style={{
-                    background: "rgba(255,255,255,0.03)",
-                    border: "1px solid rgba(255,255,255,0.06)",
-                    opacity: evento.ativo ? 1 : 0.5,
-                  }}
-                >
-                  <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2">
-                      <CalendarDays className="h-4 w-4 flex-shrink-0" style={{ color: "#C84B31" }} />
-                      <span className="text-sm font-dm font-semibold truncate" style={{ color: "#FDFBF7" }}>
-                        {evento.titulo}
-                      </span>
-                    </div>
-                    {evento.descricao && (
-                      <p className="text-xs font-dm mt-0.5 ml-6 truncate" style={{ color: "rgba(253,251,247,0.4)" }}>
-                        {evento.descricao}
-                      </p>
-                    )}
-                    <div className="flex gap-3 ml-6 mt-1">
-                      <span className="text-[10px] font-dm" style={{ color: "rgba(253,251,247,0.3)" }}>
-                        Início: {new Date(evento.data_inicio).toLocaleString("pt-BR")}
-                      </span>
-                      <span className="text-[10px] font-dm" style={{ color: "rgba(253,251,247,0.3)" }}>
-                        Fim: {new Date(evento.data_fim).toLocaleString("pt-BR")}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Toggle ativo */}
-                    <button
-                      onClick={() => toggleEvento(evento.id, !evento.ativo)}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors"
-                      style={{
-                        background: evento.ativo ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.05)",
-                        color: evento.ativo ? "#22c55e" : "rgba(253,251,247,0.4)",
-                        border: "1px solid rgba(255,255,255,0.06)",
-                      }}
-                    >
-                      {evento.ativo ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                      {evento.ativo ? "Ativo" : "Inativo"}
-                    </button>
-                    {/* Delete */}
-                    <button
-                      onClick={() => setDeleteEventoTarget(evento)}
-                      className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
-                    >
-                      <Trash2 className="h-4 w-4" style={{ color: "rgba(239,68,68,0.6)" }} />
-                    </button>
-                  </div>
-                </motion.div>
-              ))}
-
-              {eventos.length === 0 && (
-                <div className="text-center py-16">
-                  <CalendarDays className="h-8 w-8 mx-auto mb-3" style={{ color: "rgba(253,251,247,0.15)" }} />
-                  <p className="text-sm font-dm" style={{ color: "rgba(253,251,247,0.4)" }}>
-                    Nenhum evento cadastrado.
-                  </p>
-                </div>
-              )}
-            </div>
-          </motion.div>
-        )}
+        {subTab === "eventos" && <EventosTab />}
       </AnimatePresence>
 
       {/* Reset modal */}
@@ -1940,33 +1731,6 @@ export default function CalendarioPage() {
         </div>
       </Modal>
 
-      {/* Delete evento modal */}
-      <Modal
-        open={!!deleteEventoTarget}
-        onClose={() => setDeleteEventoTarget(null)}
-        title="Remover Evento"
-      >
-        <div className="space-y-4">
-          <p className="text-sm font-dm" style={{ color: "rgba(253,251,247,0.7)" }}>
-            Deseja remover o evento{" "}
-            <strong style={{ color: "#FDFBF7" }}>&quot;{deleteEventoTarget?.titulo}&quot;</strong>?
-            Esta ação não pode ser desfeita.
-          </p>
-          <div className="flex gap-3 justify-end">
-            <Button variant="ghost" size="sm" onClick={() => setDeleteEventoTarget(null)}>
-              Cancelar
-            </Button>
-            <Button
-              variant="danger"
-              size="sm"
-              onClick={() => deleteEventoTarget && deleteEvento(deleteEventoTarget.id)}
-            >
-              <Trash2 className="h-4 w-4" />
-              Remover
-            </Button>
-          </div>
-        </div>
-      </Modal>
     </div>
   );
 }
