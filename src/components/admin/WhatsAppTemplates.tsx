@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
+import EmptyState from "@/components/ui/EmptyState";
+import LoadingState from "@/components/ui/LoadingState";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
@@ -170,24 +172,15 @@ export default function WhatsAppTemplates() {
       </p>
 
       {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-8 text-xs font-dm text-cream-30">
-          <Loader2 className="h-4 w-4 animate-spin mr-2" />
-          Carregando...
-        </div>
-      )}
+      {loading && <LoadingState />}
 
       {/* Empty state */}
       {!loading && templates.length === 0 && (
-        <div className="text-center py-10 rounded-lg bg-black/20">
-          <MessageCircle className="h-8 w-8 mx-auto mb-3 text-cream/20" />
-          <p className="text-sm font-dm mb-1 text-cream-50">
-            Nenhuma mensagem salva ainda
-          </p>
-          <p className="text-xs font-dm text-cream-30">
-            Clique em &quot;Nova&quot; pra criar a primeira.
-          </p>
-        </div>
+        <EmptyState
+          icon={MessageCircle}
+          title="Nenhuma mensagem salva ainda"
+          description={"Clique em \u201cNova\u201d pra criar a primeira."}
+        />
       )}
 
       {/* List */}

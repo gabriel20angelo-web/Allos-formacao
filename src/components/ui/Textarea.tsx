@@ -24,33 +24,29 @@ const Textarea = forwardRef<HTMLTextAreaElement, TextareaProps>(
         <textarea
           ref={ref}
           id={textareaId}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${textareaId}-error` : undefined}
           className={`
             w-full px-4 py-2.5
             rounded-[10px]
-            text-cream placeholder:text-cream/45
+            bg-white/5 text-cream-90 placeholder:text-cream/45
             transition-all duration-250 ease-out
             disabled:opacity-40 disabled:cursor-not-allowed
             resize-y min-h-[100px]
-            ${error ? "border-red-400/60" : ""}
+            outline-none
+            border-[1.5px]
+            ${error
+              ? "border-red-400/40 focus:border-red-400/60 focus:ring-2 focus:ring-red-400/10"
+              : "border-border-soft-2 focus:border-accent/50 focus:ring-[3px] focus:ring-accent/10"}
             ${className}
           `}
-          style={{
-            background: "rgba(255,255,255,0.04)",
-            border: `1.5px solid ${error ? "rgba(248,113,113,0.4)" : "rgba(255,255,255,0.08)"}`,
-            color: "rgba(253,251,247,0.9)",
-          }}
-          onFocus={(e) => {
-            e.currentTarget.style.borderColor = "rgba(200,75,49,0.5)";
-            e.currentTarget.style.boxShadow = "0 0 0 3px rgba(200,75,49,0.12)";
-            e.currentTarget.style.outline = "none";
-          }}
-          onBlur={(e) => {
-            e.currentTarget.style.borderColor = error ? "rgba(248,113,113,0.4)" : "rgba(255,255,255,0.08)";
-            e.currentTarget.style.boxShadow = "none";
-          }}
           {...props}
         />
-        {error && <p className="text-xs text-red-400">{error}</p>}
+        {error && (
+          <p id={`${textareaId}-error`} className="text-xs text-red-400">
+            {error}
+          </p>
+        )}
       </div>
     );
   }
