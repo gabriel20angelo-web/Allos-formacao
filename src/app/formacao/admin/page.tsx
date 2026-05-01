@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils/format";
@@ -16,10 +16,10 @@ import StatCard from "@/components/admin/dashboard/StatCard";
 import HintButton from "@/components/admin/dashboard/HintButton";
 import MiniBarChart from "@/components/admin/dashboard/MiniBarChart";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
+import AdminNotesSection from "@/components/admin/dashboard/AdminNotesSection";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
-import { toast } from "sonner";
 import {
   BookOpen,
   Users,
@@ -38,11 +38,7 @@ import {
   Activity,
   BarChart3,
   Flame,
-  StickyNote,
   Plus,
-  Trash2,
-  Save,
-  X,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════
@@ -67,14 +63,6 @@ interface ActivityEvent {
   courseTitle: string;
   rating?: number;
   timestamp: string;
-}
-
-interface AdminNote {
-  id: string;
-  user_id: string;
-  content: string;
-  created_at: string;
-  updated_at: string;
 }
 
 // ─── Tipos locais pras queries Supabase ─────────────────────────────────
@@ -213,13 +201,6 @@ export default function AdminDashboard() {
     participantesUnicos: number;
     tendencia: number;
   } | null>(null);
-
-  // ── Admin Notes ──
-  const [notes, setNotes] = useState<AdminNote[]>([]);
-  const [newNoteText, setNewNoteText] = useState("");
-  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
-  const [editingNoteText, setEditingNoteText] = useState("");
-  const [notesLoading, setNotesLoading] = useState(false);
 
   // ═══════════════════════════════════════════════════════════
   // Data fetching: Async dashboard stats
@@ -1074,83 +1055,6 @@ export default function AdminDashboard() {
     }
     if (profile) fetchQuorum();
   }, [profile]);
-
-  // ═══════════════════════════════════════════════════════════
-  // Data fetching: Admin Notes
-  // ═══════════════════════════════════════════════════════════
-
-  const fetchNotes = useCallback(async () => {
-    if (!profile) return;
-    setNotesLoading(true);
-    try {
-      const supabase = createClient();
-      const { data, error } = await supabase
-        .from("admin_notes")
-        .select("*")
-        .eq("user_id", profile.id)
-        .order("updated_at", { ascending: false });
-      if (error) throw error;
-      setNotes(data || []);
-    } catch {
-      // table may not exist yet
-    } finally {
-      setNotesLoading(false);
-    }
-  }, [profile]);
-
-  useEffect(() => {
-    fetchNotes();
-  }, [fetchNotes]);
-
-  const addNote = async () => {
-    if (!profile || !newNoteText.trim()) return;
-    try {
-      const supabase = createClient();
-      const { error } = await supabase.from("admin_notes").insert({
-        user_id: profile.id,
-        content: newNoteText.trim(),
-      });
-      if (error) throw error;
-      setNewNoteText("");
-      toast.success("Nota adicionada");
-      fetchNotes();
-    } catch {
-      toast.error("Erro ao adicionar nota");
-    }
-  };
-
-  const updateNote = async (id: string) => {
-    if (!editingNoteText.trim()) return;
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("admin_notes")
-        .update({ content: editingNoteText.trim(), updated_at: new Date().toISOString() })
-        .eq("id", id);
-      if (error) throw error;
-      setEditingNoteId(null);
-      setEditingNoteText("");
-      toast.success("Nota atualizada");
-      fetchNotes();
-    } catch {
-      toast.error("Erro ao atualizar nota");
-    }
-  };
-
-  const deleteNote = async (id: string) => {
-    try {
-      const supabase = createClient();
-      const { error } = await supabase
-        .from("admin_notes")
-        .delete()
-        .eq("id", id);
-      if (error) throw error;
-      toast.success("Nota removida");
-      fetchNotes();
-    } catch {
-      toast.error("Erro ao remover nota");
-    }
-  };
 
   // ═══════════════════════════════════════════════════════════
   // CSV Export (sync mode)
@@ -2920,173 +2824,7 @@ export default function AdminDashboard() {
         </motion.div>
       )}
 
-      {/* ════════════════════════════════════════════════════════
-          ADMIN NOTES (both modes)
-         ════════════════════════════════════════════════════════ */}
-      <motion.div
-        initial={{ opacity: 0, y: 16 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 1.4, duration: 0.4 }}
-        className="mt-8"
-      >
-        <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <StickyNote
-              className="h-4 w-4"
-              style={{ color: "#D4854A" }}
-            />
-            <h3 className="font-fraunces font-bold text-base text-cream">
-              Notas do Admin
-            </h3>
-          </div>
-
-          {/* Add new note */}
-          <div className="flex gap-2 mb-4">
-            <textarea
-              value={newNoteText}
-              onChange={(e) => setNewNoteText(e.target.value)}
-              placeholder="Adicionar uma nota..."
-              className="flex-1 font-dm text-sm text-cream bg-transparent rounded-[10px] px-3 py-2 resize-none placeholder:text-cream/20 focus:outline-none"
-              style={{
-                border: "1px solid rgba(255,255,255,0.08)",
-                minHeight: "60px",
-              }}
-              onKeyDown={(e) => {
-                if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-                  addNote();
-                }
-              }}
-            />
-            <button
-              onClick={addNote}
-              disabled={!newNoteText.trim()}
-              className="self-end flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-[8px] transition-all disabled:opacity-30"
-              style={{
-                background: "rgba(200,75,49,0.12)",
-                color: "#C84B31",
-              }}
-            >
-              <Plus className="h-3.5 w-3.5" />
-              Adicionar
-            </button>
-          </div>
-
-          {/* Notes list */}
-          {notesLoading ? (
-            <div className="space-y-2">
-              <Skeleton className="h-16" />
-              <Skeleton className="h-16" />
-            </div>
-          ) : notes.length > 0 ? (
-            <div className="space-y-2">
-              {notes.map((note) => (
-                <div
-                  key={note.id}
-                  className="px-3 py-2.5 rounded-[10px] group"
-                  style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid rgba(255,255,255,0.04)",
-                  }}
-                >
-                  {editingNoteId === note.id ? (
-                    <div className="space-y-2">
-                      <textarea
-                        value={editingNoteText}
-                        onChange={(e) =>
-                          setEditingNoteText(e.target.value)
-                        }
-                        className="w-full font-dm text-sm text-cream bg-transparent rounded-[8px] px-2 py-1.5 resize-none focus:outline-none"
-                        style={{
-                          border:
-                            "1px solid rgba(200,75,49,0.2)",
-                          minHeight: "60px",
-                        }}
-                        autoFocus
-                        onKeyDown={(e) => {
-                          if (
-                            e.key === "Enter" &&
-                            (e.metaKey || e.ctrlKey)
-                          ) {
-                            updateNote(note.id);
-                          }
-                          if (e.key === "Escape") {
-                            setEditingNoteId(null);
-                            setEditingNoteText("");
-                          }
-                        }}
-                      />
-                      <div className="flex gap-1.5">
-                        <button
-                          onClick={() => updateNote(note.id)}
-                          className="flex items-center gap-1 font-dm text-[11px] px-2 py-1 rounded-md transition-all"
-                          style={{
-                            background:
-                              "rgba(46,158,143,0.12)",
-                            color: "#2E9E8F",
-                          }}
-                        >
-                          <Save className="h-3 w-3" />
-                          Salvar
-                        </button>
-                        <button
-                          onClick={() => {
-                            setEditingNoteId(null);
-                            setEditingNoteText("");
-                          }}
-                          className="flex items-center gap-1 font-dm text-[11px] px-2 py-1 rounded-md text-cream/40 hover:text-cream/60 transition-all"
-                        >
-                          <X className="h-3 w-3" />
-                          Cancelar
-                        </button>
-                      </div>
-                    </div>
-                  ) : (
-                    <>
-                      <p className="font-dm text-sm text-cream/70 leading-relaxed whitespace-pre-wrap">
-                        {note.content}
-                      </p>
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="font-dm text-[10px] text-cream/20">
-                          {new Date(
-                            note.updated_at || note.created_at
-                          ).toLocaleDateString("pt-BR", {
-                            day: "2-digit",
-                            month: "short",
-                            year: "numeric",
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                        <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <button
-                            onClick={() => {
-                              setEditingNoteId(note.id);
-                              setEditingNoteText(note.content);
-                            }}
-                            className="font-dm text-[10px] px-1.5 py-0.5 rounded text-cream/30 hover:text-cream/60 hover:bg-white/[.03] transition-all"
-                          >
-                            Editar
-                          </button>
-                          <button
-                            onClick={() => deleteNote(note.id)}
-                            className="font-dm text-[10px] px-1.5 py-0.5 rounded text-red-400/40 hover:text-red-400 hover:bg-red-400/[.05] transition-all"
-                          >
-                            <Trash2 className="h-3 w-3" />
-                          </button>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              ))}
-            </div>
-          ) : (
-            <p className="text-xs text-cream/25 text-center py-4 font-dm">
-              Nenhuma nota ainda. Use o campo acima para adicionar lembretes.
-            </p>
-          )}
-        </Card>
-      </motion.div>
+      {profile && <AdminNotesSection userId={profile.id} />}
     </div>
   );
 }
