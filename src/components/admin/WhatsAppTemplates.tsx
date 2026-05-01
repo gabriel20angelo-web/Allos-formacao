@@ -1,0 +1,352 @@
+"use client";
+
+import { useState, useEffect, useRef, useCallback } from "react";
+import { createClient } from "@/lib/supabase/client";
+import { useAuth } from "@/hooks/useAuth";
+import Button from "@/components/ui/Button";
+import { motion, AnimatePresence } from "framer-motion";
+import {
+  Plus,
+  Copy,
+  Check,
+  Trash2,
+  MessageCircle,
+  Loader2,
+} from "lucide-react";
+import { toast } from "sonner";
+import type { WhatsAppTemplate } from "@/types";
+
+type SaveState = "idle" | "saving" | "saved";
+
+export default function WhatsAppTemplates() {
+  const { user } = useAuth();
+  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [creating, setCreating] = useState(false);
+  const [copiedId, setCopiedId] = useState<string | null>(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [saveState, setSaveState] = useState<Record<string, SaveState>>({});
+
+  // debounce timers per template id; clears on unmount
+  const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
+
+  // ─── Fetch ────────────────────────────────────────────────────────────────
+  useEffect(() => {
+    if (!user) return;
+    const supabase = createClient();
+    supabase
+      .from("whatsapp_templates")
+      .select("*")
+      .eq("user_id", user.id)
+      .order("created_at", { ascending: true })
+      .then(({ data }) => {
+        if (data) setTemplates(data as WhatsAppTemplate[]);
+      })
+      .then(() => setLoading(false), () => setLoading(false));
+  }, [user]);
+
+  // Cleanup pending debounce timers no unmount pra não dispararem em
+  // componente desmontado.
+  useEffect(() => {
+    const timers = saveTimers.current;
+    return () => {
+      Object.values(timers).forEach(clearTimeout);
+    };
+  }, []);
+
+  // ─── Create ───────────────────────────────────────────────────────────────
+  async function handleCreate() {
+    if (!user || creating) return;
+    setCreating(true);
+    const supabase = createClient();
+    const { data, error } = await supabase
+      .from("whatsapp_templates")
+      .insert({ user_id: user.id, titulo: "", mensagem: "" })
+      .select("*")
+      .single();
+    setCreating(false);
+    if (error || !data) {
+      toast.error("Erro ao criar mensagem");
+      return;
+    }
+    setTemplates((prev) => [...prev, data as WhatsAppTemplate]);
+  }
+
+  // ─── Auto-save (debounce 600ms) ───────────────────────────────────────────
+  const scheduleSave = useCallback(
+    (id: string, fields: Partial<Pick<WhatsAppTemplate, "titulo" | "mensagem">>) => {
+      if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
+      setSaveState((s) => ({ ...s, [id]: "saving" }));
+      saveTimers.current[id] = setTimeout(async () => {
+        const supabase = createClient();
+        const { error } = await supabase
+          .from("whatsapp_templates")
+          .update({ ...fields, updated_at: new Date().toISOString() })
+          .eq("id", id);
+        if (error) {
+          setSaveState((s) => ({ ...s, [id]: "idle" }));
+          toast.error("Erro ao salvar");
+          return;
+        }
+        setSaveState((s) => ({ ...s, [id]: "saved" }));
+        // Volta o badge pra idle após 1.5s pra não ficar permanente.
+        setTimeout(() => {
+          setSaveState((s) => (s[id] === "saved" ? { ...s, [id]: "idle" } : s));
+        }, 1500);
+      }, 600);
+    },
+    []
+  );
+
+  function updateField(
+    id: string,
+    field: "titulo" | "mensagem",
+    value: string
+  ) {
+    setTemplates((prev) =>
+      prev.map((t) => (t.id === id ? { ...t, [field]: value } : t))
+    );
+    scheduleSave(id, { [field]: value });
+  }
+
+  // ─── Copy ─────────────────────────────────────────────────────────────────
+  async function handleCopy(t: WhatsAppTemplate) {
+    if (!t.mensagem.trim()) {
+      toast.error("Mensagem vazia");
+      return;
+    }
+    try {
+      await navigator.clipboard.writeText(t.mensagem);
+      setCopiedId(t.id);
+      toast.success("Copiado!");
+      setTimeout(() => setCopiedId((c) => (c === t.id ? null : c)), 1500);
+    } catch {
+      toast.error("Erro ao copiar");
+    }
+  }
+
+  // ─── Delete ───────────────────────────────────────────────────────────────
+  async function handleDelete(id: string) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from("whatsapp_templates")
+      .delete()
+      .eq("id", id);
+    if (error) {
+      toast.error("Erro ao excluir");
+      return;
+    }
+    if (saveTimers.current[id]) {
+      clearTimeout(saveTimers.current[id]);
+      delete saveTimers.current[id];
+    }
+    setTemplates((prev) => prev.filter((t) => t.id !== id));
+    setConfirmDeleteId(null);
+    toast.success("Mensagem excluída");
+  }
+
+  // ─── Render ───────────────────────────────────────────────────────────────
+  return (
+    <div
+      className="rounded-xl p-5"
+      style={{
+        background: "rgba(255,255,255,0.03)",
+        border: "1px solid rgba(255,255,255,0.06)",
+      }}
+    >
+      {/* Header */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
+          <h3
+            className="font-fraunces font-semibold text-base"
+            style={{ color: "#FDFBF7" }}
+          >
+            Mensagens salvas
+          </h3>
+          <span
+            className="text-[10px] font-dm px-1.5 py-0.5 rounded"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              color: "rgba(253,251,247,0.35)",
+            }}
+          >
+            {templates.length}
+          </span>
+        </div>
+        <Button size="sm" onClick={handleCreate} loading={creating}>
+          <Plus className="h-3.5 w-3.5" /> Nova
+        </Button>
+      </div>
+
+      <p
+        className="text-[10px] font-dm mb-4"
+        style={{ color: "rgba(253,251,247,0.25)" }}
+      >
+        Bloco de notas pessoal. Crie quantas mensagens quiser e copie pra mandar
+        no WhatsApp. Salva automaticamente.
+      </p>
+
+      {/* Loading */}
+      {loading && (
+        <div
+          className="flex items-center justify-center py-8 text-xs font-dm"
+          style={{ color: "rgba(253,251,247,0.3)" }}
+        >
+          <Loader2 className="h-4 w-4 animate-spin mr-2" />
+          Carregando...
+        </div>
+      )}
+
+      {/* Empty state */}
+      {!loading && templates.length === 0 && (
+        <div
+          className="text-center py-10 rounded-lg"
+          style={{ background: "rgba(0,0,0,0.2)" }}
+        >
+          <MessageCircle
+            className="h-8 w-8 mx-auto mb-3"
+            style={{ color: "rgba(253,251,247,0.2)" }}
+          />
+          <p
+            className="text-sm font-dm mb-1"
+            style={{ color: "rgba(253,251,247,0.5)" }}
+          >
+            Nenhuma mensagem salva ainda
+          </p>
+          <p
+            className="text-xs font-dm"
+            style={{ color: "rgba(253,251,247,0.25)" }}
+          >
+            Clique em &quot;Nova&quot; pra criar a primeira.
+          </p>
+        </div>
+      )}
+
+      {/* List */}
+      {!loading && templates.length > 0 && (
+        <div className="space-y-3">
+          <AnimatePresence initial={false}>
+            {templates.map((t) => {
+              const state = saveState[t.id] || "idle";
+              const isConfirm = confirmDeleteId === t.id;
+              return (
+                <motion.div
+                  key={t.id}
+                  layout
+                  initial={{ opacity: 0, y: 8 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -8 }}
+                  transition={{ duration: 0.18 }}
+                  className="rounded-lg p-3"
+                  style={{
+                    background: "rgba(0,0,0,0.25)",
+                    border: "1px solid rgba(255,255,255,0.05)",
+                  }}
+                >
+                  {/* Title row */}
+                  <div className="flex items-center gap-2 mb-2">
+                    <input
+                      type="text"
+                      placeholder="Título (ex.: Lembrete sessão)"
+                      value={t.titulo}
+                      onChange={(e) =>
+                        updateField(t.id, "titulo", e.target.value)
+                      }
+                      className="flex-1 bg-transparent outline-none text-sm font-dm font-semibold"
+                      style={{ color: "#FDFBF7" }}
+                    />
+
+                    {/* Save indicator */}
+                    {state === "saving" && (
+                      <Loader2
+                        className="h-3 w-3 animate-spin flex-shrink-0"
+                        style={{ color: "rgba(253,251,247,0.3)" }}
+                      />
+                    )}
+                    {state === "saved" && (
+                      <Check
+                        className="h-3 w-3 flex-shrink-0"
+                        style={{ color: "#25D366" }}
+                      />
+                    )}
+
+                    {/* Copy */}
+                    <button
+                      onClick={() => handleCopy(t)}
+                      className="p-1.5 rounded hover:bg-white/5 transition-colors flex-shrink-0"
+                      title="Copiar mensagem"
+                      style={{
+                        color:
+                          copiedId === t.id
+                            ? "#25D366"
+                            : "rgba(253,251,247,0.45)",
+                      }}
+                    >
+                      {copiedId === t.id ? (
+                        <Check className="h-3.5 w-3.5" />
+                      ) : (
+                        <Copy className="h-3.5 w-3.5" />
+                      )}
+                    </button>
+
+                    {/* Delete */}
+                    {isConfirm ? (
+                      <div className="flex items-center gap-1">
+                        <button
+                          onClick={() => handleDelete(t.id)}
+                          className="text-[10px] font-dm font-bold px-2 py-1 rounded"
+                          style={{
+                            background: "rgba(239,68,68,0.18)",
+                            color: "#ef4444",
+                          }}
+                        >
+                          Excluir
+                        </button>
+                        <button
+                          onClick={() => setConfirmDeleteId(null)}
+                          className="text-[10px] font-dm px-2 py-1 rounded"
+                          style={{
+                            background: "rgba(255,255,255,0.04)",
+                            color: "rgba(253,251,247,0.5)",
+                          }}
+                        >
+                          Cancelar
+                        </button>
+                      </div>
+                    ) : (
+                      <button
+                        onClick={() => setConfirmDeleteId(t.id)}
+                        className="p-1.5 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
+                        title="Excluir mensagem"
+                        style={{ color: "rgba(253,251,247,0.3)" }}
+                      >
+                        <Trash2 className="h-3.5 w-3.5" />
+                      </button>
+                    )}
+                  </div>
+
+                  {/* Message textarea */}
+                  <textarea
+                    placeholder="Escreva a mensagem..."
+                    value={t.mensagem}
+                    onChange={(e) =>
+                      updateField(t.id, "mensagem", e.target.value)
+                    }
+                    className="w-full text-xs font-dm p-3 rounded resize-y outline-none"
+                    style={{
+                      background: "rgba(0,0,0,0.3)",
+                      color: "rgba(253,251,247,0.75)",
+                      border: "1px solid rgba(255,255,255,0.04)",
+                      minHeight: "90px",
+                    }}
+                  />
+                </motion.div>
+              );
+            })}
+          </AnimatePresence>
+        </div>
+      )}
+    </div>
+  );
+}

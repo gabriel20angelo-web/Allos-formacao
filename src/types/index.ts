@@ -289,6 +289,15 @@ export interface FormacaoCronograma {
   updated_at: string;
 }
 
+export interface WhatsAppTemplate {
+  id: string;
+  user_id: string;
+  titulo: string;
+  mensagem: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface CertificadoEvento {
   id: string;
   titulo: string;

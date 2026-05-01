@@ -6,6 +6,7 @@ import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
+import WhatsAppTemplates from "@/components/admin/WhatsAppTemplates";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Calendar,
@@ -1637,6 +1638,8 @@ export default function CalendarioPage() {
         {/* ─── WhatsApp ──────────────────────────────────────────── */}
         {subTab === "whatsapp" && (
           <motion.div key="whatsapp" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="space-y-5">
+            <WhatsAppTemplates />
+
             <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <div className="flex items-center justify-between mb-4">
                 <div className="flex items-center gap-2">
