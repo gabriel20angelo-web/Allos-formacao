@@ -1,8 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import {
+  listWhatsAppTemplates,
+  createWhatsAppTemplate,
+  updateWhatsAppTemplate,
+  deleteWhatsAppTemplate,
+} from "@/lib/queries";
 import Button from "@/components/ui/Button";
 import EmptyState from "@/components/ui/EmptyState";
 import LoadingState from "@/components/ui/LoadingState";
@@ -35,16 +40,9 @@ export default function WhatsAppTemplates() {
   // ─── Fetch ────────────────────────────────────────────────────────────────
   useEffect(() => {
     if (!user) return;
-    const supabase = createClient();
-    supabase
-      .from("whatsapp_templates")
-      .select("*")
-      .eq("user_id", user.id)
-      .order("created_at", { ascending: true })
-      .then(({ data }) => {
-        if (data) setTemplates(data as WhatsAppTemplate[]);
-      })
-      .then(() => setLoading(false), () => setLoading(false));
+    listWhatsAppTemplates(user.id)
+      .then(({ data }) => setTemplates(data))
+      .finally(() => setLoading(false));
   }, [user]);
 
   // Cleanup pending debounce timers no unmount pra não dispararem em
@@ -60,18 +58,13 @@ export default function WhatsAppTemplates() {
   async function handleCreate() {
     if (!user || creating) return;
     setCreating(true);
-    const supabase = createClient();
-    const { data, error } = await supabase
-      .from("whatsapp_templates")
-      .insert({ user_id: user.id, titulo: "", mensagem: "" })
-      .select("*")
-      .single();
+    const { data, error } = await createWhatsAppTemplate(user.id);
     setCreating(false);
     if (error || !data) {
       toast.error("Erro ao criar mensagem");
       return;
     }
-    setTemplates((prev) => [...prev, data as WhatsAppTemplate]);
+    setTemplates((prev) => [...prev, data]);
   }
 
   // ─── Auto-save (debounce 600ms) ───────────────────────────────────────────
@@ -80,11 +73,7 @@ export default function WhatsAppTemplates() {
       if (saveTimers.current[id]) clearTimeout(saveTimers.current[id]);
       setSaveState((s) => ({ ...s, [id]: "saving" }));
       saveTimers.current[id] = setTimeout(async () => {
-        const supabase = createClient();
-        const { error } = await supabase
-          .from("whatsapp_templates")
-          .update({ ...fields, updated_at: new Date().toISOString() })
-          .eq("id", id);
+        const { error } = await updateWhatsAppTemplate(id, fields);
         if (error) {
           setSaveState((s) => ({ ...s, [id]: "idle" }));
           toast.error("Erro ao salvar");
@@ -129,11 +118,7 @@ export default function WhatsAppTemplates() {
 
   // ─── Delete ───────────────────────────────────────────────────────────────
   async function handleDelete(id: string) {
-    const supabase = createClient();
-    const { error } = await supabase
-      .from("whatsapp_templates")
-      .delete()
-      .eq("id", id);
+    const { error } = await deleteWhatsAppTemplate(id);
     if (error) {
       toast.error("Erro ao excluir");
       return;

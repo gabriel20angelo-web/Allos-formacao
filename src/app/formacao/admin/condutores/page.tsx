@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
+import { listCondutores } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
@@ -47,11 +48,11 @@ export default function CondutoresPage() {
     async function fetch() {
       const client = createClient();
       const [condRes, subRes, presRes] = await Promise.all([
-        client.from("certificado_condutores").select("*").order("nome"),
+        listCondutores(),
         client.from("certificado_submissions").select("id,condutores,nota_condutor"),
         client.from("formacao_meet_presencas").select("condutor_nome, total_participantes, media_participantes"),
       ]);
-      if (condRes.data) setCondutores(condRes.data);
+      setCondutores(condRes.data);
       if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
 
       // Aggregate quorum by conductor
