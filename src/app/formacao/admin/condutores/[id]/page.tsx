@@ -69,12 +69,19 @@ export default function CondutorDetailPage() {
         if (subs) setSubmissions(subs);
 
         // Quorum aggregation
-        if (presencas && presencas.length > 0) {
-          const count = presencas.length;
-          const media = presencas.reduce((s: number, p: any) => s + (p.media_participantes || 0), 0) / count;
-          const pico = Math.max(...presencas.map((p: any) => p.pico_participantes || 0));
+        type PresencaRow = {
+          atividade_nome: string | null;
+          total_participantes: number | null;
+          media_participantes: number | null;
+          pico_participantes: number | null;
+        };
+        const rows = (presencas ?? []) as PresencaRow[];
+        if (rows.length > 0) {
+          const count = rows.length;
+          const media = rows.reduce((s, p) => s + (p.media_participantes || 0), 0) / count;
+          const pico = Math.max(...rows.map((p) => p.pico_participantes || 0));
           const porAtividade: Record<string, { count: number; total: number }> = {};
-          presencas.forEach((p: any) => {
+          rows.forEach((p) => {
             const nome = p.atividade_nome || "Sem atividade";
             if (!porAtividade[nome]) porAtividade[nome] = { count: 0, total: 0 };
             porAtividade[nome].count++;

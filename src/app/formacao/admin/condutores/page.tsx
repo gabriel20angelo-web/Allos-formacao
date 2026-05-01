@@ -60,8 +60,12 @@ export default function CondutoresPage() {
       if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
 
       // Aggregate quorum by conductor
+      type PresencaQuorumRow = {
+        condutor_nome: string | null;
+        total_participantes: number | null;
+      };
       const qMap: Record<string, { count: number; total: number }> = {};
-      (presRes.data || []).forEach((p: any) => {
+      ((presRes.data || []) as PresencaQuorumRow[]).forEach((p) => {
         const nome = p.condutor_nome;
         if (!nome) return;
         if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };

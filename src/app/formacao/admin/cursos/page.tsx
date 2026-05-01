@@ -464,8 +464,9 @@ export default function AdminCursosPage() {
 
       setCourses((prev) => [enrichedNew, ...prev]);
       toast.success(`Curso duplicado: "${enrichedNew.title}"`);
-    } catch (err: any) {
-      toast.error(err.message || "Erro ao duplicar curso.");
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Erro ao duplicar curso.";
+      toast.error(message);
     } finally {
       setDuplicating(null);
     }

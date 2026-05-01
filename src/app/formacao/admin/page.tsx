@@ -77,6 +77,73 @@ interface AdminNote {
   updated_at: string;
 }
 
+// ─── Tipos locais pras queries Supabase ─────────────────────────────────
+// Subset dos campos das tabelas que essa página realmente lê.
+type SubmissionRow = {
+  created_at: string;
+  nome_completo: string | null;
+  atividade_nome: string | null;
+  nota_grupo: number | null;
+  nota_condutor: number | null;
+  relato: string | null;
+  condutores: string[] | null;
+};
+
+type EnrollmentJoinRow = {
+  id: string;
+  enrolled_at: string;
+  status: string;
+  completed_at: string | null;
+  user?: { full_name: string | null } | null;
+  course?: { title: string | null } | null;
+};
+
+type EnrollmentDateRow = {
+  enrolled_at: string;
+  completed_at?: string | null;
+};
+
+type ReviewJoinRow = {
+  id: string;
+  rating: number;
+  created_at: string;
+  user?: { full_name: string | null } | null;
+  course?: { title: string | null } | null;
+};
+
+type PaidEnrollmentRow = { courses?: { price_cents: number | null } | null };
+
+type AtividadeRow = { nome: string; carga_horaria: number };
+
+type SlotRow = {
+  status: string;
+  created_at: string;
+  atividade_nome: string | null;
+  dia_semana: number;
+  formacao_horarios?: { hora: string } | null;
+};
+
+type HorarioRow = { hora: string };
+
+type PresencaWeekRow = {
+  media_participantes: number | null;
+  pico_participantes: number | null;
+  participantes: { nome: string }[] | null;
+};
+
+// Inline pra evitar import duplicado; bate com `StatCardData` de StatCard.tsx.
+import type { LucideIcon } from "lucide-react";
+type StatCardSpec = {
+  label: string;
+  value: string;
+  suffix?: string;
+  subtitle?: string;
+  hint?: string;
+  icon: LucideIcon;
+  iconColor: string;
+  iconBg: string;
+  trend?: number;
+};
 
 // ═══════════════════════════════════════════════════════════════
 // Main component
@@ -230,10 +297,10 @@ export default function AdminDashboard() {
 
         // Revenue from paid enrollments
         if (paidEnrollmentsRes.data && paidEnrollmentsRes.data.length > 0) {
-          totalRevenue = paidEnrollmentsRes.data.reduce((sum, e: any) => {
-            const price = e.courses?.price_cents || 0;
-            return sum + price;
-          }, 0);
+          totalRevenue = (paidEnrollmentsRes.data as PaidEnrollmentRow[]).reduce(
+            (sum, e) => sum + (e.courses?.price_cents || 0),
+            0
+          );
           hasRevenue = totalRevenue > 0;
         }
 
@@ -318,7 +385,7 @@ export default function AdminDashboard() {
         // Completion trend data
         if (completionsRes.data) {
           const byDay: Record<string, number> = {};
-          completionsRes.data.forEach((e: any) => {
+          (completionsRes.data as EnrollmentDateRow[]).forEach((e) => {
             if (e.completed_at) {
               const day = e.completed_at.split("T")[0];
               byDay[day] = (byDay[day] || 0) + 1;
@@ -333,7 +400,7 @@ export default function AdminDashboard() {
         const events: ActivityEvent[] = [];
 
         if (recentEnrollFeed.data) {
-          recentEnrollFeed.data.forEach((e: any) => {
+          (recentEnrollFeed.data as unknown as EnrollmentJoinRow[]).forEach((e) => {
             const userName = e.user?.full_name || "Aluno";
             const courseTitle = e.course?.title || "Curso";
 
@@ -358,7 +425,7 @@ export default function AdminDashboard() {
         }
 
         if (recentReviewsFeed.data) {
-          recentReviewsFeed.data.forEach((r: any) => {
+          (recentReviewsFeed.data as unknown as ReviewJoinRow[]).forEach((r) => {
             events.push({
               id: `review-${r.id}`,
               type: "review",
@@ -560,32 +627,28 @@ export default function AdminDashboard() {
             supabase.from("formacao_horarios").select("id, hora, ordem"),
           ]);
 
-        const allSubs = subsRes.data || [];
-        const atividades = atividadesRes.data || [];
-        const enrollData = enrollRes.data || [];
-        const slotsData = slotsRes.data || [];
-        const horariosData = horariosRes.data || [];
+        const allSubs = (subsRes.data ?? []) as SubmissionRow[];
+        const atividades = (atividadesRes.data ?? []) as AtividadeRow[];
+        const enrollData = (enrollRes.data ?? []) as EnrollmentDateRow[];
+        const slotsData = (slotsRes.data ?? []) as SlotRow[];
+        const horariosData = (horariosRes.data ?? []) as HorarioRow[];
 
         // Filter submissions by period
         const subs = allSubs.filter(
-          (s: any) => new Date(s.created_at) >= periodStart
+          (s) => new Date(s.created_at) >= periodStart
         );
 
         const total = subs.length;
         const avgG =
           total > 0
-            ? subs.reduce((a: number, x: any) => a + (x.nota_grupo || 0), 0) /
-              total
+            ? subs.reduce((a, x) => a + (x.nota_grupo || 0), 0) / total
             : 0;
         const avgC =
           total > 0
-            ? subs.reduce(
-                (a: number, x: any) => a + (x.nota_condutor || 0),
-                0
-              ) / total
+            ? subs.reduce((a, x) => a + (x.nota_condutor || 0), 0) / total
             : 0;
         const totalRelatos = subs.filter(
-          (s: any) => s.relato && s.relato.trim().length > 0
+          (s) => s.relato && s.relato.trim().length > 0
         ).length;
 
         // Conductor ranking with relatos
@@ -597,7 +660,7 @@ export default function AdminDashboard() {
             relatos: { text: string; date: string }[];
           }
         >();
-        subs.forEach((x: any) => {
+        subs.forEach((x) => {
           (x.condutores || []).forEach((c: string) => {
             const e = cMap.get(c) || { sum: 0, count: 0, relatos: [] };
             e.sum += x.nota_condutor || 0;
@@ -620,16 +683,16 @@ export default function AdminDashboard() {
 
         // Participant ranking (hours)
         const horasMap = new Map<string, number>();
-        (atividades || []).forEach((a: any) =>
+        atividades.forEach((a) =>
           horasMap.set(a.nome.toLowerCase(), a.carga_horaria)
         );
         const pMap = new Map<string, { count: number; horas: number }>();
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const nome = (s.nome_completo || "").trim();
           if (!nome) return;
           const e = pMap.get(nome) || { count: 0, horas: 0 };
           e.count++;
-          e.horas += horasMap.get(s.atividade_nome?.toLowerCase()) || 2;
+          e.horas += horasMap.get(s.atividade_nome?.toLowerCase() || "") || 2;
           pMap.set(nome, e);
         });
         const topP = Array.from(pMap.entries())
@@ -639,7 +702,7 @@ export default function AdminDashboard() {
 
         // Activity distribution
         const actMap = new Map<string, number>();
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const name = s.atividade_nome || "Sem nome";
           actMap.set(name, (actMap.get(name) || 0) + 1);
         });
@@ -649,7 +712,7 @@ export default function AdminDashboard() {
 
         // Submissions trend (group by day within period)
         const subsByDay: Record<string, number> = {};
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const day = s.created_at.split("T")[0];
           subsByDay[day] = (subsByDay[day] || 0) + 1;
         });
@@ -659,7 +722,7 @@ export default function AdminDashboard() {
 
         // Enrollment trend (based on period window)
         const enrollByDay: Record<string, number> = {};
-        (enrollData || []).forEach((e: any) => {
+        enrollData.forEach((e) => {
           if (new Date(e.enrolled_at) >= periodStart) {
             const day = e.enrolled_at.split("T")[0];
             enrollByDay[day] = (enrollByDay[day] || 0) + 1;
@@ -670,8 +733,8 @@ export default function AdminDashboard() {
           .sort((a, b) => a.date.localeCompare(b.date));
 
         // Session metrics
-        const conductedSlots = (slotsData || []).filter(
-          (s: any) =>
+        const conductedSlots = slotsData.filter(
+          (s) =>
             s.status === "conduzido" &&
             new Date(s.created_at) >= periodStart
         );
@@ -679,7 +742,7 @@ export default function AdminDashboard() {
 
         // Unique participants in period
         const uniqueNames = new Set<string>();
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const nome = (s.nome_completo || "").trim();
           if (nome) uniqueNames.add(nome.toLowerCase());
         });
@@ -698,7 +761,7 @@ export default function AdminDashboard() {
           string,
           { first: Date; last: Date }
         >();
-        (allSubs || []).forEach((s: any) => {
+        allSubs.forEach((s) => {
           const nome = (s.nome_completo || "").trim().toLowerCase();
           if (!nome) return;
           const d = new Date(s.created_at);
@@ -738,7 +801,7 @@ export default function AdminDashboard() {
           string,
           { sum: number; count: number }
         >();
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const name = s.atividade_nome || "Sem nome";
           const e = groupNotaMap.get(name) || { sum: 0, count: 0 };
           e.sum += s.nota_grupo || 0;
@@ -765,7 +828,7 @@ export default function AdminDashboard() {
           ratingDistribution.push({
             rating: r,
             count: subs.filter(
-              (s: any) => Math.round(s.nota_grupo || 0) === r
+              (s) => Math.round(s.nota_grupo || 0) === r
             ).length,
           });
         }
@@ -776,7 +839,7 @@ export default function AdminDashboard() {
           conductorRatingDist.push({
             rating: r,
             count: subs.filter(
-              (s: any) => Math.round(s.nota_condutor || 0) === r
+              (s) => Math.round(s.nota_condutor || 0) === r
             ).length,
           });
         }
@@ -784,7 +847,7 @@ export default function AdminDashboard() {
         // Heatmap: dia x hora engagement
         const heatmapMap = new Map<string, number>();
         const submissionCountByAtividade = new Map<string, number>();
-        subs.forEach((s: any) => {
+        subs.forEach((s) => {
           const name = (s.atividade_nome || "").toLowerCase();
           submissionCountByAtividade.set(
             name,
@@ -792,10 +855,8 @@ export default function AdminDashboard() {
           );
         });
 
-        const activeSlots = (slotsData || []).filter(
-          (s: any) => s.atividade_nome
-        );
-        activeSlots.forEach((slot: any) => {
+        const activeSlots = slotsData.filter((s) => s.atividade_nome);
+        activeSlots.forEach((slot) => {
           const hora = slot.formacao_horarios?.hora || "";
           const key = `${slot.dia_semana}-${hora}`;
           const atividadeName = (slot.atividade_nome || "").toLowerCase();
@@ -803,8 +864,8 @@ export default function AdminDashboard() {
           heatmapMap.set(key, (heatmapMap.get(key) || 0) + count);
         });
 
-        if (heatmapMap.size === 0 && horariosData) {
-          horariosData.forEach((h: any) => {
+        if (heatmapMap.size === 0 && horariosData.length > 0) {
+          horariosData.forEach((h) => {
             for (let d = 0; d < 5; d++) {
               const key = `${d}-${h.hora}`;
               if (!heatmapMap.has(key)) heatmapMap.set(key, 0);
@@ -857,7 +918,7 @@ export default function AdminDashboard() {
           const activeInMonth = new Set<string>();
           const activeInPrev = new Set<string>();
 
-          (allSubs || []).forEach((s: any) => {
+          allSubs.forEach((s) => {
             const nome = (s.nome_completo || "").trim().toLowerCase();
             if (!nome) return;
             const d = new Date(s.created_at);
@@ -958,8 +1019,8 @@ export default function AdminDashboard() {
             ),
         ]);
 
-        const presencas = current || [];
-        const prevPresencas = prev || [];
+        const presencas = (current ?? []) as PresencaWeekRow[];
+        const prevPresencas = (prev ?? []) as PresencaWeekRow[];
 
         if (presencas.length === 0 && prevPresencas.length === 0) {
           setQuorumStats(null);
@@ -970,20 +1031,20 @@ export default function AdminDashboard() {
         const mediaEstaSemana =
           gruposEstaSemana > 0
             ? presencas.reduce(
-                (s: number, p: any) => s + (p.media_participantes || 0),
+                (s, p) => s + (p.media_participantes || 0),
                 0
               ) / gruposEstaSemana
             : 0;
         const picoEstaSemana =
           gruposEstaSemana > 0
             ? Math.max(
-                ...presencas.map((p: any) => p.pico_participantes || 0)
+                ...presencas.map((p) => p.pico_participantes || 0)
               )
             : 0;
 
         const nomes = new Set<string>();
-        presencas.forEach((p: any) => {
-          (p.participantes || []).forEach((part: any) =>
+        presencas.forEach((p) => {
+          (p.participantes || []).forEach((part) =>
             nomes.add(part.nome)
           );
         });
@@ -991,7 +1052,7 @@ export default function AdminDashboard() {
         const mediaPrev =
           prevPresencas.length > 0
             ? prevPresencas.reduce(
-                (s: number, p: any) => s + (p.media_participantes || 0),
+                (s, p) => s + (p.media_participantes || 0),
                 0
               ) / prevPresencas.length
             : 0;
@@ -1515,7 +1576,7 @@ export default function AdminDashboard() {
                         iconColor: "#e17055",
                         iconBg: "rgba(225,112,85,0.1)",
                       },
-                    ].map((card: any, i) => (
+                    ].map((card: StatCardSpec, i) => (
                       <StatCard key={card.label} card={card} delay={0.7 + i * 0.06} />
                     ))}
                   </div>

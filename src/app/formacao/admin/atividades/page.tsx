@@ -53,8 +53,12 @@ export default function AtividadesPage() {
       if (data) setAtividades(data);
 
       // Aggregate quorum by atividade
+      type PresencaQuorumRow = {
+        atividade_nome: string | null;
+        total_participantes: number | null;
+      };
       const qMap: Record<string, { count: number; total: number }> = {};
-      (presencas || []).forEach((p: any) => {
+      ((presencas || []) as PresencaQuorumRow[]).forEach((p) => {
         const nome = p.atividade_nome;
         if (!nome) return;
         if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };
