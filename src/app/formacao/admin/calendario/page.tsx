@@ -691,7 +691,7 @@ export default function CalendarioPage() {
     lines.push("👉 allos.org.br/formacao");
     lines.push("");
     lines.push("🧠 Confira também nosso projeto de psicoterapia acessível a valor social:");
-    lines.push("👉 https://bit.ly/terapiasite");
+    lines.push("👉 allos.org.br/terapiasocial");
     lines.push("");
     lines.push("_Sua participação fortalece nossos projetos!_ 💚");
 
