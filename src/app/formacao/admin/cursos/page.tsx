@@ -9,6 +9,7 @@ import Button from "@/components/ui/Button";
 import Badge from "@/components/ui/Badge";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
+import { logger } from "@/lib/logger";
 import {
   Plus,
   Edit,
@@ -264,7 +265,7 @@ export default function AdminCursosPage() {
       .eq("id", course.id);
 
     if (error) {
-      console.error("Erro ao atualizar destaque:", error);
+      logger.error("admin/cursos","Erro ao atualizar destaque:", error);
       toast.error(`Erro ao atualizar destaque: ${error.message}`);
       return;
     }
@@ -293,7 +294,7 @@ export default function AdminCursosPage() {
       .eq("id", course.id);
 
     if (error) {
-      console.error("Erro ao atualizar estruturado:", error);
+      logger.error("admin/cursos","Erro ao atualizar estruturado:", error);
       toast.error(`Erro ao atualizar curso: ${error.message}`);
       return;
     }
@@ -317,7 +318,7 @@ export default function AdminCursosPage() {
       .eq("id", courseId);
 
     if (error) {
-      console.error("Erro ao atualizar label:", error);
+      logger.error("admin/cursos","Erro ao atualizar label:", error);
       toast.error(`Erro ao salvar label: ${error.message}`);
       return;
     }

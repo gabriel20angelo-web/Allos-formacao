@@ -12,6 +12,7 @@ import {
 } from "react";
 import { createElement } from "react";
 import { createClient, resetClient } from "@/lib/supabase/client";
+import { logger } from "@/lib/logger";
 import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
 
@@ -127,7 +128,7 @@ export function AuthProvider({
           .single();
         setProfile(data);
       } catch (err) {
-        console.error("[AUTH] fetchProfile error:", err);
+        logger.error("AUTH", "fetchProfile error:", err);
       }
     },
     [supabase]
@@ -146,7 +147,7 @@ export function AuthProvider({
         // 1. Try SSR-provided session (most reliable)
         if (initialSession?.access_token) {
           authUser = userFromJWT(initialSession.access_token);
-          console.log("[AUTH] SSR session:", authUser ? authUser.email : "expired/invalid");
+          logger.debug("AUTH", "SSR session:", authUser ? authUser.email : "expired/invalid");
         }
 
         // 2. Try localStorage
@@ -154,9 +155,9 @@ export function AuthProvider({
           const lsToken = getTokenFromLocalStorage();
           if (lsToken) {
             authUser = userFromJWT(lsToken);
-            console.log("[AUTH] localStorage session:", authUser ? authUser.email : "expired/invalid");
+            logger.debug("AUTH", "localStorage session:", authUser ? authUser.email : "expired/invalid");
           } else {
-            console.log("[AUTH] localStorage: empty");
+            logger.debug("AUTH", "localStorage: empty");
           }
         }
 
@@ -167,10 +168,10 @@ export function AuthProvider({
           setUser(authUser);
           await fetchProfile(authUser.id);
         } else {
-          console.log("[AUTH] no valid session found");
+          logger.debug("AUTH", "no valid session found");
         }
       } catch (err) {
-        console.error("[AUTH] init error:", err);
+        logger.error("AUTH", "init error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -214,7 +215,7 @@ export function AuthProvider({
         headers: { "X-Allos-Auth": "1" },
       });
     } catch (err) {
-      console.warn("[useAuth] sign-out endpoint failed:", err);
+      logger.warn("useAuth", "sign-out endpoint failed:", err);
     }
     window.location.href = "/formacao/auth";
   }, []);

@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
     );
 
     const { error } = await supabase.auth.exchangeCodeForSession(code);
-    console.log("[AUTH CALLBACK] exchangeCodeForSession error:", error);
+    if (error) console.error("[AUTH CALLBACK] exchangeCodeForSession error:", error);
 
     if (!error && collectedCookies.length > 0) {
       // Build the bridge HTML page
