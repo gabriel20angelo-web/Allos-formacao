@@ -7,7 +7,6 @@ import { motion } from "framer-motion";
 import { Play, BookOpen, ChevronRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
-import { formatDuration } from "@/lib/utils/format";
 import type { Course } from "@/types";
 
 interface EnrolledCourse {

@@ -100,7 +100,6 @@ function ProfessoresTab() {
     const currentSet = new Set(currentCourses);
 
     const toAssign = Array.from(selectedCourses).filter((id) => !currentSet.has(id));
-    const toUnassign = currentCourses.filter((id) => !selectedCourses.has(id));
 
     // Assign new courses to this instructor
     for (const courseId of toAssign) {

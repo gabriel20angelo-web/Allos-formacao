@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
@@ -47,7 +46,6 @@ import type {
 type SubTab = "calendario" | "horarios" | "cronograma" | "whatsapp" | "eventos";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
-const DIAS_SHORT = ["Seg", "Ter", "Qua", "Qui", "Sex"] as const;
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; bg: string }> = {
   pendente:       { label: "Pendente",       color: "#9ca3af", bg: "rgba(156,163,175,0.12)" },
@@ -180,7 +178,6 @@ function AtividadeDropdown({
 
 // ─── Main Page ──────────────────────────────────────────────────────────────
 export default function CalendarioPage() {
-  const { isAdmin } = useAuth();
   const [subTab, setSubTab] = useState<SubTab>("calendario");
   const [loading, setLoading] = useState(true);
 

@@ -17,7 +17,6 @@ import {
   User,
   Calendar,
   MessageSquareText,
-  Filter,
 } from "lucide-react";
 import { formatRelativeDate } from "@/lib/utils/format";
 import { toast } from "sonner";

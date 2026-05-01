@@ -8,7 +8,6 @@ import {
   Clock,
   ListVideo,
   X,
-  Pause,
   Sparkles,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";

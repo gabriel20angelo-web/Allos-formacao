@@ -30,7 +30,7 @@ const FILE_ICONS: Record<string, string> = {
 
 export default function CourseContentTabs({
   lesson,
-  courseId,
+  courseId: _courseId,
 }: CourseContentTabsProps) {
   const { user } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>("description");

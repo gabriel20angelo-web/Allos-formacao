@@ -43,22 +43,14 @@ export default function AtividadeDetailPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const [atvRes, subRes] = await Promise.all([
-        supabase
-          .from("certificado_atividades")
-          .select("*")
-          .eq("id", id)
-          .single(),
-        supabase
-          .from("certificado_submissions")
-          .select("*")
-          .eq("atividade_nome", "") // placeholder, will filter after getting name
-          .order("created_at", { ascending: false }),
-      ]);
+      const atvRes = await supabase
+        .from("certificado_atividades")
+        .select("*")
+        .eq("id", id)
+        .single();
 
       if (atvRes.data) {
         setAtividade(atvRes.data);
-        // Now fetch submissions with the correct activity name
         const { data: subs } = await supabase
           .from("certificado_submissions")
           .select("*")

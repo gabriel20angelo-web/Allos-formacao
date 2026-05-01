@@ -61,7 +61,6 @@ export default function CourseOverviewPage() {
   );
 
   const totalLessons = allLessons.length;
-  const completedLessons = Object.values(progressMap).filter((p) => p.completed).length;
   const requiredTotal = requiredLessons.length;
   const requiredCompleted = requiredLessons.filter(
     (l) => progressMap[l.id]?.completed
@@ -185,9 +184,8 @@ export default function CourseOverviewPage() {
   const isSync = course?.course_type === "sync";
   const liveDurationMs = (course?.live_session_duration_minutes ?? 120) * 60 * 1000;
 
-  const { liveMeeting, nextMeeting, futureMeetings } = useMemo(() => {
+  const { liveMeeting, futureMeetings } = useMemo(() => {
     let live: CourseMeeting | null = null;
-    let next: CourseMeeting | null = null;
     const future: CourseMeeting[] = [];
     for (const m of meetings) {
       const startMs = new Date(m.starts_at).getTime();
@@ -196,10 +194,9 @@ export default function CourseOverviewPage() {
         live = m;
       } else if (startMs > nowMs) {
         future.push(m);
-        if (!next || startMs < new Date(next.starts_at).getTime()) next = m;
       }
     }
-    return { liveMeeting: live, nextMeeting: next, futureMeetings: future };
+    return { liveMeeting: live, futureMeetings: future };
   }, [meetings, nowMs, liveDurationMs]);
 
   const liveEndsAt = liveMeeting

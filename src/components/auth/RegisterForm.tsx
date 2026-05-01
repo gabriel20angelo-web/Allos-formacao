@@ -13,7 +13,7 @@ interface RegisterFormProps {
   redirectTo?: string;
 }
 
-export default function RegisterForm({ redirectTo }: RegisterFormProps) {
+export default function RegisterForm({ redirectTo: _redirectTo }: RegisterFormProps) {
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");

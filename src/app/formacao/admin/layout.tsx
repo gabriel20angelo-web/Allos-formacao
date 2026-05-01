@@ -11,22 +11,15 @@ import Badge from "@/components/ui/Badge";
 import Skeleton from "@/components/ui/Skeleton";
 import {
   LayoutDashboard,
-  BookOpen,
-  Users,
   Award,
   Settings,
   MessageSquare,
-  Tag,
   LogOut,
   ChevronLeft,
   Menu,
   X,
   User,
-  Video,
-  FileText,
-  GraduationCap,
   Calendar,
-  BarChart3,
 } from "lucide-react";
 
 const navItems = [

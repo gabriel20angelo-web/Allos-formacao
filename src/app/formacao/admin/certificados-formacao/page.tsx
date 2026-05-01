@@ -5,11 +5,10 @@ import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
-import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
-import { Search, Award, FileCheck, RotateCcw, User, Clock } from "lucide-react";
+import { Search, Award, FileCheck, User, Clock } from "lucide-react";
 import type { CertificadoSubmission, CertificadoAtividade } from "@/types";
 
 const CertificateGenerator = dynamic(
@@ -57,7 +56,7 @@ function horasExtenso(h: number): string {
 }
 
 export default function AdminCertificadosFormacaoPage() {
-  const { isAdmin, profile } = useAuth();
+  const { isAdmin } = useAuth();
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(false);
   const [claiming, setClaiming] = useState(false);

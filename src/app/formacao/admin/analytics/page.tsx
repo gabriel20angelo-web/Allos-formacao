@@ -11,15 +11,12 @@ import {
   Users,
   Star,
   MessageSquare,
-  BookOpen,
   CheckCircle,
   Clock,
   AlertTriangle,
   ChevronDown,
   GraduationCap,
   Target,
-  UserCheck,
-  XCircle,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════
@@ -248,20 +245,6 @@ export default function AnalyticsPage() {
     courses.forEach((c) => m.set(c.id, c));
     return m;
   }, [courses]);
-
-  // ── Derived: section -> course mapping ────────────────────
-  const sectionCourseMap = useMemo(() => {
-    const m = new Map<string, string>();
-    sections.forEach((s) => m.set(s.id, s.course_id));
-    return m;
-  }, [sections]);
-
-  // ── Derived: lesson -> section mapping ────────────────────
-  const lessonSectionMap = useMemo(() => {
-    const m = new Map<string, string>();
-    lessons.forEach((l) => m.set(l.id, l.section_id));
-    return m;
-  }, [lessons]);
 
   // ── Selected course ───────────────────────────────────────
   const selectedCourse = selectedCourseId ? courseMap.get(selectedCourseId) : null;

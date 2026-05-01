@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import {
   Users, TrendingUp, Clock, Calendar, ChevronLeft, ChevronRight,
-  UserCheck, BarChart3, ArrowUp, ArrowDown, Minus, Trash2, Plus, X,
+  UserCheck, BarChart3, Trash2, Plus, X,
 } from "lucide-react";
 
 interface MeetPresenca {

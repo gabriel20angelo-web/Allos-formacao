@@ -7,7 +7,6 @@ import dynamic from "next/dynamic";
 import { BookOpen, Bell, Mail, Archive, GraduationCap, Sparkles, Star, Users, Clock } from "lucide-react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import { useAuth } from "@/hooks/useAuth";
 import { useCategories } from "@/hooks/useCategories";
 import HeroFormacao from "@/components/formacao/HeroFormacao";
 import CourseBackground from "@/components/course/CourseBackground";
@@ -35,7 +34,6 @@ const DownloadAppCard = dynamic(
 
 
 export default function FormacaoPage() {
-  const { profile } = useAuth();
   const { categories: hookCategories } = useCategories();
   const [courses, setCourses] = useState<Course[]>([]);
   const [serverCategories, setServerCategories] = useState<string[] | null>(null);

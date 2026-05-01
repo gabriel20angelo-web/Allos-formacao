@@ -9,7 +9,6 @@ import Input from "@/components/ui/Input";
 import Textarea from "@/components/ui/Textarea";
 import Select from "@/components/ui/Select";
 import ImageUpload from "@/components/ui/ImageUpload";
-import Badge from "@/components/ui/Badge";
 import { useCategories } from "@/hooks/useCategories";
 import { slugify } from "@/lib/utils/format";
 import { detectVideoSource } from "@/lib/utils/video";
@@ -18,10 +17,6 @@ import {
   Plus,
   Trash2,
   GripVertical,
-  Upload,
-  ChevronDown,
-  ChevronUp,
-  Eye,
   X,
   Sparkles,
   Clock,
@@ -45,7 +40,7 @@ import {
   verticalListSortingStrategy,
 } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
-import type { Course, Section, Lesson, ExamQuestion, ExamOption } from "@/types";
+import type { Section, Lesson, ExamQuestion, ExamOption } from "@/types";
 
 interface CourseFormProps {
   courseId?: string;
@@ -245,8 +240,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
 
   // --- Track deleted sections/lessons for DB cleanup ---
-  const [deletedSectionIds, setDeletedSectionIds] = useState<string[]>([]);
-  const [deletedLessonIds, setDeletedLessonIds] = useState<string[]>([]);
+  const [, setDeletedSectionIds] = useState<string[]>([]);
+  const [, setDeletedLessonIds] = useState<string[]>([]);
 
   // --- NEW STATE: unsaved changes tracking ---
   const [isDirty, setIsDirty] = useState(false);
@@ -810,21 +805,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       if (to < 0 || to >= section.lessons.length) return prev;
       section.lessons = arrayMove([...section.lessons], from, to);
       next[sectionIdx] = section;
-      return next;
-    });
-  }
-
-  function moveLessonToSection(fromSectionIdx: number, lessonIdx: number, toSectionIdx: number) {
-    if (toSectionIdx < 0 || toSectionIdx >= sections.length || fromSectionIdx === toSectionIdx) return;
-    markDirty();
-    setSections((prev) => {
-      const next = [...prev];
-      const fromSection = { ...next[fromSectionIdx] };
-      const toSection = { ...next[toSectionIdx] };
-      const [lesson] = fromSection.lessons.splice(lessonIdx, 1);
-      toSection.lessons = [...toSection.lessons, { ...lesson, section_id: toSection.id }];
-      next[fromSectionIdx] = fromSection;
-      next[toSectionIdx] = toSection;
       return next;
     });
   }

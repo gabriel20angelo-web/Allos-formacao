@@ -3,7 +3,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { createClient } from "@/lib/supabase/client";
-import Card from "@/components/ui/Card";
 import {
   BarChart3,
   TrendingUp,
@@ -12,8 +11,6 @@ import {
   Calendar,
   Users,
   Activity,
-  CheckCircle,
-  XCircle,
 } from "lucide-react";
 
 const STATUS_COLORS: Record<string, string> = {
@@ -31,8 +28,6 @@ const STATUS_LABELS: Record<string, string> = {
   desmarcado: "Desmarcado",
   pendente: "Pendente",
 };
-
-const DAY_NAMES = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
 
 interface SlotLog {
   id: string;

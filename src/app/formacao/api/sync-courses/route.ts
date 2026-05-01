@@ -77,7 +77,6 @@ export async function GET() {
     if (courses.length === 0) return NextResponse.json({ courses: [] });
 
     const ids = courses.map((c) => c.id);
-    const nowIso = new Date().toISOString();
 
     // Janela: pega encontros que estão acontecendo agora ou no futuro próximo.
     // Pra detectar "ao vivo", precisamos também dos starts_at <= now() recentes.

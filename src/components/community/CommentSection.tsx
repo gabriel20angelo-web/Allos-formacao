@@ -18,7 +18,7 @@ interface CommentSectionProps {
 const COMMENTS_PER_PAGE = 8;
 
 export default function CommentSection({ lessonId, onCountChange }: CommentSectionProps) {
-  const { user, profile, isAdmin, isInstructor } = useAuth();
+  const { user, isAdmin, isInstructor } = useAuth();
   const [comments, setComments] = useState<LessonComment[]>([]);
   const [content, setContent] = useState("");
   const [loading, setLoading] = useState(true);

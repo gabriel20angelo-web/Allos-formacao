@@ -6,7 +6,6 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
-import { formatDuration } from "@/lib/utils/format";
 import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { Award, Download } from "lucide-react";

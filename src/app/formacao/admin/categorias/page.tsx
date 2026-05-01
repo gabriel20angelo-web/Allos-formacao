@@ -7,7 +7,7 @@ import { DEFAULT_CATEGORIES } from "@/lib/constants";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import { motion } from "framer-motion";
-import { Plus, X, Tag, RotateCcw, AlertTriangle, BookOpen, Pencil, Check, ArrowUp, ArrowDown, ChevronDown, ChevronRight, GripVertical } from "lucide-react";
+import { Plus, X, Tag, RotateCcw, AlertTriangle, BookOpen, Pencil, Check, ArrowUp, ArrowDown, ChevronDown, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 interface CategoryRow {

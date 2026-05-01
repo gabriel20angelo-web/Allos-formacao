@@ -18,7 +18,7 @@ import {
   UserCircle,
   Users,
 } from "lucide-react";
-import type { CertificadoCondutor, CertificadoSubmission, CertificadoAtividade } from "@/types";
+import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
 
 interface AtividadeStats {
   nome: string;
@@ -39,7 +39,6 @@ export default function CondutorDetailPage() {
   const { isAdmin } = useAuth();
   const [condutor, setCondutor] = useState<CertificadoCondutor | null>(null);
   const [submissions, setSubmissions] = useState<CertificadoSubmission[]>([]);
-  const [atividades, setAtividades] = useState<CertificadoAtividade[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedAtividade, setExpandedAtividade] = useState<string | null>(null);
   const [quorumData, setQuorumData] = useState<{ count: number; media: number; pico: number; porAtividade: Record<string, { count: number; media: number }> } | null>(null);
@@ -47,10 +46,11 @@ export default function CondutorDetailPage() {
   useEffect(() => {
     async function load() {
       const supabase = createClient();
-      const [condRes, atvRes] = await Promise.all([
-        supabase.from("certificado_condutores").select("*").eq("id", id).single(),
-        supabase.from("certificado_atividades").select("*").order("nome"),
-      ]);
+      const condRes = await supabase
+        .from("certificado_condutores")
+        .select("*")
+        .eq("id", id)
+        .single();
 
       if (condRes.data) {
         setCondutor(condRes.data);
@@ -87,7 +87,6 @@ export default function CondutorDetailPage() {
           setQuorumData({ count, media, pico, porAtividade: porAtividadeResult });
         }
       }
-      if (atvRes.data) setAtividades(atvRes.data);
       setLoading(false);
     }
     if (id) load().catch(() => setLoading(false));

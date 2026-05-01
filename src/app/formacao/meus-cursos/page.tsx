@@ -24,7 +24,7 @@ import { useAuth } from "@/hooks/useAuth";
 import { formatDuration } from "@/lib/utils/format";
 import CourseBackground from "@/components/course/CourseBackground";
 import Skeleton from "@/components/ui/Skeleton";
-import type { Course, EnrollmentStatus, Certificate } from "@/types";
+import type { Course, EnrollmentStatus } from "@/types";
 
 interface EnrolledCourse {
   course: Course;
