@@ -262,28 +262,38 @@ export default function CalendarioPage() {
     fetchAll().catch(() => setLoading(false));
   }, [fetchAll]);
 
-  // Load assets for canvas (logo, backgrounds, fonts)
+  // Load assets for canvas (logo, backgrounds, fonts) — só quando a aba
+  // cronograma é aberta. Antes carregava no mount, mesmo que o usuário só
+  // precisasse das outras abas; agora as fontes Cocogoose (~600 KB) e as
+  // 3 imagens (~120 KB) só baixam sob demanda.
   useEffect(() => {
+    if (subTab !== "cronograma") return;
     // Cada onload dispara um redraw — drawCronograma faz early return se o
     // canvas ainda não montou (aba diferente), então é seguro chamar sempre.
     const triggerRedraw = () => {
       setTimeout(() => drawCronogramaRef.current?.(), 30);
     };
 
-    const img = new window.Image();
-    img.crossOrigin = "anonymous";
-    img.src = "/Logo_Dark_Alternativo.png";
-    img.onload = () => { logoRef.current = img; triggerRedraw(); };
+    if (!logoRef.current) {
+      const img = new window.Image();
+      img.crossOrigin = "anonymous";
+      img.src = "/Logo_Dark_Alternativo.png";
+      img.onload = () => { logoRef.current = img; triggerRedraw(); };
+    }
 
-    const bg = new window.Image();
-    bg.crossOrigin = "anonymous";
-    bg.src = "/cronograma_bg_color.png";
-    bg.onload = () => { bgRef.current = bg; triggerRedraw(); };
+    if (!bgRef.current) {
+      const bg = new window.Image();
+      bg.crossOrigin = "anonymous";
+      bg.src = "/cronograma_bg_color.png";
+      bg.onload = () => { bgRef.current = bg; triggerRedraw(); };
+    }
 
-    const bgL = new window.Image();
-    bgL.crossOrigin = "anonymous";
-    bgL.src = "/cronograma_bg_light.png";
-    bgL.onload = () => { bgLightRef.current = bgL; triggerRedraw(); };
+    if (!bgLightRef.current) {
+      const bgL = new window.Image();
+      bgL.crossOrigin = "anonymous";
+      bgL.src = "/cronograma_bg_light.png";
+      bgL.onload = () => { bgLightRef.current = bgL; triggerRedraw(); };
+    }
 
     // Load Cocogoose family for canvas
     const cocoBold = new FontFace("CocogoosePro", "url(/fonts/CocogoosePro.ttf)");
@@ -293,7 +303,7 @@ export default function CalendarioPage() {
       fonts.forEach((f) => document.fonts.add(f));
       triggerRedraw();
     }).catch(() => {});
-  }, []);
+  }, [subTab]);
 
   // ─── Config upsert ────────────────────────────────────────────────────────
   async function upsertConfig(fields: Partial<FormacaoCronograma>) {
