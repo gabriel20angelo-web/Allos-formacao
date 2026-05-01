@@ -1,3 +1,18 @@
+// Wizard de criar/editar curso. Usado em /admin/cursos/novo (sem courseId)
+// e /admin/cursos/[id]/editar (com courseId). 2000+ linhas porque cada step
+// tem seu próprio setor de UI:
+//   - "info":        título, slug, categoria, capa, tipo (sync/async)
+//   - "content":     seções e aulas (com dnd-kit)
+//   - "meetings":    encontros ao vivo (só pra course_type === "sync")
+//   - "exam":        prova final + perguntas + opções
+//   - "certificate": carga horária + texto + preview (já em CertificateStep)
+//
+// Estado central + autosave debounced + dirty tracking + saveCourseRef pra
+// evitar saves concorrentes. Carregado dynamic em /novo e /[id]/editar pra
+// não inflar o JS inicial. Steps individuais devem virar componentes
+// próprios em src/components/admin/course-form/ — feito o CertificateStep,
+// faltam os outros.
+
 "use client";
 
 import { useState, useEffect, useCallback, useRef } from "react";

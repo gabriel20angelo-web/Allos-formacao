@@ -1,3 +1,10 @@
+// Supabase clients pra Server Components / Route Handlers / Server Actions.
+//
+// - createServerSupabaseClient(): respeita RLS. Lê cookies de auth do request.
+// - createServiceRoleClient(): bypass total de RLS via SUPABASE_SERVICE_ROLE_KEY.
+//   Use só em rotas server-side controladas (ex.: /admin/configuracoes/update-role).
+//   NUNCA exponha esse cliente no browser.
+
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 

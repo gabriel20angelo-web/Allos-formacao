@@ -1,3 +1,10 @@
+// Middleware Supabase: roda em cada request. Responsabilidades:
+// 1. Refrescar sessão Supabase (set/update de cookies)
+// 2. Bloquear rotas protegidas (/formacao/admin, /formacao/curso) sem login
+//    redirecionando pra /formacao/auth?redirect=...
+// 3. Em catch geral, limpa cookies sb-* e redireciona pra auth — evita loop
+//    quando token está corrompido.
+
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 

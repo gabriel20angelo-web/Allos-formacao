@@ -1,3 +1,15 @@
+// Auth client-side via decode direto de JWT — bypassa supabase.auth.* porque
+// os métodos do @supabase/ssr travam em alguns navegadores (incidente Brave +
+// shields, ver memory project_oauth_debug). Estratégia atual:
+//
+// 1. SSR injeta tokens via initialSession (mais confiável)
+// 2. Fallback: lê access_token do localStorage (chave sb-auth-cookies, populada
+//    pelo bridge em /formacao/auth/callback)
+// 3. fetchProfile() consulta tabela `profiles` pra montar role/avatar/nome
+//
+// signOut() só faz POST pra /auth/sign-out + window.location.href pra limpar
+// estado client-side; o middleware lida com cookies sb-*.
+
 "use client";
 
 import {

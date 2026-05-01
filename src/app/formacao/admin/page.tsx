@@ -1,3 +1,15 @@
+// Dashboard admin — landing page do /admin. Dois modos lado a lado:
+//   - mode="async" (cursos): foca em cursos publicados, matrículas, certificados,
+//     receita (se cobrar), reviews, retenção e atividade recente
+//   - mode="sync" (formação síncrona): foca em sessões conduzidas, quórum
+//     médio, ranking de condutores/participantes, distribuição de notas
+//
+// Período (dashPeriod) filtra "sync" entre 7d/30d/90d/all. Todos os blocos
+// são `useEffect` separados (engagement async, formacao stats, quorum, notes)
+// pra cada um falhar isolado sem derrubar a tela. A AdminNotesSection já
+// está extraída; o resto ainda vive aqui (~2700 linhas) e deve ser quebrado
+// em sub-componentes nos próximos blocos de refactor.
+
 "use client";
 
 import { useEffect, useState } from "react";

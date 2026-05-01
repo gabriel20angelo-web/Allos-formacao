@@ -1,3 +1,17 @@
+// Página /admin/calendario — controle de formação síncrona da Allos.
+// Sub-abas (subTab):
+//   - "calendario":  grid semanal Seg→Sex × Horários, com status por slot
+//   - "horarios":    gerenciar lista de horários ativos + reordenar
+//   - "cronograma":  Canvas 1080x1080 da arte do quadro semanal (download PNG)
+//   - "whatsapp":    mensagens salvas (WhatsAppTemplates) + cronograma+condutores
+//   - "eventos":     CRUD de eventos avulsos (componente EventosTab)
+//
+// fetchAll() carrega os 7 datasets em paralelo (horários, slots, alocações,
+// condutores, atividades, cronograma config, presenças meet). Eventos virou
+// fetch próprio do EventosTab. Os assets pesados do canvas (3 fontes
+// Cocogoose ~600KB + 3 PNGs ~120KB) são lazy-load só quando subTab vira
+// "cronograma" pela primeira vez.
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";

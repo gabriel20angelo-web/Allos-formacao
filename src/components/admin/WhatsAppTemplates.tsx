@@ -1,3 +1,12 @@
+// Bloco de notas de mensagens prontas pra WhatsApp, persistido por user_id
+// no Supabase (RLS na tabela whatsapp_templates). Aparece em
+// /admin/calendario sub-aba "WhatsApp" e serve como acesso rápido a
+// templates que o admin cola no celular pra enviar.
+//
+// Auto-save debounced (600ms) ao editar título/mensagem. CRUD usa os helpers
+// de src/lib/queries/whatsapp-templates; estado client gerenciado pelo hook
+// useWhatsAppTemplates(userId).
+
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
