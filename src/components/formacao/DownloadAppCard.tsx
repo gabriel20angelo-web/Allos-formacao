@@ -49,7 +49,7 @@ export default function DownloadAppCard() {
           </div>
 
           <a
-            href="/allos-formacao.apk"
+            href="/formacao/allos-formacao.apk"
             download="Allos-Formacao.apk"
             className="flex items-center gap-2 px-6 py-3 rounded-xl font-dm font-semibold text-sm text-white transition-all hover:scale-[1.03] active:scale-[0.97] flex-shrink-0"
             style={{
