@@ -1,16 +1,13 @@
 "use client";
 
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useAuth } from "@/hooks/useAuth";
-import { useWhatsAppTemplates } from "@/hooks/useWhatsAppTemplates";
+import { useAuth, useWhatsAppTemplates } from "@/hooks";
 import {
   createWhatsAppTemplate,
   updateWhatsAppTemplate,
   deleteWhatsAppTemplate,
 } from "@/lib/queries";
-import Button from "@/components/ui/Button";
-import EmptyState from "@/components/ui/EmptyState";
-import LoadingState from "@/components/ui/LoadingState";
+import { Button, EmptyState, LoadingState } from "@/components/ui";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Plus,
