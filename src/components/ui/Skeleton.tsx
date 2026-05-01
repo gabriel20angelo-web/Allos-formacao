@@ -5,8 +5,7 @@ interface SkeletonProps {
 export default function Skeleton({ className = "" }: SkeletonProps) {
   return (
     <div
-      className={`animate-pulse rounded-[10px] ${className}`}
-      style={{ background: "rgba(255,255,255,0.05)" }}
+      className={`animate-pulse rounded-[10px] bg-surface-3 ${className}`}
       aria-hidden="true"
     />
   );
@@ -14,13 +13,7 @@ export default function Skeleton({ className = "" }: SkeletonProps) {
 
 export function CourseCardSkeleton() {
   return (
-    <div
-      className="rounded-2xl overflow-hidden aspect-[3/4]"
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
-      }}
-    >
+    <div className="rounded-2xl overflow-hidden aspect-[3/4] bg-surface-2 border border-border-soft">
       <Skeleton className="w-full h-full rounded-none" />
     </div>
   );

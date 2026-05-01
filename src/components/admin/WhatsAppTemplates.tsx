@@ -147,30 +147,15 @@ export default function WhatsAppTemplates() {
 
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
-    <div
-      className="rounded-xl p-5"
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
-      }}
-    >
+    <div className="rounded-xl p-5 bg-surface-2 border border-border-soft">
       {/* Header */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
-          <h3
-            className="font-fraunces font-semibold text-base"
-            style={{ color: "#FDFBF7" }}
-          >
+          <MessageCircle className="h-4 w-4 text-[#25D366]" />
+          <h3 className="font-fraunces font-semibold text-base text-cream">
             Mensagens salvas
           </h3>
-          <span
-            className="text-[10px] font-dm px-1.5 py-0.5 rounded"
-            style={{
-              background: "rgba(255,255,255,0.06)",
-              color: "rgba(253,251,247,0.35)",
-            }}
-          >
+          <span className="text-[10px] font-dm px-1.5 py-0.5 rounded bg-border-soft text-cream-30">
             {templates.length}
           </span>
         </div>
@@ -179,20 +164,14 @@ export default function WhatsAppTemplates() {
         </Button>
       </div>
 
-      <p
-        className="text-[10px] font-dm mb-4"
-        style={{ color: "rgba(253,251,247,0.25)" }}
-      >
+      <p className="text-[10px] font-dm mb-4 text-cream-30">
         Bloco de notas pessoal. Crie quantas mensagens quiser e copie pra mandar
         no WhatsApp. Salva automaticamente.
       </p>
 
       {/* Loading */}
       {loading && (
-        <div
-          className="flex items-center justify-center py-8 text-xs font-dm"
-          style={{ color: "rgba(253,251,247,0.3)" }}
-        >
+        <div className="flex items-center justify-center py-8 text-xs font-dm text-cream-30">
           <Loader2 className="h-4 w-4 animate-spin mr-2" />
           Carregando...
         </div>
@@ -200,24 +179,12 @@ export default function WhatsAppTemplates() {
 
       {/* Empty state */}
       {!loading && templates.length === 0 && (
-        <div
-          className="text-center py-10 rounded-lg"
-          style={{ background: "rgba(0,0,0,0.2)" }}
-        >
-          <MessageCircle
-            className="h-8 w-8 mx-auto mb-3"
-            style={{ color: "rgba(253,251,247,0.2)" }}
-          />
-          <p
-            className="text-sm font-dm mb-1"
-            style={{ color: "rgba(253,251,247,0.5)" }}
-          >
+        <div className="text-center py-10 rounded-lg bg-black/20">
+          <MessageCircle className="h-8 w-8 mx-auto mb-3 text-cream/20" />
+          <p className="text-sm font-dm mb-1 text-cream-50">
             Nenhuma mensagem salva ainda
           </p>
-          <p
-            className="text-xs font-dm"
-            style={{ color: "rgba(253,251,247,0.25)" }}
-          >
+          <p className="text-xs font-dm text-cream-30">
             Clique em &quot;Nova&quot; pra criar a primeira.
           </p>
         </div>
@@ -238,11 +205,7 @@ export default function WhatsAppTemplates() {
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: -8 }}
                   transition={{ duration: 0.18 }}
-                  className="rounded-lg p-3"
-                  style={{
-                    background: "rgba(0,0,0,0.25)",
-                    border: "1px solid rgba(255,255,255,0.05)",
-                  }}
+                  className="rounded-lg p-3 bg-black/25 border border-white/5"
                 >
                   {/* Title row */}
                   <div className="flex items-center gap-2 mb-2">
@@ -253,35 +216,24 @@ export default function WhatsAppTemplates() {
                       onChange={(e) =>
                         updateField(t.id, "titulo", e.target.value)
                       }
-                      className="flex-1 bg-transparent outline-none text-sm font-dm font-semibold"
-                      style={{ color: "#FDFBF7" }}
+                      className="flex-1 bg-transparent outline-none text-sm font-dm font-semibold text-cream"
                     />
 
                     {/* Save indicator */}
                     {state === "saving" && (
-                      <Loader2
-                        className="h-3 w-3 animate-spin flex-shrink-0"
-                        style={{ color: "rgba(253,251,247,0.3)" }}
-                      />
+                      <Loader2 className="h-3 w-3 animate-spin flex-shrink-0 text-cream-30" />
                     )}
                     {state === "saved" && (
-                      <Check
-                        className="h-3 w-3 flex-shrink-0"
-                        style={{ color: "#25D366" }}
-                      />
+                      <Check className="h-3 w-3 flex-shrink-0 text-[#25D366]" />
                     )}
 
                     {/* Copy */}
                     <button
                       onClick={() => handleCopy(t)}
-                      className="p-1.5 rounded hover:bg-white/5 transition-colors flex-shrink-0"
+                      className={`p-1.5 rounded hover:bg-white/5 transition-colors flex-shrink-0 ${
+                        copiedId === t.id ? "text-[#25D366]" : "text-cream/45"
+                      }`}
                       title="Copiar mensagem"
-                      style={{
-                        color:
-                          copiedId === t.id
-                            ? "#25D366"
-                            : "rgba(253,251,247,0.45)",
-                      }}
                     >
                       {copiedId === t.id ? (
                         <Check className="h-3.5 w-3.5" />
@@ -295,21 +247,13 @@ export default function WhatsAppTemplates() {
                       <div className="flex items-center gap-1">
                         <button
                           onClick={() => handleDelete(t.id)}
-                          className="text-[10px] font-dm font-bold px-2 py-1 rounded"
-                          style={{
-                            background: "rgba(239,68,68,0.18)",
-                            color: "#ef4444",
-                          }}
+                          className="text-[10px] font-dm font-bold px-2 py-1 rounded bg-red-500/20 text-red-500"
                         >
                           Excluir
                         </button>
                         <button
                           onClick={() => setConfirmDeleteId(null)}
-                          className="text-[10px] font-dm px-2 py-1 rounded"
-                          style={{
-                            background: "rgba(255,255,255,0.04)",
-                            color: "rgba(253,251,247,0.5)",
-                          }}
+                          className="text-[10px] font-dm px-2 py-1 rounded bg-white/5 text-cream-50"
                         >
                           Cancelar
                         </button>
@@ -317,9 +261,8 @@ export default function WhatsAppTemplates() {
                     ) : (
                       <button
                         onClick={() => setConfirmDeleteId(t.id)}
-                        className="p-1.5 rounded hover:bg-red-500/10 transition-colors flex-shrink-0"
+                        className="p-1.5 rounded hover:bg-red-500/10 transition-colors flex-shrink-0 text-cream-30"
                         title="Excluir mensagem"
-                        style={{ color: "rgba(253,251,247,0.3)" }}
                       >
                         <Trash2 className="h-3.5 w-3.5" />
                       </button>
@@ -333,13 +276,7 @@ export default function WhatsAppTemplates() {
                     onChange={(e) =>
                       updateField(t.id, "mensagem", e.target.value)
                     }
-                    className="w-full text-xs font-dm p-3 rounded resize-y outline-none"
-                    style={{
-                      background: "rgba(0,0,0,0.3)",
-                      color: "rgba(253,251,247,0.75)",
-                      border: "1px solid rgba(255,255,255,0.04)",
-                      minHeight: "90px",
-                    }}
+                    className="w-full text-xs font-dm p-3 rounded resize-y outline-none bg-black/30 text-cream/75 border border-white/5 min-h-[90px]"
                   />
                 </motion.div>
               );

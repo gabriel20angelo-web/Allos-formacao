@@ -20,7 +20,8 @@ export default function Card({
   return (
     <div
       className={`
-        rounded-[16px]
+        rounded-[16px] backdrop-blur-md
+        bg-surface-2 border border-border-soft
         ${paddingStyles[padding]}
         ${
           hover
@@ -29,11 +30,6 @@ export default function Card({
         }
         ${className}
       `}
-      style={{
-        background: "rgba(255,255,255,0.03)",
-        border: "1px solid rgba(255,255,255,0.06)",
-        backdropFilter: "blur(12px)",
-      }}
     >
       {children}
     </div>

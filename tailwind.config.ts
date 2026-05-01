@@ -26,6 +26,30 @@ const config: Config = {
         border: "#E5DFD3",
         "dark-border": "rgba(255,255,255,0.08)",
         sage: "#2D6A4F",
+        // ─── Surface overlays (escala de elevação no fundo dark) ──
+        // surface-1 (mais sutil) → surface-3 (mais visível)
+        "surface-1": "rgba(255,255,255,0.02)",
+        "surface-2": "rgba(255,255,255,0.03)",
+        "surface-3": "rgba(255,255,255,0.05)",
+        "surface-4": "rgba(255,255,255,0.08)",
+        // ─── Border tokens (sobre fundo dark) ────────────────────
+        "border-soft": "rgba(255,255,255,0.06)",
+        "border-soft-2": "rgba(255,255,255,0.08)",
+        "border-soft-3": "rgba(255,255,255,0.12)",
+        // ─── Accent variations ───────────────────────────────────
+        "accent-soft": "rgba(200,75,49,0.1)",
+        "accent-soft-2": "rgba(200,75,49,0.15)",
+        "accent-soft-3": "rgba(200,75,49,0.2)",
+        // ─── Cream variations (para texto sobre dark) ────────────
+        "cream-30": "rgba(253,251,247,0.3)",
+        "cream-40": "rgba(253,251,247,0.4)",
+        "cream-50": "rgba(253,251,247,0.5)",
+        "cream-60": "rgba(253,251,247,0.6)",
+        "cream-70": "rgba(253,251,247,0.7)",
+        "cream-90": "rgba(253,251,247,0.9)",
+      },
+      backgroundImage: {
+        "accent-gradient": "linear-gradient(135deg, #C84B31, #A33D27)",
       },
       fontFamily: {
         fraunces: ["var(--font-fraunces)", "serif"],

@@ -58,18 +58,12 @@ export default function Modal({
           w-full ${maxWidth}
           max-h-[90vh] overflow-y-auto
           animate-fade-up
+          bg-dark-surface border border-accent-soft
+          shadow-[0_24px_80px_rgba(0,0,0,0.5)]
         `}
-        style={{
-          background: "#1A1A1A",
-          border: "1px solid rgba(200,75,49,0.1)",
-          boxShadow: "0 24px 80px rgba(0,0,0,0.5)",
-        }}
       >
         {title && (
-          <div
-            className="flex items-center justify-between p-6"
-            style={{ borderBottom: "1px solid rgba(200,75,49,0.08)" }}
-          >
+          <div className="flex items-center justify-between p-6 border-b border-accent/10">
             <h2 className="font-fraunces font-bold text-xl text-cream">
               {title}
             </h2>
