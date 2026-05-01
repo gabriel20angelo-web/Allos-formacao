@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/hooks/useAuth";
+import { useWhatsAppTemplates } from "@/hooks/useWhatsAppTemplates";
 import {
-  listWhatsAppTemplates,
   createWhatsAppTemplate,
   updateWhatsAppTemplate,
   deleteWhatsAppTemplate,
@@ -27,8 +27,8 @@ type SaveState = "idle" | "saving" | "saved";
 
 export default function WhatsAppTemplates() {
   const { user } = useAuth();
-  const [templates, setTemplates] = useState<WhatsAppTemplate[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { data: templates, loading, setData: setTemplates } =
+    useWhatsAppTemplates(user?.id);
   const [creating, setCreating] = useState(false);
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
@@ -36,14 +36,6 @@ export default function WhatsAppTemplates() {
 
   // debounce timers per template id; clears on unmount
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
-
-  // ─── Fetch ────────────────────────────────────────────────────────────────
-  useEffect(() => {
-    if (!user) return;
-    listWhatsAppTemplates(user.id)
-      .then(({ data }) => setTemplates(data))
-      .finally(() => setLoading(false));
-  }, [user]);
 
   // Cleanup pending debounce timers no unmount pra não dispararem em
   // componente desmontado.

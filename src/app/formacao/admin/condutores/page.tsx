@@ -3,8 +3,8 @@
 import { useState, useEffect, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { listCondutores } from "@/lib/queries";
 import { useAuth } from "@/hooks/useAuth";
+import { useCondutores } from "@/hooks/useCondutores";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
@@ -28,9 +28,13 @@ import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
 
 export default function CondutoresPage() {
   const { isAdmin } = useAuth();
-  const [condutores, setCondutores] = useState<CertificadoCondutor[]>([]);
+  const {
+    data: condutores,
+    loading: condutoresLoading,
+    setData: setCondutores,
+  } = useCondutores();
   const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [extrasLoading, setExtrasLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newNome, setNewNome] = useState("");
 
@@ -44,15 +48,15 @@ export default function CondutoresPage() {
   const [quorumByCondutor, setQuorumByCondutor] = useState<Record<string, { count: number; media: number }>>({});
   const router = useRouter();
 
+  const loading = condutoresLoading || extrasLoading;
+
   useEffect(() => {
-    async function fetch() {
+    async function fetchExtras() {
       const client = createClient();
-      const [condRes, subRes, presRes] = await Promise.all([
-        listCondutores(),
+      const [subRes, presRes] = await Promise.all([
         client.from("certificado_submissions").select("id,condutores,nota_condutor"),
         client.from("formacao_meet_presencas").select("condutor_nome, total_participantes, media_participantes"),
       ]);
-      setCondutores(condRes.data);
       if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
 
       // Aggregate quorum by conductor
@@ -70,9 +74,9 @@ export default function CondutoresPage() {
       });
       setQuorumByCondutor(result);
 
-      setLoading(false);
+      setExtrasLoading(false);
     }
-    fetch().catch(() => setLoading(false));
+    fetchExtras().catch(() => setExtrasLoading(false));
   }, []);
 
   const condutorStats = useMemo(() => {
