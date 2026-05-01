@@ -25,7 +25,10 @@ import {
   Trash2,
   MessageCircle,
   Loader2,
+  ChevronDown,
 } from "lucide-react";
+
+const COLLAPSE_KEY = "whatsapp_templates_collapsed";
 import { toast } from "sonner";
 import type { WhatsAppTemplate } from "@/types";
 
@@ -39,6 +42,23 @@ export default function WhatsAppTemplates() {
   const [copiedId, setCopiedId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<Record<string, SaveState>>({});
+  const [collapsed, setCollapsed] = useState(false);
+
+  // Restaurar estado collapsed do localStorage no mount
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    setCollapsed(localStorage.getItem(COLLAPSE_KEY) === "1");
+  }, []);
+
+  function toggleCollapsed() {
+    setCollapsed((prev) => {
+      const next = !prev;
+      try {
+        localStorage.setItem(COLLAPSE_KEY, next ? "1" : "0");
+      } catch {}
+      return next;
+    });
+  }
 
   // debounce timers per template id; clears on unmount
   const saveTimers = useRef<Record<string, ReturnType<typeof setTimeout>>>({});
@@ -133,9 +153,19 @@ export default function WhatsAppTemplates() {
   // ─── Render ───────────────────────────────────────────────────────────────
   return (
     <div className="rounded-xl p-5 bg-surface-2 border border-border-soft">
-      {/* Header */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="flex items-center gap-2">
+      {/* Header — clica na área inteira pra colapsar/expandir */}
+      <div className={`flex items-center justify-between ${collapsed ? "" : "mb-4"}`}>
+        <button
+          onClick={toggleCollapsed}
+          className="flex items-center gap-2 flex-1 text-left -m-1 p-1 rounded hover:bg-white/5 transition-colors"
+          aria-expanded={!collapsed}
+          aria-controls="wa-templates-body"
+        >
+          <ChevronDown
+            className={`h-4 w-4 text-cream-50 transition-transform ${
+              collapsed ? "-rotate-90" : ""
+            }`}
+          />
           <MessageCircle className="h-4 w-4 text-[#25D366]" />
           <h3 className="font-fraunces font-semibold text-base text-cream">
             Mensagens salvas
@@ -143,12 +173,25 @@ export default function WhatsAppTemplates() {
           <span className="text-[10px] font-dm px-1.5 py-0.5 rounded bg-border-soft text-cream-30">
             {templates.length}
           </span>
-        </div>
-        <Button size="sm" onClick={handleCreate} loading={creating}>
-          <Plus className="h-3.5 w-3.5" /> Nova
-        </Button>
+        </button>
+        {!collapsed && (
+          <Button size="sm" onClick={handleCreate} loading={creating}>
+            <Plus className="h-3.5 w-3.5" /> Nova
+          </Button>
+        )}
       </div>
 
+      {/* Conteúdo colapsável */}
+      <AnimatePresence initial={false}>
+        {!collapsed && (
+          <motion.div
+            id="wa-templates-body"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            transition={{ duration: 0.22, ease: "easeOut" }}
+            style={{ overflow: "hidden" }}
+          >
       <p className="text-[10px] font-dm mb-4 text-cream-30">
         Bloco de notas pessoal. Crie quantas mensagens quiser e copie pra mandar
         no WhatsApp. Salva automaticamente.
@@ -260,6 +303,9 @@ export default function WhatsAppTemplates() {
           </AnimatePresence>
         </div>
       )}
+          </motion.div>
+        )}
+      </AnimatePresence>
     </div>
   );
 }
