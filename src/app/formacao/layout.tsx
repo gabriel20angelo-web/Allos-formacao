@@ -4,7 +4,10 @@ import SidebarOffset from "@/components/layout/SidebarOffset";
 import FloatingQuestionButton from "@/components/ui/FloatingQuestionButton";
 import type { Metadata } from "next";
 
-export const dynamic = "force-dynamic";
+// Sem force-dynamic: Sidebar/TopBar são client components e leem auth no
+// browser. Forçar dynamic estava custando ~400-600ms de TTFB em todo
+// /formacao, sem ganho — páginas que precisam de dynamic real já declaram
+// isso individualmente (admin/page.tsx, curso/[slug]/...).
 
 export const metadata: Metadata = {
   title: "Formação Allos",

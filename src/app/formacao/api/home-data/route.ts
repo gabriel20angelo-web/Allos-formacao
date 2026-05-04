@@ -115,10 +115,13 @@ export async function GET() {
   }
 
   try {
+    const start = Date.now();
     const data = await getHomeData();
+    const elapsed = Date.now() - start;
     return NextResponse.json(data, {
       headers: {
         "Cache-Control": "public, s-maxage=30, stale-while-revalidate=300",
+        "Server-Timing": `home-data;dur=${elapsed}`,
       },
     });
   } catch (err) {
