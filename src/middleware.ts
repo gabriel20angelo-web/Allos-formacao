@@ -6,5 +6,8 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/formacao", "/formacao/:path*"],
+  // Só roda nas rotas que precisam de auth/role check no servidor.
+  // Demais rotas (home, /cursos, /auth, /api/*) passam direto, evitando
+  // 1-2 round-trips ao Supabase por request.
+  matcher: ["/formacao/admin/:path*", "/formacao/curso/:path*"],
 };
