@@ -58,6 +58,10 @@ export interface Course {
   featured_label?: string | null;
   show_instructor?: boolean;
   price?: number | null;
+  study_link_slug?: string | null;
+  study_link_url?: string | null;
+  study_link_label?: string | null;
+  study_link_clicks?: number;
   created_at: string;
   updated_at: string;
   // Relations
