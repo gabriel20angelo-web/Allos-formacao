@@ -55,14 +55,20 @@ export default function EventosTab() {
     }
     setAdding(true);
     const supabase = createClient();
+    // datetime-local entrega "2026-05-05T13:00" sem timezone. Postgres
+    // timestamptz interpretaria como UTC; convertemos com `new Date()`
+    // (que assume timezone local do navegador) e exportamos pra ISO UTC,
+    // garantindo que o horário gravado bata com o que o admin viu.
+    const dataInicioIso = new Date(eventoForm.data_inicio).toISOString();
+    const dataFimIso = new Date(eventoForm.data_fim).toISOString();
     const { data, error } = await supabase
       .from(TABLE)
       .insert({
         titulo: eventoForm.titulo.trim(),
         descricao: eventoForm.descricao.trim() || null,
         link: eventoForm.link.trim() || null,
-        data_inicio: eventoForm.data_inicio,
-        data_fim: eventoForm.data_fim,
+        data_inicio: dataInicioIso,
+        data_fim: dataFimIso,
         ativo: true,
       })
       .select("*")
