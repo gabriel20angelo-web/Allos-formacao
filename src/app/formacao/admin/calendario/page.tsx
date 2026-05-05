@@ -45,6 +45,7 @@ import {
   ArrowDown,
   UserCheck,
   Users,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import type {
@@ -208,6 +209,11 @@ export default function CalendarioPage() {
   const [meetEditSlotId, setMeetEditSlotId] = useState<string | null>(null);
   const [meetLinkDraft, setMeetLinkDraft] = useState("");
   const [addCondutorSlotId, setAddCondutorSlotId] = useState<string | null>(null);
+
+  // Drag-and-drop dos cards do calendário
+  const [draggingSlotId, setDraggingSlotId] = useState<string | null>(null);
+  const [dragOverKey, setDragOverKey] = useState<string | null>(null);
+  const [movingSlot, setMovingSlot] = useState(false);
 
   // Horarios tab
   const [newHora, setNewHora] = useState("08:00");
@@ -797,6 +803,105 @@ export default function CalendarioPage() {
     toast.success("Slot removido!");
   }
 
+  // Move o slot pra (dia, horarioId). Se o destino já tem um slot, faz swap
+  // entre os dois. Como `formacao_slots` tem UNIQUE(dia_semana, horario_id) e
+  // CHECK 0..4 em dia_semana, swap precisa parkear um dos slots num par
+  // (dia, horario_id) atualmente livre — varremos a grade pra achar um.
+  async function moveOrSwapSlot(sourceId: string, targetDia: number, targetHorarioId: string) {
+    const source = slots.find((s) => s.id === sourceId);
+    if (!source) return;
+    if (source.dia_semana === targetDia && source.horario_id === targetHorarioId) return;
+
+    const target = slots.find(
+      (s) => s.dia_semana === targetDia && s.horario_id === targetHorarioId,
+    );
+
+    const supabase = createClient();
+    setMovingSlot(true);
+
+    try {
+      // Caso 1: destino vazio — update simples.
+      if (!target) {
+        const { data, error } = await supabase
+          .from("formacao_slots")
+          .update({ dia_semana: targetDia, horario_id: targetHorarioId })
+          .eq("id", sourceId)
+          .select("*, formacao_horarios(hora, ordem)")
+          .single();
+        if (error || !data) { toast.error("Erro ao mover slot."); return; }
+        setSlots((prev) => prev.map((s) => (s.id === sourceId ? data : s)));
+        toast.success("Slot movido!");
+        return;
+      }
+
+      // Caso 2: destino ocupado — swap parkeando num par livre.
+      // Procura uma combinação (dia, horario_id) atualmente desocupada em
+      // qualquer horário (ativo ou não) entre todos os 5 dias.
+      const occupied = new Set(slots.map((s) => `${s.dia_semana}|${s.horario_id}`));
+      let parkDia = -1;
+      let parkHorarioId = "";
+      outer: for (let d = 0; d < 5; d++) {
+        for (const h of horarios) {
+          if (!occupied.has(`${d}|${h.id}`)) {
+            parkDia = d;
+            parkHorarioId = h.id;
+            break outer;
+          }
+        }
+      }
+      if (parkDia === -1) {
+        toast.error("Não há célula livre pra trocar — desative ou remova um slot primeiro.");
+        return;
+      }
+
+      // Step 1: park source na célula livre.
+      const r1 = await supabase
+        .from("formacao_slots")
+        .update({ dia_semana: parkDia, horario_id: parkHorarioId })
+        .eq("id", sourceId)
+        .select("*, formacao_horarios(hora, ordem)")
+        .single();
+      if (r1.error || !r1.data) { toast.error("Erro ao mover slot (1/3)."); return; }
+
+      // Step 2: move target → posição original do source.
+      const r2 = await supabase
+        .from("formacao_slots")
+        .update({ dia_semana: source.dia_semana, horario_id: source.horario_id })
+        .eq("id", target.id)
+        .select("*, formacao_horarios(hora, ordem)")
+        .single();
+      if (r2.error || !r2.data) {
+        // tenta voltar source pro lugar original pra não deixar inconsistente
+        await supabase
+          .from("formacao_slots")
+          .update({ dia_semana: source.dia_semana, horario_id: source.horario_id })
+          .eq("id", sourceId);
+        toast.error("Erro ao trocar slot (2/3).");
+        return;
+      }
+
+      // Step 3: move source → posição original do target.
+      const r3 = await supabase
+        .from("formacao_slots")
+        .update({ dia_semana: target.dia_semana, horario_id: target.horario_id })
+        .eq("id", sourceId)
+        .select("*, formacao_horarios(hora, ordem)")
+        .single();
+      if (r3.error || !r3.data) { toast.error("Erro ao trocar slot (3/3)."); return; }
+
+      setSlots((prev) =>
+        prev.map((s) => {
+          if (s.id === sourceId) return r3.data;
+          if (s.id === target.id) return r2.data;
+          return s;
+        }),
+      );
+      toast.success("Slots trocados!");
+    } finally {
+      setMovingSlot(false);
+    }
+  }
+
   // ─── Alocacao CRUD ────────────────────────────────────────────────────────
   async function addAlocacao(slotId: string, condutorId: string) {
     const supabase = createClient();
@@ -1200,12 +1305,35 @@ export default function CalendarioPage() {
                       const slotAlocacoes = slot ? getSlotAlocacoes(slot.id) : [];
 
                       if (!slot) {
+                        const cellKey = `${diaIdx}-${horario.id}`;
+                        const isOver = dragOverKey === cellKey && draggingSlotId !== null;
                         return (
                           <div
-                            key={`${diaIdx}-${horario.id}`}
+                            key={cellKey}
                             className="flex items-center justify-center rounded-xl min-h-[100px] transition-colors hover:bg-white/[0.04] cursor-pointer"
-                            style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.06)" }}
+                            style={{
+                              background: isOver ? "rgba(200,75,49,0.08)" : "rgba(255,255,255,0.02)",
+                              border: isOver
+                                ? "1px dashed rgba(200,75,49,0.6)"
+                                : "1px dashed rgba(255,255,255,0.06)",
+                            }}
                             onClick={() => createSlot(diaIdx, horario.id)}
+                            onDragOver={(e) => {
+                              if (!draggingSlotId) return;
+                              e.preventDefault();
+                              e.dataTransfer.dropEffect = "move";
+                              if (dragOverKey !== cellKey) setDragOverKey(cellKey);
+                            }}
+                            onDragLeave={() => {
+                              if (dragOverKey === cellKey) setDragOverKey(null);
+                            }}
+                            onDrop={(e) => {
+                              e.preventDefault();
+                              const id = draggingSlotId;
+                              setDragOverKey(null);
+                              setDraggingSlotId(null);
+                              if (id) moveOrSwapSlot(id, diaIdx, horario.id);
+                            }}
                           >
                             <Plus className="h-5 w-5" style={{ color: "rgba(253,251,247,0.15)" }} />
                           </div>
@@ -1231,18 +1359,63 @@ export default function CalendarioPage() {
                         );
                       }
 
+                      const cellKey = `${diaIdx}-${horario.id}`;
+                      const isDragging = draggingSlotId === slot.id;
+                      const isOver = dragOverKey === cellKey && draggingSlotId !== null && draggingSlotId !== slot.id;
                       return (
                         <div
-                          key={`${diaIdx}-${horario.id}`}
-                          className="rounded-xl p-2.5 flex flex-col gap-1.5 min-h-[100px]"
-                          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                          key={cellKey}
+                          draggable={!movingSlot}
+                          onDragStart={(e) => {
+                            e.dataTransfer.effectAllowed = "move";
+                            e.dataTransfer.setData("text/plain", slot.id);
+                            setDraggingSlotId(slot.id);
+                          }}
+                          onDragEnd={() => {
+                            setDraggingSlotId(null);
+                            setDragOverKey(null);
+                          }}
+                          onDragOver={(e) => {
+                            if (!draggingSlotId || draggingSlotId === slot.id) return;
+                            e.preventDefault();
+                            e.dataTransfer.dropEffect = "move";
+                            if (dragOverKey !== cellKey) setDragOverKey(cellKey);
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverKey === cellKey) setDragOverKey(null);
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault();
+                            const id = draggingSlotId;
+                            setDragOverKey(null);
+                            setDraggingSlotId(null);
+                            if (id && id !== slot.id) moveOrSwapSlot(id, diaIdx, horario.id);
+                          }}
+                          className="rounded-xl p-2.5 flex flex-col gap-1.5 min-h-[100px] transition-colors"
+                          style={{
+                            background: isOver ? "rgba(200,75,49,0.08)" : "rgba(255,255,255,0.03)",
+                            border: isOver
+                              ? "1px solid rgba(200,75,49,0.6)"
+                              : "1px solid rgba(255,255,255,0.06)",
+                            opacity: isDragging ? 0.4 : 1,
+                            cursor: movingSlot ? "wait" : "grab",
+                          }}
                         >
-                          {/* Top row: status + delete */}
+                          {/* Top row: grip + status + delete */}
                           <div className="flex items-center justify-between gap-1">
-                            <StatusDropdown
-                              current={slot.status}
-                              onChange={(status) => updateSlot(slot.id, { status } as Partial<FormacaoSlot>)}
-                            />
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span
+                                className="flex-shrink-0"
+                                title="Arraste pra mover"
+                                style={{ cursor: "grab", color: "rgba(253,251,247,0.25)" }}
+                              >
+                                <GripVertical className="h-3.5 w-3.5" />
+                              </span>
+                              <StatusDropdown
+                                current={slot.status}
+                                onChange={(status) => updateSlot(slot.id, { status } as Partial<FormacaoSlot>)}
+                              />
+                            </div>
                             <div className="flex items-center gap-0.5">
                               <button
                                 onClick={() => updateSlot(slot.id, { ativo: false } as Partial<FormacaoSlot>)}
