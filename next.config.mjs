@@ -41,6 +41,23 @@ const nextConfig = {
           { key: 'Pragma', value: 'no-cache' },
         ],
       },
+      // Página de login é client component static — sem esses headers o Next
+      // emite s-maxage=31536000 e o navegador serve HTML com chunks JS antigos
+      // após deploys, deixando o usuário com login que parece travar.
+      {
+        source: '/formacao/auth',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+          { key: 'Pragma', value: 'no-cache' },
+        ],
+      },
+      {
+        source: '/formacao/auth/:path*',
+        headers: [
+          { key: 'Cache-Control', value: 'no-store, no-cache, must-revalidate, max-age=0' },
+          { key: 'Pragma', value: 'no-cache' },
+        ],
+      },
       {
         source: '/formacao/curso/:path*',
         headers: [

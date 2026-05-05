@@ -86,6 +86,11 @@ function userFromJWT(token: string): User | null {
 /**
  * Try to get access_token from localStorage (the sb-auth-cookies store).
  * The cookies contain chunked session data that includes the tokens.
+ *
+ * @supabase/ssr 0.5+ prefixa o valor do cookie com "base64-" antes do
+ * payload codificado. Versões mais antigas serializavam o JSON direto
+ * (sem prefixo, sem base64). Lidamos com os dois pra não quebrar quem
+ * já tem localStorage do formato anterior.
  */
 function getTokenFromLocalStorage(): string | null {
   if (typeof window === "undefined") return null;
@@ -94,22 +99,34 @@ function getTokenFromLocalStorage(): string | null {
     if (!raw) return null;
     const cookies: { name: string; value: string }[] = JSON.parse(raw);
 
-    // Reassemble chunked cookies into a single string
+    // Concatena chunks na ordem certa (.0, .1, ... ou nome principal sozinho).
     const authCookies = cookies
       .filter((c) => c.name.includes("-auth-token") && !c.name.includes("code-verifier"))
       .sort((a, b) => a.name.localeCompare(b.name));
 
     if (authCookies.length === 0) return null;
 
-    // The cookie value is a base64-encoded JSON with access_token and refresh_token
-    const combined = authCookies.map((c) => c.value).join("");
-    // Try decoding as base64url first, then raw
-    let sessionStr: string;
-    try {
-      sessionStr = atob(combined.replace(/-/g, "+").replace(/_/g, "/"));
-    } catch {
+    let combined = authCookies.map((c) => c.value).join("");
+
+    let sessionStr: string | null = null;
+    if (combined.startsWith("base64-")) {
+      const payload = combined.slice("base64-".length);
+      try {
+        sessionStr = atob(payload.replace(/-/g, "+").replace(/_/g, "/"));
+      } catch {
+        return null;
+      }
+    } else if (combined.startsWith("{")) {
       sessionStr = combined;
+    } else {
+      // Compat: tenta base64url puro (sem prefixo); se falhar, JSON cru.
+      try {
+        sessionStr = atob(combined.replace(/-/g, "+").replace(/_/g, "/"));
+      } catch {
+        sessionStr = combined;
+      }
     }
+
     const session = JSON.parse(sessionStr);
     return session?.access_token || null;
   } catch {
