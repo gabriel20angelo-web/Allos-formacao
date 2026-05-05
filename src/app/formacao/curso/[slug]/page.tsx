@@ -28,7 +28,6 @@ import {
   Video,
   MessageCircle,
   Calendar,
-  Users,
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment, CourseMeeting } from "@/types";
 import { formatDuration } from "@/lib/utils/format";
@@ -597,23 +596,6 @@ export default function CourseOverviewPage() {
                   Link do Meet
                 </a>
               )}
-              {course.study_link_slug && course.study_link_url && (
-                <a
-                  href={`/formacao/${course.study_link_slug}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-2 px-4 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:-translate-y-0.5"
-                  style={{
-                    background: "rgba(46,158,143,0.12)",
-                    color: "#5ECEB8",
-                    border: "1px solid rgba(46,158,143,0.3)",
-                  }}
-                >
-                  <Users className="h-4 w-4" />
-                  {course.study_link_label || "Grupo de estudo"}
-                </a>
-              )}
-
               {course.certificate_enabled && isEnrolled && (
                 <Link
                   href={`/formacao/curso/${slug}/certificado`}

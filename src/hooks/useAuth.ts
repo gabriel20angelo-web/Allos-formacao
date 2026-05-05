@@ -47,6 +47,47 @@ interface InitialSession {
 const AuthContext = createContext<AuthContextValue | null>(null);
 
 const STORAGE_KEY = "sb-auth-cookies";
+const PROFILE_CACHE_KEY = "sb-profile-cache";
+
+interface CachedProfile {
+  userId: string;
+  profile: Profile;
+  cachedAt: number;
+}
+
+function readProfileCache(userId: string): Profile | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = localStorage.getItem(PROFILE_CACHE_KEY);
+    if (!raw) return null;
+    const parsed: CachedProfile = JSON.parse(raw);
+    if (parsed.userId !== userId) return null;
+    // 24h TTL — alem disso, refresh em background sempre roda mesmo com cache.
+    if (Date.now() - parsed.cachedAt > 24 * 60 * 60 * 1000) return null;
+    return parsed.profile;
+  } catch {
+    return null;
+  }
+}
+
+function writeProfileCache(userId: string, profile: Profile) {
+  if (typeof window === "undefined") return;
+  try {
+    const payload: CachedProfile = { userId, profile, cachedAt: Date.now() };
+    localStorage.setItem(PROFILE_CACHE_KEY, JSON.stringify(payload));
+  } catch {
+    // ignore (localStorage cheio/desabilitado)
+  }
+}
+
+function clearProfileCache() {
+  if (typeof window === "undefined") return;
+  try {
+    localStorage.removeItem(PROFILE_CACHE_KEY);
+  } catch {
+    // ignore
+  }
+}
 
 /**
  * Decode a JWT payload without verification.
@@ -155,7 +196,10 @@ export function AuthProvider({
           .select("id, full_name, email, avatar_url, role, certificate_name, created_at, updated_at")
           .eq("id", userId)
           .single();
-        setProfile(data);
+        if (data) {
+          setProfile(data);
+          writeProfileCache(userId, data);
+        }
       } catch (err) {
         logger.error("AUTH", "fetchProfile error:", err);
       }
@@ -195,6 +239,20 @@ export function AuthProvider({
         if (authUser) {
           currentUserIdRef.current = authUser.id;
           setUser(authUser);
+
+          // Stale-while-revalidate: usa cache do localStorage instantaneamente
+          // pra desbloquear UI (avatar, role checks). fetchProfile roda em
+          // background pra revalidar — qualquer mudanca de role/nome aparece
+          // na proxima paint.
+          const cached = readProfileCache(authUser.id);
+          if (cached) {
+            setProfile(cached);
+            // Drop loading o quanto antes — UI pode renderizar com cache.
+            setLoading(false);
+            // Revalida em background, sem await.
+            fetchProfile(authUser.id);
+            return; // pula o setLoading no finally
+          }
           await fetchProfile(authUser.id);
         } else {
           logger.debug("AUTH", "no valid session found");
@@ -235,6 +293,7 @@ export function AuthProvider({
     } catch {
       // ignore
     }
+    clearProfileCache();
     // Server-side: invalida o refresh token no Supabase + limpa cookies
     // HttpOnly que o JS não consegue clarear sozinho.
     try {

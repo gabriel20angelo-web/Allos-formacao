@@ -1,7 +1,8 @@
-// Atalho publico de curso: /formacao/<slug> -> redirect 302 pra study_link_url.
-// Resolve via RPC SECURITY DEFINER que tambem incrementa study_link_clicks.
+// Atalho publico: /formacao/<slug> -> redirect 302 pra destination_url.
+// Resolve via RPC SECURITY DEFINER que tambem incrementa clicks na tabela study_links.
 // Rotas estaticas (/formacao/admin, /formacao/curso, etc) tem prioridade
 // natural sobre [shortlink] no Next App Router.
+// Gerenciado em /formacao/admin/atalhos.
 
 import { redirect, notFound } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";

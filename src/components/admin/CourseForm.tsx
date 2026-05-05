@@ -28,7 +28,6 @@ import CertificateStep from "@/components/admin/course-form/CertificateStep";
 import { useCategories } from "@/hooks/useCategories";
 import { slugify } from "@/lib/utils/format";
 import { detectVideoSource } from "@/lib/utils/video";
-import { validateStudyLinkSlug, validateStudyLinkUrl } from "@/lib/utils/studyLink";
 import { toast } from "sonner";
 import {
   Plus,
@@ -215,12 +214,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const STEPS = courseType === "collection" ? COLLECTION_STEPS : courseType === "sync" ? SYNC_STEPS : ALL_STEPS;
   const [learningPoints, setLearningPoints] = useState<string[]>([""]);
 
-  // Atalho publico (grupo de estudo): /formacao/[slug] redireciona pra URL externa
-  const [studyLinkSlug, setStudyLinkSlug] = useState("");
-  const [studyLinkUrl, setStudyLinkUrl] = useState("");
-  const [studyLinkLabel, setStudyLinkLabel] = useState("");
-  const [studyLinkClicks, setStudyLinkClicks] = useState(0);
-
   // Sync course: comunidade + encontros
   const [whatsappGroupUrl, setWhatsappGroupUrl] = useState("");
   const [meetUrl, setMeetUrl] = useState("");
@@ -362,10 +355,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       setMeetUrl(course.meet_url || "");
       setInstructorBio(course.instructor_bio || "");
       setLiveSessionDuration(course.live_session_duration_minutes ?? 120);
-      setStudyLinkSlug(course.study_link_slug || "");
-      setStudyLinkUrl(course.study_link_url || "");
-      setStudyLinkLabel(course.study_link_label || "");
-      setStudyLinkClicks(course.study_link_clicks ?? 0);
 
       // Load meetings agendados pra cursos sync
       const { data: meetingsData } = await createClient()
@@ -438,23 +427,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       return;
     }
 
-    // Atalho publico: se algum campo do bloco "grupo de estudo" tem valor, todos precisam ser validos.
-    const studyAny = studyLinkSlug.trim() || studyLinkUrl.trim() || studyLinkLabel.trim();
-    if (studyAny) {
-      const slugCheck = validateStudyLinkSlug(studyLinkSlug);
-      if (!slugCheck.ok) {
-        if (!silent) toast.error(`Atalho público: ${slugCheck.reason}`);
-        isSavingRef.current = false;
-        return;
-      }
-      const urlCheck = validateStudyLinkUrl(studyLinkUrl);
-      if (!urlCheck.ok) {
-        if (!silent) toast.error(`Atalho público: ${urlCheck.reason}`);
-        isSavingRef.current = false;
-        return;
-      }
-    }
-
     if (silent) {
       setIsAutoSaving(true);
     } else {
@@ -490,9 +462,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         meet_url: courseType === "sync" ? (meetUrl.trim() || null) : null,
         instructor_bio: courseType === "sync" ? (instructorBio.trim() || null) : null,
         live_session_duration_minutes: courseType === "sync" ? (liveSessionDuration || 120) : null,
-        study_link_slug: studyLinkSlug.trim().toLowerCase() || null,
-        study_link_url: studyLinkUrl.trim() || null,
-        study_link_label: studyLinkLabel.trim() || null,
       };
 
       let savedCourseId = courseId;
@@ -1338,58 +1307,6 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             </div>
           </div>
 
-          {/* Atalho público (grupo de estudo) */}
-          <div
-            className="p-5 rounded-[12px] space-y-4"
-            style={{ background: "rgba(46,158,143,0.04)", border: "1px solid rgba(46,158,143,0.18)" }}
-          >
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-semibold mb-1" style={{ color: "rgb(94,206,184)" }}>
-                  Atalho público (grupo de estudo)
-                </p>
-                <p className="text-xs text-cream/40">
-                  Cria um link curto em <code className="text-cream/60">allos.org.br/formacao/&lt;slug&gt;</code> que redireciona pra URL externa (WhatsApp, Telegram, Discord etc).
-                </p>
-              </div>
-              {studyLinkClicks > 0 && (
-                <div className="flex-shrink-0 text-xs text-cream/50">
-                  <span className="font-mono text-cream/80">{studyLinkClicks}</span> {studyLinkClicks === 1 ? "clique" : "cliques"}
-                </div>
-              )}
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-              <Input
-                label="Slug (URL)"
-                placeholder="ex: jung2026"
-                value={studyLinkSlug}
-                onChange={(e) => {
-                  setStudyLinkSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, ""));
-                  markDirty();
-                }}
-              />
-              <Input
-                label="Rótulo do botão (opcional)"
-                placeholder="Entrar no grupo de estudo"
-                value={studyLinkLabel}
-                onChange={(e) => { setStudyLinkLabel(e.target.value); markDirty(); }}
-              />
-            </div>
-
-            <Input
-              label="URL de destino"
-              placeholder="https://chat.whatsapp.com/..."
-              value={studyLinkUrl}
-              onChange={(e) => { setStudyLinkUrl(e.target.value); markDirty(); }}
-            />
-
-            {studyLinkSlug.trim() && (
-              <p className="text-xs text-cream/50">
-                Preview: <span className="font-mono text-cream/80">allos.org.br/formacao/{studyLinkSlug.trim().toLowerCase()}</span>
-              </p>
-            )}
-          </div>
         </div>
       )}
 

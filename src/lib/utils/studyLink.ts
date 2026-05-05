@@ -1,5 +1,5 @@
-// Atalho publico do curso (study link). Slug fica em /formacao/[slug]
-// e redireciona pra study_link_url. Reserva nomes que ja sao rotas.
+// Atalho publico (study link). Slug fica em /formacao/[slug] e redireciona
+// pra destination_url da tabela study_links. Reserva nomes que ja sao rotas.
 
 export const RESERVED_STUDY_LINK_SLUGS = new Set<string>([
   "acervo",

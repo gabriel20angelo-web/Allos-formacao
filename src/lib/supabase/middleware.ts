@@ -80,16 +80,28 @@ export async function updateSession(request: NextRequest) {
       }
     );
 
-    let user: { id: string } | null = null;
+    // getClaims() verifica o JWT local via JWKS cacheado (Supabase usa ES256
+    // assimetrico) — elimina round-trip pra /auth/v1/user em quase toda chamada.
+    // Fallback pra getUser() quando claims falhar (HMAC, JWKS indisponivel etc).
+    let user: { id: string; role?: string | null } | null = null;
     try {
-      const result = await supabase.auth.getUser();
-      user = result.data.user;
+      const claimsResult = await supabase.auth.getClaims();
+      const claims = claimsResult.data?.claims;
+      if (claims?.sub) {
+        user = {
+          id: claims.sub as string,
+          role: (claims as Record<string, unknown>).user_role as string | null | undefined ?? null,
+        };
+      } else if (claimsResult.error) {
+        // claims invalido/expirado — tenta refresh via getUser
+        const result = await supabase.auth.getUser();
+        user = result.data.user ? { id: result.data.user.id } : null;
+      }
     } catch (err) {
-      // Corrupted/truncated sb-* cookies make getUser throw and propagate as
-      // a raw 500 ("Internal Server Error") because middleware errors bypass
-      // error.tsx. Treat as unauthenticated and clear the bad cookies so the
-      // next request starts from a clean slate.
-      console.error("[MIDDLEWARE] auth.getUser threw, clearing session:", err);
+      // Corrupted/truncated sb-* cookies fazem getClaims/getUser quebrar e
+      // propagar como 500 cru porque middleware errors bypassam error.tsx.
+      // Tratar como nao autenticado e limpar cookies pra proxima request.
+      console.error("[MIDDLEWARE] auth claims threw, clearing session:", err);
       const target = pathname.startsWith("/formacao/admin") || pathname.startsWith("/formacao/curso")
         ? `/formacao/auth?redirect=${encodeURIComponent(pathname)}`
         : pathname;
@@ -105,23 +117,39 @@ export async function updateSession(request: NextRequest) {
       return hardRedirect(`/formacao/auth?redirect=${encodeURIComponent(pathname)}`, supabaseResponse);
     }
 
-    // Admin routes — check role (admin or instructor required)
+    // Admin routes — check role (admin or instructor required).
+    // Prefere claim `user_role` no JWT (custom claim da Auth Hook em
+    // supabase/functions/access-token-hook): zero round-trip. Cai pra query
+    // em profiles so quando o claim nao existe (hook ainda nao habilitada).
     if (pathname.startsWith("/formacao/admin") && user) {
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("role")
-        .eq("id", user.id)
-        .single();
+      const allowedRoles = new Set(["admin", "instructor"]);
+      let role: string | null = user.role ?? null;
 
-      const allowedRoles = ["admin", "instructor"];
-      if (!profile?.role || !allowedRoles.includes(profile.role)) {
+      if (!role) {
+        const { data: profile } = await supabase
+          .from("profiles")
+          .select("role")
+          .eq("id", user.id)
+          .single();
+        role = profile?.role ?? null;
+      }
+
+      if (!role || !allowedRoles.has(role)) {
         return hardRedirect("/formacao", supabaseResponse);
       }
     }
 
-    // Prevent CDN (Cloudflare/Railway) from caching HTML responses
-    supabaseResponse.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
-    supabaseResponse.headers.set("Pragma", "no-cache");
+    // Cache-Control: admin tem dados sensiveis (roles, alunos, financeiro) e
+    // nao pode ser cacheado em lugar nenhum. Demais rotas autenticadas (curso,
+    // meus-cursos via subpath /curso/*) podem usar `private` — o navegador do
+    // usuario reaproveita o HTML em back/forward navigation, mas nenhum proxy
+    // intermediario (Cloudflare/Railway edge) cacheia entre usuarios.
+    if (pathname.startsWith("/formacao/admin")) {
+      supabaseResponse.headers.set("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0");
+      supabaseResponse.headers.set("Pragma", "no-cache");
+    } else {
+      supabaseResponse.headers.set("Cache-Control", "private, max-age=0, must-revalidate");
+    }
 
     return supabaseResponse;
   } catch (err) {
