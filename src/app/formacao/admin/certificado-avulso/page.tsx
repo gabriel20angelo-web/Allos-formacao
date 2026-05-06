@@ -1,11 +1,23 @@
 "use client";
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import Card from "@/components/ui/Card";
 import { Award, Download, Eye, RotateCcw } from "lucide-react";
 import { jsPDF } from "jspdf";
+
+type TipoCert = "participação" | "conclusão" | "supervisão" | "palestra" | "organização";
+
+function loadImage(src: string): Promise<HTMLImageElement> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
 
 function formatDatePtBR(dateStr: string) {
   const months = [
@@ -60,12 +72,18 @@ function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number)
 export default function CertificadoAvulsoPage() {
   const [nome, setNome] = useState("");
   const [horas, setHoras] = useState("20");
+  const [tipo, setTipo] = useState<TipoCert>("conclusão");
   const [textoCorpo, setTextoCorpo] = useState(
     "concluiu com êxito o programa de estágio em Psicologia Clínica da Associação Allos, com carga horária total de {horas} ({horas_extenso}) horas, no período de {data}."
   );
   const [data, setData] = useState(new Date().toISOString().split("T")[0]);
   const [previewing, setPreviewing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const [signatureImg, setSignatureImg] = useState<HTMLImageElement | null>(null);
+
+  useEffect(() => {
+    loadImage("/assinatura.jpg").then(setSignatureImg).catch(() => {});
+  }, []);
 
   const drawCertificate = useCallback(
     (canvas: HTMLCanvasElement) => {
@@ -76,6 +94,7 @@ export default function CertificadoAvulsoPage() {
       const H = 1190;
       canvas.width = W;
       canvas.height = H;
+      const cx = W / 2;
 
       // Background
       ctx.fillStyle = "#FFFFFF";
@@ -93,102 +112,117 @@ export default function CertificadoAvulsoPage() {
       ctx.fillStyle = "#c0392b";
       ctx.fillRect(W * 0.4, H - 12, W * 0.2, 12);
 
+      // Inner frame
+      const fm = 40;
+      ctx.strokeStyle = "rgba(26,58,58,0.12)";
+      ctx.lineWidth = 1;
+      ctx.strokeRect(fm, fm, W - fm * 2, H - fm * 2);
+
       // Header
       ctx.textAlign = "center";
+      ctx.font = "700 28px 'Helvetica Neue', Arial, sans-serif";
       ctx.fillStyle = "#1a3a3a";
-      ctx.font = "700 28px 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      ctx.fillText("ASSOCIAÇÃO ALLOS", W / 2, 110);
+      ctx.letterSpacing = "8px";
+      ctx.fillText("ASSOCIAÇÃO ALLOS", cx, 110);
+      ctx.letterSpacing = "0px";
 
+      ctx.font = "400 16px 'Helvetica Neue', Arial, sans-serif";
       ctx.fillStyle = "#888888";
-      ctx.font = "400 16px 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      ctx.fillText("PSICOLOGIA · FORMAÇÃO · PESQUISA", W / 2, 140);
+      ctx.letterSpacing = "4px";
+      ctx.fillText("PSICOLOGIA  ·  FORMAÇÃO  ·  PESQUISA", cx, 140);
+      ctx.letterSpacing = "0px";
 
       // Decorative line with diamond
-      const lineY = 165;
+      const lineW = 120;
       ctx.strokeStyle = "#c0392b";
-      ctx.lineWidth = 1;
+      ctx.lineWidth = 2;
       ctx.beginPath();
-      ctx.moveTo(W * 0.25, lineY);
-      ctx.lineTo(W / 2 - 12, lineY);
-      ctx.moveTo(W / 2 + 12, lineY);
-      ctx.lineTo(W * 0.75, lineY);
+      ctx.moveTo(cx - lineW, 165);
+      ctx.lineTo(cx + lineW, 165);
       ctx.stroke();
+
       ctx.fillStyle = "#c0392b";
-      ctx.beginPath();
-      ctx.moveTo(W / 2, lineY - 6);
-      ctx.lineTo(W / 2 + 6, lineY);
-      ctx.lineTo(W / 2, lineY + 6);
-      ctx.lineTo(W / 2 - 6, lineY);
-      ctx.closePath();
-      ctx.fill();
+      ctx.save();
+      ctx.translate(cx, 165);
+      ctx.rotate(Math.PI / 4);
+      ctx.fillRect(-4, -4, 8, 8);
+      ctx.restore();
 
       // "CERTIFICADO"
-      ctx.fillStyle = "#1a3a3a";
       ctx.font = "300 72px Georgia, 'Times New Roman', serif";
-      ctx.fillText("CERTIFICADO", W / 2, 275);
+      ctx.fillStyle = "#1a3a3a";
+      ctx.fillText("CERTIFICADO", cx, 260);
+
+      // "DE [TIPO]"
+      ctx.font = "400 22px 'Helvetica Neue', Arial, sans-serif";
+      ctx.fillStyle = "#888888";
+      ctx.letterSpacing = "6px";
+      ctx.fillText(`DE ${tipo.toUpperCase()}`, cx, 295);
+      ctx.letterSpacing = "0px";
 
       // "Certificamos que"
-      ctx.fillStyle = "#444444";
-      ctx.font = "300 22px 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      ctx.fillText("Certificamos que", W / 2, 380);
+      ctx.font = "300 22px 'Helvetica Neue', Arial, sans-serif";
+      ctx.fillStyle = "#666666";
+      ctx.fillText("Certificamos que", cx, 370);
 
       // Name
-      ctx.fillStyle = "#c0392b";
       ctx.font = "italic 700 52px Georgia, 'Times New Roman', serif";
-      ctx.fillText(nome || "Nome Completo", W / 2, 445);
-
-      // Name underline
+      ctx.fillStyle = "#c0392b";
       const nameText = nome || "Nome Completo";
-      const nameWidth = ctx.measureText(nameText).width;
-      const grad = ctx.createLinearGradient(W / 2 - nameWidth / 2, 0, W / 2 + nameWidth / 2, 0);
-      grad.addColorStop(0, "rgba(192,57,43,0)");
-      grad.addColorStop(0.2, "rgba(192,57,43,0.3)");
-      grad.addColorStop(0.5, "rgba(192,57,43,0.5)");
-      grad.addColorStop(0.8, "rgba(192,57,43,0.3)");
-      grad.addColorStop(1, "rgba(192,57,43,0)");
-      ctx.strokeStyle = grad;
-      ctx.lineWidth = 1.5;
-      ctx.beginPath();
-      ctx.moveTo(W / 2 - nameWidth / 2 - 30, 460);
-      ctx.lineTo(W / 2 + nameWidth / 2 + 30, 460);
-      ctx.stroke();
+      ctx.fillText(nameText, cx, 440);
+
+      // Name underline (gradient bar)
+      const nw = ctx.measureText(nameText).width;
+      const nlGrad = ctx.createLinearGradient(cx - nw / 2 - 10, 452, cx + nw / 2 + 10, 452);
+      nlGrad.addColorStop(0, "transparent");
+      nlGrad.addColorStop(0.15, "rgba(192,57,43,0.25)");
+      nlGrad.addColorStop(0.85, "rgba(192,57,43,0.25)");
+      nlGrad.addColorStop(1, "transparent");
+      ctx.fillStyle = nlGrad;
+      ctx.fillRect(cx - nw / 2 - 20, 448, nw + 40, 5);
 
       // Body text with variable replacement
       const h = parseInt(horas) || 0;
       const bodyText = textoCorpo
-        .replace(/\{nome\}/g, nome || "Nome Completo")
+        .replace(/\{nome\}/g, nameText)
         .replace(/\{horas\}/g, String(h))
         .replace(/\{horas_extenso\}/g, horasExtenso(h))
         .replace(/\{data\}/g, formatDatePtBR(data));
 
-      ctx.fillStyle = "#333333";
-      ctx.font = "400 24px Georgia, 'Times New Roman', serif";
+      ctx.font = "300 20px 'Helvetica Neue', Arial, sans-serif";
+      ctx.fillStyle = "#444444";
       const lines = wrapText(ctx, bodyText, W * 0.65);
-      let bodyY = 520;
-      lines.forEach((line) => {
-        ctx.fillText(line, W / 2, bodyY);
-        bodyY += 36;
+      lines.forEach((line, i) => {
+        ctx.fillText(line, cx, 500 + i * 34);
       });
 
-      // Bottom date
-      ctx.fillStyle = "#888888";
-      ctx.font = "400 18px 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      ctx.fillText(formatDatePtBR(data), W / 2, H - 120);
+      // Location line
+      const locY = 500 + lines.length * 34 + 30;
+      ctx.font = "italic 18px Georgia, 'Times New Roman', serif";
+      ctx.fillStyle = "#999999";
+      ctx.fillText(`Belo Horizonte, ${formatDatePtBR(data)}`, cx, locY);
 
-      // Footer line
-      ctx.strokeStyle = "#c0392b";
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.moveTo(W * 0.3, H - 80);
-      ctx.lineTo(W * 0.7, H - 80);
-      ctx.stroke();
-
-      ctx.fillStyle = "#1a3a3a";
-      ctx.font = "600 14px 'Helvetica Neue', Helvetica, Arial, sans-serif";
-      ctx.fillText("Associação Allos · allos.org.br", W / 2, H - 55);
+      // Signature
+      if (signatureImg) {
+        const iw = signatureImg.naturalWidth;
+        const ih = signatureImg.naturalHeight;
+        const sx = Math.round(iw * 0.36);
+        const sy = Math.round(ih * 0.58);
+        const sw = Math.round(iw * 0.40);
+        const sh = Math.round(ih * 0.38);
+        const sigDrawW = W * 0.30;
+        const sigDrawH = sigDrawW * (sh / sw);
+        const sigX = cx - sigDrawW / 2;
+        const sigY = H - 55 - sigDrawH;
+        ctx.drawImage(signatureImg, sx, sy, sw, sh, sigX, sigY, sigDrawW, sigDrawH);
+      }
     },
-    [nome, horas, textoCorpo, data]
+    [nome, horas, tipo, textoCorpo, data, signatureImg]
   );
+
+  useEffect(() => {
+    if (previewing && canvasRef.current) drawCertificate(canvasRef.current);
+  }, [previewing, drawCertificate]);
 
   function preview() {
     if (!nome.trim()) {
@@ -196,9 +230,6 @@ export default function CertificadoAvulsoPage() {
       return;
     }
     setPreviewing(true);
-    setTimeout(() => {
-      if (canvasRef.current) drawCertificate(canvasRef.current);
-    }, 100);
   }
 
   function downloadPDF() {
@@ -260,6 +291,22 @@ export default function CertificadoAvulsoPage() {
                     style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", colorScheme: "dark" }}
                   />
                 </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-dm text-cream/50 mb-1.5">Tipo</label>
+                <select
+                  value={tipo}
+                  onChange={(e) => setTipo(e.target.value as TipoCert)}
+                  className="w-full px-3 py-2.5 rounded-lg text-sm font-dm text-cream outline-none"
+                  style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", colorScheme: "dark" }}
+                >
+                  <option value="participação">Participação</option>
+                  <option value="conclusão">Conclusão</option>
+                  <option value="supervisão">Supervisão</option>
+                  <option value="palestra">Palestra</option>
+                  <option value="organização">Organização</option>
+                </select>
               </div>
 
               <div>
