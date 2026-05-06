@@ -12,6 +12,7 @@ import {
   Eye,
   EyeOff,
   CalendarDays,
+  Infinity as InfinityIcon,
 } from "lucide-react";
 import type { CertificadoEvento } from "@/types";
 
@@ -22,6 +23,7 @@ const EMPTY_FORM = {
   link: "",
   data_inicio: "",
   data_fim: "",
+  permanente: false,
 };
 
 export default function EventosTab() {
@@ -32,16 +34,25 @@ export default function EventosTab() {
     null
   );
 
-  // Fetch initial events
+  // Fetch initial events. Antes do select, desativa em massa os eventos
+  // vencidos não-permanentes (ativo=true & permanente=false & data_fim<now).
+  // Eventos permanentes ficam ativos até serem desligados manualmente.
   useEffect(() => {
     const supabase = createClient();
-    supabase
-      .from(TABLE)
-      .select("*")
-      .order("data_inicio", { ascending: false })
-      .then(({ data }) => {
-        if (data) setEventos(data as CertificadoEvento[]);
-      });
+    (async () => {
+      const nowIso = new Date().toISOString();
+      await supabase
+        .from(TABLE)
+        .update({ ativo: false })
+        .eq("ativo", true)
+        .eq("permanente", false)
+        .lt("data_fim", nowIso);
+      const { data } = await supabase
+        .from(TABLE)
+        .select("*")
+        .order("data_inicio", { ascending: false });
+      if (data) setEventos(data as CertificadoEvento[]);
+    })();
   }, []);
 
   async function handleAdd() {
@@ -70,6 +81,7 @@ export default function EventosTab() {
         data_inicio: dataInicioIso,
         data_fim: dataFimIso,
         ativo: true,
+        permanente: eventoForm.permanente,
       })
       .select("*")
       .single();
@@ -92,6 +104,26 @@ export default function EventosTab() {
       return;
     }
     setEventos((prev) => prev.map((e) => (e.id === id ? { ...e, ativo } : e)));
+  }
+
+  async function togglePermanente(id: string, permanente: boolean) {
+    const supabase = createClient();
+    const { error } = await supabase
+      .from(TABLE)
+      .update({ permanente })
+      .eq("id", id);
+    if (error) {
+      toast.error("Erro ao atualizar evento.");
+      return;
+    }
+    setEventos((prev) =>
+      prev.map((e) => (e.id === id ? { ...e, permanente } : e))
+    );
+    toast.success(
+      permanente
+        ? "Evento marcado como permanente."
+        : "Evento sem permanência: vai desativar quando o horário acabar."
+    );
   }
 
   async function handleDelete(id: string) {
@@ -172,6 +204,28 @@ export default function EventosTab() {
               style={{ colorScheme: "dark" }}
             />
           </div>
+          <label className="col-span-full flex items-start gap-2.5 px-3 py-2.5 rounded-lg bg-white/5 border border-white/10 cursor-pointer select-none hover:bg-white/[0.07] transition-colors">
+            <input
+              type="checkbox"
+              checked={eventoForm.permanente}
+              onChange={(e) =>
+                setEventoForm((f) => ({ ...f, permanente: e.target.checked }))
+              }
+              className="mt-0.5 accent-amber-400"
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-1.5">
+                <InfinityIcon className="h-3.5 w-3.5 text-amber-400" />
+                <span className="text-sm font-dm font-medium text-cream">
+                  Manter ativo permanentemente
+                </span>
+              </div>
+              <p className="text-[11px] font-dm text-cream-40 mt-0.5">
+                Eventos permanentes ficam ativos mesmo depois do horário acabar
+                — só desligam quando você clicar em &quot;Inativo&quot;.
+              </p>
+            </div>
+          </label>
         </div>
         <Button size="sm" onClick={handleAdd} loading={adding}>
           <Plus className="h-4 w-4" />
@@ -185,19 +239,29 @@ export default function EventosTab() {
           <motion.div
             key={evento.id}
             layout
-            className={`flex items-center justify-between px-4 py-3 rounded-xl bg-surface-2 border border-border-soft ${
-              evento.ativo ? "" : "opacity-50"
-            }`}
+            className={`flex items-center justify-between px-4 py-3 rounded-xl bg-surface-2 border ${
+              evento.permanente
+                ? "border-amber-400/30"
+                : "border-border-soft"
+            } ${evento.ativo ? "" : "opacity-50"}`}
           >
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
                 <CalendarDays
-                  className="h-4 w-4 flex-shrink-0 text-accent"
+                  className={`h-4 w-4 flex-shrink-0 ${
+                    evento.permanente ? "text-amber-400" : "text-accent"
+                  }`}
                   aria-hidden="true"
                 />
                 <span className="text-sm font-dm font-semibold truncate text-cream">
                   {evento.titulo}
                 </span>
+                {evento.permanente && (
+                  <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-dm font-medium bg-amber-400/15 text-amber-300 flex-shrink-0">
+                    <InfinityIcon className="h-2.5 w-2.5" />
+                    Permanente
+                  </span>
+                )}
               </div>
               {evento.descricao && (
                 <p className="text-xs font-dm mt-0.5 ml-6 truncate text-cream-40">
@@ -215,6 +279,24 @@ export default function EventosTab() {
               </div>
             </div>
             <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() =>
+                  togglePermanente(evento.id, !evento.permanente)
+                }
+                title={
+                  evento.permanente
+                    ? "Permanente: não desativa quando o horário acabar"
+                    : "Marcar como permanente (não desativa automaticamente)"
+                }
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors border ${
+                  evento.permanente
+                    ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
+                    : "bg-white/5 text-cream-40 border-border-soft"
+                }`}
+              >
+                <InfinityIcon className="h-3 w-3" />
+                {evento.permanente ? "Permanente" : "Temporário"}
+              </button>
               <button
                 onClick={() => toggleEvento(evento.id, !evento.ativo)}
                 className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors border border-border-soft ${

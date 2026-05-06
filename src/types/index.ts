@@ -306,6 +306,7 @@ export interface CertificadoEvento {
   data_inicio: string;
   data_fim: string;
   ativo: boolean;
+  permanente: boolean;
   created_at: string;
 }
 
