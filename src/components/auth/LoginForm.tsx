@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { createClient } from "@/lib/supabase/client";
+import { createClient, seedLocalStorageCookies } from "@/lib/supabase/client";
 import {
   authErrorMessage,
   isRetriableAuthError,
@@ -11,7 +11,43 @@ import Input from "@/components/ui/Input";
 import { toast } from "sonner";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RETRY_DELAY_MS = 1500;
+
+type ServerSignInResult =
+  | { ok: true; authCookies: { name: string; value: string }[] }
+  | { ok: false; kind: "invalid_credentials" | "network" | "unknown"; message?: string };
+
+// Login server-side fallback: o servidor chama Supabase via Railway (rota
+// backbone, não passa pelo CF datacenter do usuário). Resolve quando o
+// browser não consegue chegar em *.supabase.co — CF 522, iCloud Private
+// Relay, adblock, DNS de operadora etc.
+async function signInViaServer(
+  email: string,
+  password: string
+): Promise<ServerSignInResult> {
+  try {
+    const res = await fetch("/formacao/api/sign-in", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Allos-Auth": "1",
+      },
+      body: JSON.stringify({ email, password }),
+    });
+    if (res.ok) {
+      const body = (await res.json()) as {
+        authCookies?: { name: string; value: string }[];
+      };
+      return { ok: true, authCookies: body.authCookies || [] };
+    }
+    if (res.status === 401) return { ok: false, kind: "invalid_credentials" };
+    if (res.status === 502 || res.status === 503 || res.status === 504) {
+      return { ok: false, kind: "network" };
+    }
+    return { ok: false, kind: "unknown" };
+  } catch {
+    return { ok: false, kind: "network" };
+  }
+}
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -44,20 +80,42 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
 
     setLoading(true);
 
-    // Tenta logar. Se falhar com erro transitório (Supabase fora do ar,
-    // Cloudflare 522, timeout), aguarda 1.5s e tenta uma vez mais. Erros
-    // permanentes (credenciais inválidas, rate limit) saem imediatamente.
-    let { data, error } = await supabase.auth.signInWithPassword({
+    // Saneia o redirect — só aceita caminhos relativos same-origin.
+    const target =
+      redirectTo &&
+      redirectTo.startsWith("/") &&
+      !redirectTo.startsWith("//") &&
+      !redirectTo.includes("\\")
+        ? redirectTo
+        : "/formacao";
+
+    // 1ª tentativa: SDK direto (path rápido — funciona pra maioria).
+    const { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    // Se erro transitório (CF 522, fetch failed, timeout) → fallback
+    // server-side. Retry direto via SDK não ajuda quando a rota do browser
+    // pro Supabase está bloqueada (rede do user, adblock, Private Relay).
     if (error && isRetriableAuthError(error)) {
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-      ({ data, error } = await supabase.auth.signInWithPassword({
-        email,
-        password,
-      }));
+      const serverResult = await signInViaServer(email, password);
+      if (serverResult.ok) {
+        // Servidor já setou cookies HttpOnly via response. Popula localStorage
+        // do SDK pra useAuth ler a sessão sem precisar bater no Supabase.
+        if (serverResult.authCookies.length > 0) {
+          seedLocalStorageCookies(serverResult.authCookies);
+        }
+        toast.success("Login realizado com sucesso!");
+        window.location.href = target;
+        return;
+      }
+      if (serverResult.kind === "invalid_credentials") {
+        toast.error("Email ou senha incorretos.");
+        setLoading(false);
+        return;
+      }
+      // network/unknown: cai pro fluxo de erro abaixo com o erro original
     }
 
     if (error || !data.session) {
@@ -66,9 +124,9 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
       return;
     }
 
-    // Bridge the session to HttpOnly server cookies so middleware/SSR
-    // recognize the user immediately. Without this, Brave/Safari shields
-    // block document.cookie and the next navigation loops back to /auth.
+    // SDK direto funcionou. Bridge a sessão pra cookies HttpOnly servidor
+    // (sem isso Brave/Safari shields bloqueiam document.cookie e o middleware
+    // não vê a sessão, gerando loop de redirect pra /auth).
     try {
       const res = await fetch("/formacao/auth/set-session", {
         method: "POST",
@@ -87,10 +145,6 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
     }
 
     toast.success("Login realizado com sucesso!");
-    // Saneia o redirect — só aceita caminhos relativos same-origin.
-    const target = redirectTo && redirectTo.startsWith("/") && !redirectTo.startsWith("//") && !redirectTo.includes("\\")
-      ? redirectTo
-      : "/formacao";
     window.location.href = target;
   }
 
