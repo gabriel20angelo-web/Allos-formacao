@@ -32,6 +32,7 @@ interface Evento {
   data_inicio: string;
   data_fim: string;
   ativo: boolean;
+  permanente?: boolean;
 }
 
 interface ScheduleItem {
@@ -115,7 +116,6 @@ export default function SyncGroupsSection() {
             .from("certificado_eventos")
             .select("*")
             .eq("ativo", true)
-            .gte("data_fim", new Date().toISOString())
             .order("data_inicio"),
           client
             .from("formacao_cronograma")
@@ -203,10 +203,15 @@ export default function SyncGroupsSection() {
     return map;
   }, [schedule]);
 
-  // Active/upcoming events
+  // Active/upcoming events: permanentes sempre aparecem (independente da janela);
+  // não-permanentes só enquanto data_fim >= now.
   const activeEventos = useMemo(() => {
     const now = new Date();
-    return eventos.filter(e => e.ativo && new Date(e.data_fim) >= now);
+    return eventos.filter(e => {
+      if (!e.ativo) return false;
+      if (e.permanente) return true;
+      return new Date(e.data_fim) >= now;
+    });
   }, [eventos]);
 
   if (loading || error || !visivel) return null;
