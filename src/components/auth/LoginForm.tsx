@@ -2,11 +2,16 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
+import {
+  authErrorMessage,
+  isRetriableAuthError,
+} from "@/lib/auth/error-message";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { toast } from "sonner";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const RETRY_DELAY_MS = 1500;
 
 interface LoginFormProps {
   redirectTo?: string;
@@ -39,17 +44,24 @@ export default function LoginForm({ redirectTo }: LoginFormProps) {
 
     setLoading(true);
 
-    const { data, error } = await supabase.auth.signInWithPassword({
+    // Tenta logar. Se falhar com erro transitório (Supabase fora do ar,
+    // Cloudflare 522, timeout), aguarda 1.5s e tenta uma vez mais. Erros
+    // permanentes (credenciais inválidas, rate limit) saem imediatamente.
+    let { data, error } = await supabase.auth.signInWithPassword({
       email,
       password,
     });
 
+    if (error && isRetriableAuthError(error)) {
+      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
+      ({ data, error } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      }));
+    }
+
     if (error || !data.session) {
-      toast.error(
-        error?.message === "Invalid login credentials"
-          ? "Email ou senha incorretos."
-          : error?.message || "Não foi possível entrar."
-      );
+      toast.error(authErrorMessage(error, "Não foi possível entrar."));
       setLoading(false);
       return;
     }
