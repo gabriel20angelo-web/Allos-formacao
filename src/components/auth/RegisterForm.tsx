@@ -2,17 +2,12 @@
 
 import { useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  authErrorMessage,
-  isRetriableAuthError,
-} from "@/lib/auth/error-message";
 import Button from "@/components/ui/Button";
 import Input from "@/components/ui/Input";
 import { toast } from "sonner";
 import { Check } from "lucide-react";
 
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const RETRY_DELAY_MS = 1500;
 
 interface RegisterFormProps {
   redirectTo?: string;
@@ -85,7 +80,7 @@ export default function RegisterForm({ redirectTo: _redirectTo }: RegisterFormPr
 
     setLoading(true);
 
-    const signUpPayload = {
+    const { data, error } = await supabase.auth.signUp({
       email,
       password,
       options: {
@@ -94,19 +89,10 @@ export default function RegisterForm({ redirectTo: _redirectTo }: RegisterFormPr
         },
         emailRedirectTo: `${process.env.NEXT_PUBLIC_APP_URL || window.location.origin}/formacao/auth/callback`,
       },
-    };
-
-    // Mesma resiliência do login: tenta uma vez mais quando o Supabase
-    // devolve erro transitório (5xx, timeout, fetch failed).
-    let { data, error } = await supabase.auth.signUp(signUpPayload);
-
-    if (error && isRetriableAuthError(error)) {
-      await new Promise((r) => setTimeout(r, RETRY_DELAY_MS));
-      ({ data, error } = await supabase.auth.signUp(signUpPayload));
-    }
+    });
 
     if (error) {
-      toast.error(authErrorMessage(error, "Não foi possível criar a conta."));
+      toast.error(error.message);
       setLoading(false);
       return;
     }
