@@ -28,6 +28,11 @@ export const runtime = "nodejs";
 
 const CSRF_HEADER = "x-allos-auth";
 
+// Limite pra chamada ao Supabase. Se o upstream demorar mais que isso
+// (rota CF→origin com problema), abortamos e devolvemos 502 rápido em
+// vez de prender o cliente em loading state e segurar memória do Railway.
+const SUPABASE_TIMEOUT_MS = 8000;
+
 export async function POST(request: NextRequest) {
   if (request.headers.get(CSRF_HEADER) !== "1") {
     return NextResponse.json({ error: "CSRF check failed" }, { status: 403 });
@@ -81,13 +86,22 @@ export async function POST(request: NextRequest) {
     }
   );
 
-  let result;
+  type SignInResult = Awaited<ReturnType<typeof supabase.auth.signInWithPassword>>;
+  let result: SignInResult;
   try {
-    result = await supabase.auth.signInWithPassword({ email, password });
+    result = await Promise.race([
+      supabase.auth.signInWithPassword({ email, password }),
+      new Promise<never>((_, reject) =>
+        setTimeout(
+          () => reject(new Error("supabase_upstream_timeout")),
+          SUPABASE_TIMEOUT_MS
+        )
+      ),
+    ]);
   } catch (err) {
-    // Erro de rede entre Railway e Supabase (improvável mas possível)
+    // Timeout ou erro de rede entre Railway e Supabase (CF 522 etc.)
     return NextResponse.json(
-      { error: err instanceof Error ? err.message : "Network error" },
+      { error: err instanceof Error ? err.message : "Upstream timeout" },
       {
         status: 502,
         headers: { "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0" },

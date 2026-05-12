@@ -16,14 +16,25 @@ type ServerSignInResult =
   | { ok: true; authCookies: { name: string; value: string }[] }
   | { ok: false; kind: "invalid_credentials" | "network" | "unknown"; message?: string };
 
+// Timeout pro fallback server-side. Se o Railway também não conseguir
+// chegar no Supabase em 7s, abortamos e mostramos mensagem clara — UX
+// melhor que prender o usuário 20s+ esperando.
+const SERVER_FALLBACK_TIMEOUT_MS = 7000;
+
 // Login server-side fallback: o servidor chama Supabase via Railway (rota
-// backbone, não passa pelo CF datacenter do usuário). Resolve quando o
-// browser não consegue chegar em *.supabase.co — CF 522, iCloud Private
-// Relay, adblock, DNS de operadora etc.
+// backbone, geralmente saudável). Resolve quando só o browser do usuário
+// não consegue chegar em *.supabase.co (CF 522 só pro datacenter local,
+// iCloud Private Relay, adblock, DNS de operadora). Se o Railway TAMBÉM
+// estiver com a rota degradada, o timeout corta rápido.
 async function signInViaServer(
   email: string,
   password: string
 ): Promise<ServerSignInResult> {
+  const controller = new AbortController();
+  const timeoutId = setTimeout(
+    () => controller.abort(),
+    SERVER_FALLBACK_TIMEOUT_MS
+  );
   try {
     const res = await fetch("/formacao/api/sign-in", {
       method: "POST",
@@ -32,6 +43,7 @@ async function signInViaServer(
         "X-Allos-Auth": "1",
       },
       body: JSON.stringify({ email, password }),
+      signal: controller.signal,
     });
     if (res.ok) {
       const body = (await res.json()) as {
@@ -40,12 +52,11 @@ async function signInViaServer(
       return { ok: true, authCookies: body.authCookies || [] };
     }
     if (res.status === 401) return { ok: false, kind: "invalid_credentials" };
-    if (res.status === 502 || res.status === 503 || res.status === 504) {
-      return { ok: false, kind: "network" };
-    }
-    return { ok: false, kind: "unknown" };
+    return { ok: false, kind: "network" };
   } catch {
     return { ok: false, kind: "network" };
+  } finally {
+    clearTimeout(timeoutId);
   }
 }
 
