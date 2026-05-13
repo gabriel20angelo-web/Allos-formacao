@@ -220,11 +220,13 @@ export default function CalendarioPage() {
   const [addingHorario, setAddingHorario] = useState(false);
 
   // Quórum rápido por slot
-  type LatestPresenca = { slot_id: string; total_participantes: number; data_reuniao: string };
+  type LatestPresenca = { id: string; slot_id: string; total_participantes: number; data_reuniao: string };
   const [latestPresencas, setLatestPresencas] = useState<Record<string, LatestPresenca>>({});
   const [quorumDraftSlot, setQuorumDraftSlot] = useState<string | null>(null);
   const [quorumDraftValue, setQuorumDraftValue] = useState("");
+  const [quorumEditId, setQuorumEditId] = useState<string | null>(null);
   const [savingQuorum, setSavingQuorum] = useState(false);
+  const [deletingQuorum, setDeletingQuorum] = useState(false);
 
   // Eventos tab
 
@@ -256,7 +258,7 @@ export default function CalendarioPage() {
       supabase.from("formacao_cronograma").select("*").limit(1).single(),
       supabase
         .from("formacao_meet_presencas")
-        .select("slot_id, total_participantes, data_reuniao")
+        .select("id, slot_id, total_participantes, data_reuniao")
         .gte("data_reuniao", sixtyDaysAgo)
         .not("slot_id", "is", null)
         .order("data_reuniao", { ascending: false }),
@@ -1039,55 +1041,101 @@ export default function CalendarioPage() {
     return `https://wa.me/${withCountry}`;
   }
 
+  async function refetchLatestPresencas() {
+    const supabase = createClient();
+    const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+    const { data } = await supabase
+      .from("formacao_meet_presencas")
+      .select("id, slot_id, total_participantes, data_reuniao")
+      .gte("data_reuniao", sixtyDaysAgo)
+      .not("slot_id", "is", null)
+      .order("data_reuniao", { ascending: false });
+    const latest: Record<string, LatestPresenca> = {};
+    for (const p of (data || []) as LatestPresenca[]) {
+      if (p.slot_id && !latest[p.slot_id]) latest[p.slot_id] = p;
+    }
+    setLatestPresencas(latest);
+  }
+
+  function cancelQuorumDraft() {
+    setQuorumDraftSlot(null);
+    setQuorumEditId(null);
+    setQuorumDraftValue("");
+  }
+
   async function registrarQuorum(slot: FormacaoSlot, horario: { hora: string }) {
     const total = parseInt(quorumDraftValue);
-    if (!total || total < 0) {
+    if (Number.isNaN(total) || total < 0) {
       toast.error("Informe um número válido.");
       return;
     }
     setSavingQuorum(true);
     try {
       const supabase = createClient();
-      const slotAlocs = getSlotAlocacoes(slot.id);
-      const condutorNome = slotAlocs[0]?.certificado_condutores?.nome || "—";
-      const today = new Date();
-      const [hh, mm] = horario.hora.split(":").map(Number);
-      const horaInicio = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hh, mm);
-      const duracao = config?.duracao_minutos ?? 90;
-      const horaFim = new Date(horaInicio.getTime() + duracao * 60_000);
+      if (quorumEditId) {
+        const { error } = await supabase
+          .from("formacao_meet_presencas")
+          .update({
+            total_participantes: total,
+            media_participantes: total,
+            pico_participantes: total,
+          })
+          .eq("id", quorumEditId);
+        if (error) throw error;
+        toast.success(`Quórum atualizado: ${total} participantes`);
+      } else {
+        const slotAlocs = getSlotAlocacoes(slot.id);
+        const condutorNome = slotAlocs[0]?.certificado_condutores?.nome || "—";
+        const today = new Date();
+        const [hh, mm] = horario.hora.split(":").map(Number);
+        const horaInicio = new Date(today.getFullYear(), today.getMonth(), today.getDate(), hh, mm);
+        const duracao = config?.duracao_minutos ?? 90;
+        const horaFim = new Date(horaInicio.getTime() + duracao * 60_000);
 
-      const { error } = await supabase.from("formacao_meet_presencas").insert({
-        slot_id: slot.id,
-        meet_link: slot.meet_link || "manual",
-        condutor_nome: condutorNome,
-        atividade_nome: slot.atividade_nome,
-        data_reuniao: horaInicio.toISOString().split("T")[0],
-        dia_semana: slot.dia_semana,
-        hora_inicio: horaInicio.toISOString(),
-        hora_fim: horaFim.toISOString(),
-        duracao_minutos: duracao,
-        participantes: [],
-        total_participantes: total,
-        media_participantes: total,
-        pico_participantes: total,
-      });
-      if (error) throw error;
-      setLatestPresencas((prev) => ({
-        ...prev,
-        [slot.id]: {
+        const { error } = await supabase.from("formacao_meet_presencas").insert({
           slot_id: slot.id,
-          total_participantes: total,
+          meet_link: slot.meet_link || "manual",
+          condutor_nome: condutorNome,
+          atividade_nome: slot.atividade_nome,
           data_reuniao: horaInicio.toISOString().split("T")[0],
-        },
-      }));
-      toast.success(`Quórum registrado: ${total} participantes`);
-      setQuorumDraftSlot(null);
-      setQuorumDraftValue("");
+          dia_semana: slot.dia_semana,
+          hora_inicio: horaInicio.toISOString(),
+          hora_fim: horaFim.toISOString(),
+          duracao_minutos: duracao,
+          participantes: [],
+          total_participantes: total,
+          media_participantes: total,
+          pico_participantes: total,
+        });
+        if (error) throw error;
+        toast.success(`Quórum registrado: ${total} participantes`);
+      }
+      await refetchLatestPresencas();
+      cancelQuorumDraft();
     } catch (err) {
       console.error("[registrarQuorum]", err);
       toast.error("Erro ao registrar quórum.");
     } finally {
       setSavingQuorum(false);
+    }
+  }
+
+  async function deleteQuorumPresenca() {
+    if (!quorumEditId) return;
+    if (!window.confirm("Apagar este registro de quórum? Esta ação não pode ser desfeita.")) return;
+    setDeletingQuorum(true);
+    try {
+      const supabase = createClient();
+      const { error } = await supabase.from("formacao_meet_presencas").delete().eq("id", quorumEditId);
+      if (error) throw error;
+      toast.success("Registro apagado.");
+      await refetchLatestPresencas();
+      cancelQuorumDraft();
+    } catch (err) {
+      console.error("[deleteQuorumPresenca]", err);
+      toast.error("Erro ao apagar registro.");
+    } finally {
+      setDeletingQuorum(false);
     }
   }
 
@@ -1487,21 +1535,28 @@ export default function CalendarioPage() {
                             </button>
                           )}
 
-                          {/* Quórum: chip do último registrado + form pra registrar */}
+                          {/* Quórum: chip clicável (edita o último) + botão pra novo registro */}
                           {(() => {
                             const lastPres = latestPresencas[slot.id];
                             const isOpen = quorumDraftSlot === slot.id;
+                            const isEditing = isOpen && quorumEditId !== null;
                             return (
                               <div className="flex flex-col gap-1">
                                 {lastPres && !isOpen && (
-                                  <div
-                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-dm font-semibold w-fit"
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      setQuorumDraftSlot(slot.id);
+                                      setQuorumEditId(lastPres.id);
+                                      setQuorumDraftValue(String(lastPres.total_participantes));
+                                    }}
+                                    className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-dm font-semibold w-fit hover:opacity-80 transition-opacity"
                                     style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.18)" }}
-                                    title={`Último registro em ${new Date(lastPres.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })}`}
+                                    title={`Editar último registro (${new Date(lastPres.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})`}
                                   >
                                     <Users className="h-2.5 w-2.5" />
                                     {lastPres.total_participantes}
-                                  </div>
+                                  </button>
                                 )}
                                 {isOpen ? (
                                   <div className="flex items-center gap-1">
@@ -1513,7 +1568,7 @@ export default function CalendarioPage() {
                                       onChange={(e) => setQuorumDraftValue(e.target.value)}
                                       onKeyDown={(e) => {
                                         if (e.key === "Enter") registrarQuorum(slot, horario);
-                                        if (e.key === "Escape") { setQuorumDraftSlot(null); setQuorumDraftValue(""); }
+                                        if (e.key === "Escape") cancelQuorumDraft();
                                       }}
                                       placeholder="Total"
                                       className="flex-1 min-w-0 px-1.5 py-1 rounded text-[10px] font-dm"
@@ -1525,14 +1580,26 @@ export default function CalendarioPage() {
                                     />
                                     <button
                                       onClick={() => registrarQuorum(slot, horario)}
-                                      disabled={savingQuorum}
+                                      disabled={savingQuorum || deletingQuorum}
                                       className="p-1 rounded hover:bg-white/5 disabled:opacity-40"
+                                      title={isEditing ? "Salvar edição" : "Salvar"}
                                     >
                                       <Check className="h-3 w-3" style={{ color: "#22c55e" }} />
                                     </button>
+                                    {isEditing && (
+                                      <button
+                                        onClick={deleteQuorumPresenca}
+                                        disabled={savingQuorum || deletingQuorum}
+                                        className="p-1 rounded hover:bg-red-500/10 disabled:opacity-40"
+                                        title="Apagar registro"
+                                      >
+                                        <Trash2 className="h-3 w-3" style={{ color: "#ef4444" }} />
+                                      </button>
+                                    )}
                                     <button
-                                      onClick={() => { setQuorumDraftSlot(null); setQuorumDraftValue(""); }}
+                                      onClick={cancelQuorumDraft}
                                       className="p-1 rounded hover:bg-white/5"
+                                      title="Cancelar"
                                     >
                                       <X className="h-3 w-3" style={{ color: "rgba(253,251,247,0.3)" }} />
                                     </button>
@@ -1541,6 +1608,7 @@ export default function CalendarioPage() {
                                   <button
                                     onClick={() => {
                                       setQuorumDraftSlot(slot.id);
+                                      setQuorumEditId(null);
                                       setQuorumDraftValue("");
                                     }}
                                     className="flex items-center gap-1 text-[10px] font-dm transition-colors hover:opacity-80 w-fit"
