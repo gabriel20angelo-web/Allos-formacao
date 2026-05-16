@@ -237,21 +237,23 @@ function ScheduledCarousel({ courses }: { courses: SyncCourse[] }) {
         </div>
       </div>
 
-      {/* Carousel uniforme */}
-      <div
-        ref={scrollRef}
-        className="flex gap-4 overflow-x-auto scrollbar-hide px-5 sm:px-6 md:px-10 pb-2"
-        style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
-      >
-        {courses.map((c) => (
-          <div
-            key={c.id}
-            className="flex-shrink-0 w-[220px] sm:w-[250px] md:w-[280px] lg:w-[300px]"
-            style={{ scrollSnapAlign: "start" }}
-          >
-            <ScheduledCard course={c} />
-          </div>
-        ))}
+      {/* Carousel uniforme — contido no mesmo max-width do header */}
+      <div className="max-w-[1200px] mx-auto">
+        <div
+          ref={scrollRef}
+          className="flex gap-4 overflow-x-auto scrollbar-hide px-5 sm:px-6 md:px-10 pb-2"
+          style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
+        >
+          {courses.map((c) => (
+            <div
+              key={c.id}
+              className="flex-shrink-0 w-[160px] sm:w-[180px] md:w-[200px] lg:w-[220px]"
+              style={{ scrollSnapAlign: "start" }}
+            >
+              <ScheduledCard course={c} />
+            </div>
+          ))}
+        </div>
       </div>
     </section>
   );
@@ -423,13 +425,13 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
       }}
     >
       <Link href={`/formacao/curso/${course.slug}`} className="block">
-        <div className="relative w-full aspect-[3/4] overflow-hidden">
+        <div className="relative w-full aspect-[9/13] overflow-hidden">
           {course.thumbnail_url ? (
             <Image
               src={course.thumbnail_url}
               alt={course.title}
               fill
-              sizes="(max-width: 768px) 60vw, 380px"
+              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 25vw, 220px"
               className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
             />
           ) : (
