@@ -1,10 +1,10 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import { motion } from "framer-motion";
-import { Radio, Video, MessageCircle, Calendar, ChevronRight, Play } from "lucide-react";
+import { Radio, Video, MessageCircle, Calendar, ChevronLeft, ChevronRight, Play } from "lucide-react";
 
 interface SyncCourse {
   id: string;
@@ -140,57 +140,120 @@ export default function LiveCoursesShowcase() {
         </section>
       )}
 
-      {scheduled.length > 0 && (
-        <section className="relative pt-8 pb-10">
-          <div className="max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.5 }}
-              className="text-center mb-8"
-            >
-              <p
-                className="font-dm font-semibold text-xs tracking-[.22em] uppercase mb-2"
-                style={{ color: PURPLE }}
-              >
-                Ao vivo + Gravação
-              </p>
-              <h2
-                className="font-fraunces font-bold text-[#FDFBF7] mb-2"
-                style={{ fontSize: "clamp(22px,2.6vw,32px)" }}
-              >
-                Cursos com encontros e acervo
-              </h2>
-              <p
-                className="font-dm text-sm max-w-xl mx-auto"
-                style={{ color: "rgba(253,251,247,0.45)" }}
-              >
-                Acompanhe ao vivo pelo Meet ou assista as gravações no seu tempo.
-              </p>
-            </motion.div>
-          </div>
-
-          {/* Carousel mobile (snap-x) → grid no desktop */}
-          <div
-            className="md:hidden flex gap-3 overflow-x-auto snap-x snap-mandatory pb-3 px-5"
-            style={{ scrollbarWidth: "none" }}
-          >
-            {scheduled.map((c) => (
-              <div key={c.id} className="snap-start flex-shrink-0 w-[60%] xs:w-[55%]">
-                <ScheduledCard course={c} />
-              </div>
-            ))}
-          </div>
-          <div className="hidden md:block max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
-            <div className="grid grid-cols-2 md:grid-cols-3 gap-5">
-              {scheduled.map((c) => (
-                <ScheduledCard key={c.id} course={c} />
-              ))}
-            </div>
-          </div>
-        </section>
-      )}
+      {scheduled.length > 0 && <ScheduledCarousel courses={scheduled} />}
     </div>
+  );
+}
+
+function ScheduledCarousel({ courses }: { courses: SyncCourse[] }) {
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const [canScrollLeft, setCanScrollLeft] = useState(false);
+  const [canScrollRight, setCanScrollRight] = useState(false);
+
+  const checkScroll = useCallback(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    setCanScrollLeft(el.scrollLeft > 4);
+    setCanScrollRight(el.scrollLeft < el.scrollWidth - el.clientWidth - 4);
+  }, []);
+
+  useEffect(() => {
+    checkScroll();
+    const el = scrollRef.current;
+    if (!el) return;
+    el.addEventListener("scroll", checkScroll, { passive: true });
+    window.addEventListener("resize", checkScroll);
+    return () => {
+      el.removeEventListener("scroll", checkScroll);
+      window.removeEventListener("resize", checkScroll);
+    };
+  }, [checkScroll, courses]);
+
+  function scroll(direction: "left" | "right") {
+    const el = scrollRef.current;
+    if (!el) return;
+    const scrollAmount = el.clientWidth * 0.75;
+    el.scrollBy({
+      left: direction === "left" ? -scrollAmount : scrollAmount,
+      behavior: "smooth",
+    });
+  }
+
+  return (
+    <section className="relative pt-8 pb-10">
+      <div className="max-w-[1200px] mx-auto px-5 sm:px-6 md:px-10">
+        <motion.div
+          initial={{ opacity: 0, y: 12 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.5 }}
+          className="text-center mb-6"
+        >
+          <p
+            className="font-dm font-semibold text-xs tracking-[.22em] uppercase mb-2"
+            style={{ color: PURPLE }}
+          >
+            Ao vivo + Gravação
+          </p>
+          <h2
+            className="font-fraunces font-bold text-[#FDFBF7] mb-2"
+            style={{ fontSize: "clamp(22px,2.6vw,32px)" }}
+          >
+            Cursos com encontros e acervo
+          </h2>
+          <p
+            className="font-dm text-sm max-w-xl mx-auto"
+            style={{ color: "rgba(253,251,247,0.45)" }}
+          >
+            Acompanhe ao vivo pelo Meet ou assista as gravações no seu tempo.
+          </p>
+        </motion.div>
+
+        {/* Setas (desktop) */}
+        <div className="hidden sm:flex items-center justify-end gap-2 mb-3">
+          <button
+            onClick={() => scroll("left")}
+            disabled={!canScrollLeft}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-20"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+            aria-label="Rolar para a esquerda"
+          >
+            <ChevronLeft className="w-4 h-4 text-white/70" />
+          </button>
+          <button
+            onClick={() => scroll("right")}
+            disabled={!canScrollRight}
+            className="w-9 h-9 rounded-full flex items-center justify-center transition-all disabled:opacity-20"
+            style={{
+              background: "rgba(255,255,255,0.06)",
+              border: "1px solid rgba(255,255,255,0.1)",
+            }}
+            aria-label="Rolar para a direita"
+          >
+            <ChevronRight className="w-4 h-4 text-white/70" />
+          </button>
+        </div>
+      </div>
+
+      {/* Carousel uniforme */}
+      <div
+        ref={scrollRef}
+        className="flex gap-4 overflow-x-auto scrollbar-hide px-5 sm:px-6 md:px-10 pb-2"
+        style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
+      >
+        {courses.map((c) => (
+          <div
+            key={c.id}
+            className="flex-shrink-0 w-[220px] sm:w-[250px] md:w-[280px] lg:w-[300px]"
+            style={{ scrollSnapAlign: "start" }}
+          >
+            <ScheduledCard course={c} />
+          </div>
+        ))}
+      </div>
+    </section>
   );
 }
 
