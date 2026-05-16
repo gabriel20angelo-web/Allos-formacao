@@ -814,7 +814,7 @@ export default function CourseOverviewPage() {
                                 className="group flex items-center gap-4 px-4 py-3 rounded-xl transition-colors hover:bg-white/[0.03] cursor-pointer"
                                 onClick={() => {
                                   if (isEnrolled || course.is_free) {
-                                    router.push(`/formacao/curso/${slug}/assistir`);
+                                    router.push(`/formacao/curso/${slug}/assistir?lesson=${lesson.id}`);
                                   } else {
                                     router.push(`/formacao/curso/${slug}/comprar`);
                                   }

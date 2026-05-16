@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState, useCallback, useRef, useMemo } from "react";
-import { useParams, useRouter } from "next/navigation";
+import { Suspense, useEffect, useState, useCallback, useRef, useMemo } from "react";
+import { useParams, useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -24,10 +24,12 @@ import {
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment } from "@/types";
 
-export default function CoursePage() {
+function CoursePageContent() {
   const params = useParams();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const slug = params.slug as string;
+  const requestedLessonId = searchParams?.get("lesson") || null;
   const { user, profile } = useAuth();
 
   const [course, setCourse] = useState<Course | null>(null);
@@ -120,17 +122,24 @@ export default function CoursePage() {
           const allLoadedLessons = sectionsData.flatMap((s) => s.lessons || []);
           let initialLesson: Lesson | undefined;
 
-          // Try to restore last viewed lesson from localStorage
-          try {
-            const savedLessonId = localStorage.getItem(`allos_last_lesson_${courseData.id}`);
-            if (savedLessonId) {
-              initialLesson = allLoadedLessons.find((l: Lesson) => l.id === savedLessonId);
-            }
-          } catch {
-            // localStorage unavailable, ignore
+          // 1) Lesson passada via query param (deep link / click do overview)
+          if (requestedLessonId) {
+            initialLesson = allLoadedLessons.find((l: Lesson) => l.id === requestedLessonId);
           }
 
-          // Fall back to first lesson
+          // 2) Última aula vista (localStorage)
+          if (!initialLesson) {
+            try {
+              const savedLessonId = localStorage.getItem(`allos_last_lesson_${courseData.id}`);
+              if (savedLessonId) {
+                initialLesson = allLoadedLessons.find((l: Lesson) => l.id === savedLessonId);
+              }
+            } catch {
+              // localStorage unavailable, ignore
+            }
+          }
+
+          // 3) Fallback pra primeira aula
           if (!initialLesson) {
             initialLesson = allLoadedLessons[0];
           }
@@ -191,14 +200,15 @@ export default function CoursePage() {
               });
               setProgressMap(map);
 
-              // If no saved lesson in localStorage, jump to first incomplete lesson
+              // Se nenhuma aula específica foi pedida (query param) nem está
+              // salva no localStorage, pula pra primeira aula incompleta
               let hasSavedLesson = false;
               try {
                 hasSavedLesson = !!localStorage.getItem(`allos_last_lesson_${courseData.id}`);
               } catch {
                 // ignore
               }
-              if (!hasSavedLesson && sectionsData) {
+              if (!requestedLessonId && !hasSavedLesson && sectionsData) {
                 const allLoadedLessons = sectionsData.flatMap((s) => s.lessons || []);
                 const firstIncomplete = allLoadedLessons.find(
                   (l: Lesson) => !map[l.id]?.completed
@@ -219,7 +229,20 @@ export default function CoursePage() {
 
     fetchData();
     return () => { cancelled = true; };
+    // requestedLessonId é lido na 1ª carga (acima); navegações subsequentes
+    // pra outra aula via query param são tratadas pelo effect dedicado abaixo.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, user?.id, router]);
+
+  // Deep-link: ao mudar ?lesson=X na URL (sem recarregar), troca pra essa
+  // aula sem refazer o fetch.
+  useEffect(() => {
+    if (!requestedLessonId || sections.length === 0) return;
+    if (currentLesson?.id === requestedLessonId) return;
+    const allLoaded = sections.flatMap((s) => s.lessons || []);
+    const target = allLoaded.find((l) => l.id === requestedLessonId);
+    if (target) setCurrentLesson(target);
+  }, [requestedLessonId, sections, currentLesson?.id]);
 
   // Persist last viewed lesson to localStorage
   useEffect(() => {
@@ -230,6 +253,15 @@ export default function CoursePage() {
       // localStorage unavailable, ignore
     }
   }, [currentLesson, course]);
+
+  // Sincroniza ?lesson=X com a aula atual — assim recarregar/compartilhar
+  // o link mantém a aula. Usa replace pra não acumular histórico.
+  useEffect(() => {
+    if (!currentLesson) return;
+    if (requestedLessonId === currentLesson.id) return;
+    const url = `/formacao/curso/${slug}/assistir?lesson=${currentLesson.id}`;
+    router.replace(url, { scroll: false });
+  }, [currentLesson, requestedLessonId, slug, router]);
 
   // ─── Offline-first: sync pending progress on load ─────────────
   useEffect(() => {
@@ -774,5 +806,13 @@ export default function CoursePage() {
         certLessonsRequired={course?.cert_lessons_required ?? undefined}
       />
     </div>
+  );
+}
+
+export default function CoursePage() {
+  return (
+    <Suspense fallback={null}>
+      <CoursePageContent />
+    </Suspense>
   );
 }
