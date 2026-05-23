@@ -18,6 +18,8 @@ import {
   ArrowRight,
   Users,
   FileText,
+  Star,
+  StarOff,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -61,7 +63,17 @@ interface HoursSummary {
   syncHours: number;
 }
 
-type Tab = "active" | "completed" | "certificates";
+interface FavoriteLesson {
+  id: string;
+  lessonTitle: string;
+  durationMinutes: number | null;
+  courseTitle: string;
+  courseSlug: string;
+  courseThumbnail: string | null;
+  favoritedAt: string;
+}
+
+type Tab = "active" | "completed" | "favorites" | "certificates";
 
 export default function MeusCursosPage() {
   const { user, profile, loading: authLoading } = useAuth();
@@ -72,6 +84,7 @@ export default function MeusCursosPage() {
   const [totalStudiedMinutes, setTotalStudiedMinutes] = useState(0);
   const [studyStreak, setStudyStreak] = useState(0);
   const [hours, setHours] = useState<HoursSummary>({ asyncMinutes: 0, syncHours: 0 });
+  const [favorites, setFavorites] = useState<FavoriteLesson[]>([]);
   const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState<Tab>("active");
 
@@ -108,7 +121,7 @@ export default function MeusCursosPage() {
       const courseIds = validEnrollments.map((e) => e.course_id);
 
       // ── 2. Parallel fetches ──────────────────────────────────
-      const [sectionsRes, progressRes, certsRes, lastProgressRes] = await Promise.all([
+      const [sectionsRes, progressRes, certsRes, lastProgressRes, favoritesRes] = await Promise.all([
         courseIds.length > 0
           ? client
               .from("sections")
@@ -144,6 +157,19 @@ export default function MeusCursosPage() {
           .eq("completed", true)
           .order("completed_at", { ascending: false })
           .limit(1),
+        client
+          .from("lesson_favorites")
+          .select(`
+            id, lesson_id, created_at,
+            lesson:lessons!lesson_favorites_lesson_id_fkey(
+              id, title, duration_minutes,
+              section:sections!lessons_section_id_fkey(
+                course:courses!sections_course_id_fkey(id, title, slug, thumbnail_url, status)
+              )
+            )
+          `)
+          .eq("user_id", user!.id)
+          .order("created_at", { ascending: false }),
       ]);
 
       // ── 3. Build course lesson stats ─────────────────────────
@@ -271,6 +297,39 @@ export default function MeusCursosPage() {
         }
       }
 
+      // ── 7b. Favorite lessons ─────────────────────────────────
+      type FavRow = {
+        id: string;
+        lesson_id: string;
+        created_at: string;
+        lesson: {
+          id: string;
+          title: string;
+          duration_minutes: number | null;
+          section: {
+            course: {
+              id: string;
+              title: string;
+              slug: string;
+              thumbnail_url: string | null;
+              status?: string;
+            } | null;
+          } | null;
+        } | null;
+      };
+      const favList: FavoriteLesson[] = ((favoritesRes.data || []) as unknown as FavRow[])
+        .filter((f) => f.lesson?.section?.course && f.lesson.section.course.status !== "archived")
+        .map((f) => ({
+          id: f.lesson_id,
+          lessonTitle: f.lesson!.title,
+          durationMinutes: f.lesson!.duration_minutes,
+          courseTitle: f.lesson!.section!.course!.title,
+          courseSlug: f.lesson!.section!.course!.slug,
+          courseThumbnail: f.lesson!.section!.course!.thumbnail_url,
+          favoritedAt: f.created_at,
+        }));
+      setFavorites(favList);
+
       // ── 8. Hours summary (async + sync) ──────────────────────
       // Async hours = total studied minutes from completed lessons
       // We already have studiedMins
@@ -297,6 +356,19 @@ export default function MeusCursosPage() {
 
   const activeCourses = courses.filter((c) => c.enrollmentStatus === "active");
   const completedCourses = courses.filter((c) => c.enrollmentStatus === "completed");
+
+  async function removeFavorite(lessonId: string) {
+    if (!user) return;
+    const prev = favorites;
+    setFavorites((curr) => curr.filter((f) => f.id !== lessonId));
+    const client = createClient();
+    const { error } = await client
+      .from("lesson_favorites")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("lesson_id", lessonId);
+    if (error) setFavorites(prev);
+  }
 
   const displayed =
     tab === "active"
@@ -585,6 +657,7 @@ export default function MeusCursosPage() {
               {[
                 { id: "active" as Tab, label: "Em andamento", count: activeCourses.length },
                 { id: "completed" as Tab, label: "Concluídos", count: completedCourses.length },
+                { id: "favorites" as Tab, label: "Favoritas", count: favorites.length },
                 { id: "certificates" as Tab, label: "Certificados", count: certificates.length },
               ].map((t) => (
                 <button
@@ -727,6 +800,107 @@ export default function MeusCursosPage() {
                       </motion.div>
                     );
                   })
+                )}
+              </div>
+            )}
+
+            {/* ── Favorites tab ─────────────────────────────── */}
+            {tab === "favorites" && (
+              <div className="space-y-4">
+                {favorites.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <div
+                      className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+                      style={{ background: "rgba(232,178,58,0.08)", border: "1px solid rgba(232,178,58,0.2)" }}
+                    >
+                      <Star className="h-7 w-7" style={{ color: "rgba(232,178,58,0.7)" }} />
+                    </div>
+                    <h3 className="font-fraunces font-bold text-cream text-lg mb-2">
+                      Nenhuma aula favoritada
+                    </h3>
+                    <p className="text-cream/50 text-sm max-w-md">
+                      Clique na estrela ao lado de qualquer aula para salvá-la aqui e voltar facilmente depois.
+                    </p>
+                  </div>
+                ) : (
+                  favorites.map((fav, i) => (
+                    <motion.div
+                      key={fav.id}
+                      initial={{ opacity: 0, y: 12 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      transition={{ delay: i * 0.05, duration: 0.35 }}
+                      className="group relative flex gap-5 rounded-2xl p-5"
+                      style={{
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <Link
+                        href={`/formacao/curso/${fav.courseSlug}/assistir?lesson=${fav.id}`}
+                        className="flex gap-5 flex-1 min-w-0 transition-all duration-300"
+                      >
+                        {/* Thumbnail */}
+                        <div className="relative w-28 h-20 sm:w-36 sm:h-24 rounded-xl overflow-hidden flex-shrink-0">
+                          {fav.courseThumbnail ? (
+                            <Image
+                              src={fav.courseThumbnail}
+                              alt={fav.courseTitle}
+                              fill
+                              className="object-cover"
+                              sizes="144px"
+                            />
+                          ) : (
+                            <div
+                              className="w-full h-full flex items-center justify-center"
+                              style={{ background: "rgba(232,178,58,0.08)" }}
+                            >
+                              <Star className="h-6 w-6" style={{ color: "rgba(232,178,58,0.5)" }} />
+                            </div>
+                          )}
+                          <div className="absolute inset-0 bg-black/30 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                            <Play className="h-6 w-6 text-white fill-white" />
+                          </div>
+                          <div
+                            className="absolute top-1.5 left-1.5 w-6 h-6 rounded-full flex items-center justify-center"
+                            style={{ background: "rgba(0,0,0,0.55)", backdropFilter: "blur(4px)" }}
+                          >
+                            <Star className="h-3.5 w-3.5" style={{ color: "#E8B23A", fill: "#E8B23A" }} />
+                          </div>
+                        </div>
+
+                        {/* Info */}
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-semibold uppercase tracking-wider mb-1" style={{ color: "rgba(232,178,58,0.85)" }}>
+                            {fav.courseTitle}
+                          </p>
+                          <h3 className="font-fraunces font-bold text-base text-cream line-clamp-2 mb-2 group-hover:text-teal-light transition-colors">
+                            {fav.lessonTitle}
+                          </h3>
+                          <div className="flex items-center gap-4 text-xs text-cream/40">
+                            {fav.durationMinutes ? (
+                              <span className="flex items-center gap-1">
+                                <Clock className="h-3.5 w-3.5" />
+                                {formatDuration(fav.durationMinutes)}
+                              </span>
+                            ) : null}
+                            <span className="flex items-center gap-1">
+                              <Star className="h-3.5 w-3.5" />
+                              Favoritada em {new Date(fav.favoritedAt).toLocaleDateString("pt-BR")}
+                            </span>
+                          </div>
+                        </div>
+                      </Link>
+
+                      <button
+                        onClick={() => removeFavorite(fav.id)}
+                        className="self-start p-2 rounded-lg text-cream/30 hover:text-cream/80 hover:bg-white/[0.04] transition-colors"
+                        title="Remover dos favoritos"
+                        aria-label="Remover dos favoritos"
+                      >
+                        <StarOff className="h-4 w-4" />
+                      </button>
+                    </motion.div>
+                  ))
                 )}
               </div>
             )}

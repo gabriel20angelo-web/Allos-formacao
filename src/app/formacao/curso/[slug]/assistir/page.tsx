@@ -21,6 +21,7 @@ import {
   ChevronRight,
   SkipForward,
   PartyPopper,
+  Star,
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment } from "@/types";
 
@@ -37,6 +38,7 @@ function CoursePageContent() {
   const [enrollment, setEnrollment] = useState<Enrollment | null>(null);
   const [currentLesson, setCurrentLesson] = useState<Lesson | null>(null);
   const [progressMap, setProgressMap] = useState<Record<string, LessonProgress>>({});
+  const [favoritesSet, setFavoritesSet] = useState<Set<string>>(new Set());
   const [loading, setLoading] = useState(true);
 
   const allLessons = useMemo(
@@ -187,11 +189,23 @@ function CoursePageContent() {
             || [];
 
           if (allLessonIds.length > 0) {
-            const { data: progressData } = await client
-              .from("lesson_progress")
-              .select("*")
-              .eq("user_id", userId)
-              .in("lesson_id", allLessonIds);
+            const [progressRes, favoritesRes] = await Promise.all([
+              client
+                .from("lesson_progress")
+                .select("*")
+                .eq("user_id", userId)
+                .in("lesson_id", allLessonIds),
+              client
+                .from("lesson_favorites")
+                .select("lesson_id")
+                .eq("user_id", userId)
+                .in("lesson_id", allLessonIds),
+            ]);
+            const progressData = progressRes.data;
+
+            if (!cancelled && favoritesRes.data) {
+              setFavoritesSet(new Set(favoritesRes.data.map((f: { lesson_id: string }) => f.lesson_id)));
+            }
 
             if (!cancelled && progressData) {
               const map: Record<string, LessonProgress> = {};
@@ -402,6 +416,47 @@ function CoursePageContent() {
     [user, progressMap, course]
   );
 
+  const toggleFavorite = useCallback(
+    async (lessonId: string) => {
+      if (!user) return;
+      const wasFav = favoritesSet.has(lessonId);
+
+      setFavoritesSet((prev) => {
+        const next = new Set(prev);
+        if (wasFav) next.delete(lessonId);
+        else next.add(lessonId);
+        return next;
+      });
+
+      const client = createClient();
+      const { error } = wasFav
+        ? await client
+            .from("lesson_favorites")
+            .delete()
+            .eq("user_id", user.id)
+            .eq("lesson_id", lessonId)
+        : await client
+            .from("lesson_favorites")
+            .upsert(
+              { user_id: user.id, lesson_id: lessonId },
+              { onConflict: "user_id,lesson_id" },
+            );
+
+      if (error) {
+        setFavoritesSet((prev) => {
+          const next = new Set(prev);
+          if (wasFav) next.add(lessonId);
+          else next.delete(lessonId);
+          return next;
+        });
+        toast.error("Não foi possível salvar a aula nos favoritos.");
+        return;
+      }
+      if (!wasFav) toast.success("Aula adicionada aos favoritos!");
+    },
+    [user, favoritesSet],
+  );
+
   const isSync = course?.course_type === "sync";
   const isCollection = course?.course_type === "collection";
 
@@ -605,21 +660,48 @@ function CoursePageContent() {
                 )}
               </div>
 
-              {nextLesson && (
-                <motion.button
-                  onClick={() => setCurrentLesson(nextLesson)}
-                  whileHover={{ scale: 1.03, boxShadow: "0 4px 20px rgba(200,75,49,0.15)" }}
-                  whileTap={{ scale: 0.97 }}
-                  className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium text-cream/50 hover:text-accent transition-all flex-shrink-0 backdrop-blur-sm"
-                  style={{
-                    border: "1px solid rgba(255,255,255,0.08)",
-                    background: "rgba(255,255,255,0.03)",
-                  }}
-                >
-                  Próxima
-                  <SkipForward className="h-4 w-4" />
-                </motion.button>
-              )}
+              <div className="flex items-center gap-2 flex-shrink-0">
+                {(() => {
+                  const isFav = favoritesSet.has(currentLesson.id);
+                  return (
+                    <motion.button
+                      onClick={() => toggleFavorite(currentLesson.id)}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium transition-all backdrop-blur-sm"
+                      style={{
+                        border: `1px solid ${isFav ? "rgba(232,178,58,0.35)" : "rgba(255,255,255,0.08)"}`,
+                        background: isFav ? "rgba(232,178,58,0.08)" : "rgba(255,255,255,0.03)",
+                        color: isFav ? "#E8B23A" : "rgba(253,251,247,0.5)",
+                      }}
+                      title={isFav ? "Remover dos favoritos" : "Favoritar aula"}
+                      aria-pressed={isFav}
+                    >
+                      <Star
+                        className="h-4 w-4"
+                        style={{ fill: isFav ? "#E8B23A" : "transparent" }}
+                      />
+                      <span className="hidden sm:inline">{isFav ? "Favoritada" : "Favoritar"}</span>
+                    </motion.button>
+                  );
+                })()}
+
+                {nextLesson && (
+                  <motion.button
+                    onClick={() => setCurrentLesson(nextLesson)}
+                    whileHover={{ scale: 1.03, boxShadow: "0 4px 20px rgba(200,75,49,0.15)" }}
+                    whileTap={{ scale: 0.97 }}
+                    className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium text-cream/50 hover:text-accent transition-all backdrop-blur-sm"
+                    style={{
+                      border: "1px solid rgba(255,255,255,0.08)",
+                      background: "rgba(255,255,255,0.03)",
+                    }}
+                  >
+                    Próxima
+                    <SkipForward className="h-4 w-4" />
+                  </motion.button>
+                )}
+              </div>
             </motion.div>
           </AnimatePresence>
 
@@ -801,6 +883,8 @@ function CoursePageContent() {
         completedLessons={isCollection ? completedLessons : requiredCompleted}
         onSelectLesson={setCurrentLesson}
         onToggleComplete={toggleComplete}
+        favoritesSet={favoritesSet}
+        onToggleFavorite={toggleFavorite}
         isSync={isSync}
         isCollection={isCollection}
         certLessonsRequired={course?.cert_lessons_required ?? undefined}

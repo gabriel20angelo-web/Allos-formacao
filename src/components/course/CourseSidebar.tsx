@@ -9,6 +9,7 @@ import {
   ListVideo,
   X,
   Sparkles,
+  Star,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import type { Section, Lesson, LessonProgress } from "@/types";
@@ -22,6 +23,8 @@ interface CourseSidebarProps {
   completedLessons: number;
   onSelectLesson: (lesson: Lesson) => void;
   onToggleComplete: (lessonId: string) => void;
+  favoritesSet?: Set<string>;
+  onToggleFavorite?: (lessonId: string) => void;
   isSync?: boolean;
   isCollection?: boolean;
   certLessonsRequired?: number;
@@ -81,6 +84,8 @@ export default function CourseSidebar({
   completedLessons,
   onSelectLesson,
   onToggleComplete,
+  favoritesSet,
+  onToggleFavorite,
   isSync,
   isCollection,
   certLessonsRequired,
@@ -334,7 +339,7 @@ export default function CourseSidebar({
                           <div
                             key={lesson.id}
                             className={`
-                              relative flex items-start gap-2.5 pl-5 pr-3 py-2.5 rounded-[10px] cursor-pointer
+                              group relative flex items-start gap-2.5 pl-5 pr-3 py-2.5 rounded-[10px] cursor-pointer
                               transition-all duration-200
                               ${isCurrent ? "" : "hover:bg-white/[0.025]"}
                             `}
@@ -411,6 +416,30 @@ export default function CourseSidebar({
                                 </span>
                               )}
                             </button>
+
+                            {/* Favorite (star) toggle */}
+                            {onToggleFavorite && (() => {
+                              const isFav = favoritesSet?.has(lesson.id) ?? false;
+                              return (
+                                <button
+                                  onClick={(e) => { e.stopPropagation(); onToggleFavorite(lesson.id); }}
+                                  className={`flex-shrink-0 mt-0.5 p-1 -m-1 rounded-md transition-all duration-150 ${
+                                    isFav ? "opacity-100" : "opacity-0 group-hover:opacity-60 hover:!opacity-100 focus:opacity-100"
+                                  }`}
+                                  title={isFav ? "Remover dos favoritos" : "Favoritar aula"}
+                                  aria-label={isFav ? "Remover dos favoritos" : "Favoritar aula"}
+                                  aria-pressed={isFav}
+                                >
+                                  <Star
+                                    className="h-[15px] w-[15px]"
+                                    style={{
+                                      color: isFav ? "#E8B23A" : "rgba(253,251,247,0.55)",
+                                      fill: isFav ? "#E8B23A" : "transparent",
+                                    }}
+                                  />
+                                </button>
+                              );
+                            })()}
 
                             {/* Play/pause indicator */}
                             {isCurrent && (

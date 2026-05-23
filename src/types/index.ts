@@ -138,6 +138,13 @@ export interface LessonProgress {
   completed_at: string | null;
 }
 
+export interface LessonFavorite {
+  id: string;
+  user_id: string;
+  lesson_id: string;
+  created_at: string;
+}
+
 export interface ExamQuestion {
   id: string;
   course_id: string;
