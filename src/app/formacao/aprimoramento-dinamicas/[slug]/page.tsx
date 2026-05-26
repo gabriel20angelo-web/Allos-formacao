@@ -5,12 +5,15 @@ import {
   EXERCISES,
   getExerciseBySlug,
   extractToc,
+  getRelated,
 } from "@/lib/aprimoramento-dinamicas";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import ExerciseBlocks from "@/components/aprimoramento/ExerciseBlocks";
 import ExerciseQuickFacts from "@/components/aprimoramento/ExerciseQuickFacts";
 import ExerciseToc from "@/components/aprimoramento/ExerciseToc";
 import PrintButton from "@/components/aprimoramento/PrintButton";
+import RelatedExercises from "@/components/aprimoramento/RelatedExercises";
+import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -65,30 +68,25 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
 
   const toc = extractToc(exercise.blocks);
   const cat = CATEGORIES[exercise.category];
+  const related = getRelated(exercise, 3);
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
       <div className="flex items-center justify-between gap-3 mb-8 print-hide">
-        <nav>
-          <Link
-            href="/formacao/aprimoramento-dinamicas"
-            className="font-dm text-sm text-cream/55 hover:text-accent transition-colors inline-flex items-center gap-1.5"
-          >
-            <svg
-              width="14"
-              height="14"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              aria-hidden="true"
-            >
-              <path d="M15 18l-6-6 6-6" />
-            </svg>
-            Aprimoramento de Dinâmicas
-          </Link>
-        </nav>
+        <Breadcrumbs
+          items={[
+            { label: "Formação", href: "/formacao" },
+            {
+              label: "Aprimoramento",
+              href: "/formacao/aprimoramento-dinamicas",
+            },
+            {
+              label: cat.label,
+              href: `/formacao/aprimoramento-dinamicas?cat=${cat.slug}`,
+            },
+            { label: exercise.title },
+          ]}
+        />
         <PrintButton />
       </div>
 
@@ -135,6 +133,8 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
 
           <ExerciseQuickFacts exercise={exercise} />
           <ExerciseBlocks blocks={exercise.blocks} />
+
+          <RelatedExercises items={related} />
 
           <div
             className="mt-14 pt-8 grid grid-cols-2 gap-3 print-hide"

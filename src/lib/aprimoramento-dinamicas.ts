@@ -961,6 +961,30 @@ export function getExerciseBySlug(slug: string): Exercise | undefined {
   return EXERCISES.find((e) => e.slug === slug);
 }
 
+/**
+ * Retorna até `n` exercícios relacionados ao atual, ordenados por relevância:
+ * +3 se categoria igual · +1 por tag em comum · +0.5 por formato em comum.
+ * Empate vai pelo número original. Usado pelo bloco "Veja também" no detail.
+ */
+export function getRelated(current: Exercise, n: number = 3): Exercise[] {
+  const tagsCur = new Set(current.tags);
+  const formatosCur = new Set(current.formato);
+
+  const scored = EXERCISES.filter((e) => e.slug !== current.slug).map((e) => {
+    let score = 0;
+    if (e.category === current.category) score += 3;
+    for (const t of e.tags) if (tagsCur.has(t)) score += 1;
+    for (const f of e.formato) if (formatosCur.has(f)) score += 0.5;
+    return { ex: e, score };
+  });
+
+  scored.sort((a, b) => b.score - a.score || a.ex.number - b.ex.number);
+
+  // Tira candidatos com score 0 (sem nenhum critério em comum) pra não poluir.
+  const filtered = scored.filter((s) => s.score > 0);
+  return filtered.slice(0, n).map((s) => s.ex);
+}
+
 /** Slugifica um texto para uso como id de heading (âncora). */
 export function slugifyHeading(text: string): string {
   return text

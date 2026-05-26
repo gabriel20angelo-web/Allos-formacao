@@ -9,6 +9,7 @@ import {
   formatDuracao,
 } from "@/lib/aprimoramento-categories";
 import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
+import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import {
   Clock,
   Sparkles,
@@ -75,6 +76,15 @@ export default async function AprimoramentoDinamicasPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12">
+      <div className="mb-6">
+        <Breadcrumbs
+          items={[
+            { label: "Formação", href: "/formacao" },
+            { label: "Aprimoramento de Dinâmicas" },
+          ]}
+        />
+      </div>
+
       {/* ─── Hero ───────────────────────────────────────────────────────── */}
       <div className="relative mb-10 md:mb-12">
         {/* Pattern radial de fundo (sutil) */}
