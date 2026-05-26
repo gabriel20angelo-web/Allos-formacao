@@ -2,7 +2,7 @@
 // Por enquanto hardcoded; quando virar editável, mover pra Supabase preservando
 // o mesmo formato (slug, title, descricao, exercise_slugs[], color, tint, border).
 
-import { EXERCISES, type Exercise } from "@/lib/aprimoramento-dinamicas";
+import type { Exercise } from "@/lib/aprimoramento-dinamicas";
 
 export interface Trilha {
   slug: string;
@@ -100,11 +100,15 @@ export function getTrilhaBySlug(slug: string): Trilha | undefined {
 /**
  * Resolve os exercícios de uma trilha, na ordem. Slugs que não existem mais
  * no dataset são silenciosamente ignorados (resiliência contra renomeação).
+ * Recebe lista de exercícios buscada do banco.
  */
-export function resolveTrilhaExercises(trilha: Trilha): Exercise[] {
+export function resolveTrilhaExercises(
+  trilha: Trilha,
+  allExercises: Exercise[],
+): Exercise[] {
   const out: Exercise[] = [];
   for (const slug of trilha.exercise_slugs) {
-    const ex = EXERCISES.find((e) => e.slug === slug);
+    const ex = allExercises.find((e) => e.slug === slug);
     if (ex) out.push(ex);
   }
   return out;

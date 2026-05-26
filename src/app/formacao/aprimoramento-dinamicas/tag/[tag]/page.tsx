@@ -2,9 +2,10 @@ import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import {
-  findTagBySlug,
-  listAllTags,
-} from "@/lib/aprimoramento-dinamicas";
+  listAprimoramentoExercicios,
+  listAllTagsFrom,
+  findTagBySlugIn,
+} from "@/lib/queries/aprimoramento-exercicios";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import { ChevronRight, Tag as TagIcon } from "lucide-react";
@@ -14,12 +15,13 @@ interface PageProps {
   params: { tag: string };
 }
 
-export function generateStaticParams() {
-  return listAllTags().map((t) => ({ tag: t.slug }));
-}
+// Sem generateStaticParams — depende de banco com auth gate.
 
-export function generateMetadata({ params }: PageProps): Metadata {
-  const found = findTagBySlug(params.tag);
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const all = await listAprimoramentoExercicios();
+  const found = findTagBySlugIn(all, params.tag);
   if (!found) return { title: "Tag não encontrada — Allos Formação" };
   return {
     title: `#${found.tag} — Aprimoramento de Dinâmicas`,
@@ -31,7 +33,8 @@ export function generateMetadata({ params }: PageProps): Metadata {
 export const dynamic = "force-dynamic";
 
 export default async function TagPage({ params }: PageProps) {
-  const found = findTagBySlug(params.tag);
+  const allExercises = await listAprimoramentoExercicios();
+  const found = findTagBySlugIn(allExercises, params.tag);
   if (!found) notFound();
 
   const supabase = await createServerSupabaseClient();
@@ -57,7 +60,7 @@ export default async function TagPage({ params }: PageProps) {
   }
 
   const { tag, exercises } = found;
-  const allTags = listAllTags();
+  const allTags = listAllTagsFrom(allExercises);
   const related = allTags.filter((t) => t.tag !== tag).slice(0, 8);
 
   return (

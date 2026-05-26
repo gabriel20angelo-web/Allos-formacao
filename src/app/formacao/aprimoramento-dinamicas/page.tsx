@@ -1,7 +1,8 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { EXERCISES, isCurated } from "@/lib/aprimoramento-dinamicas";
+import { isCurated, type Exercise } from "@/lib/aprimoramento-dinamicas";
+import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercicios";
 import { CATEGORIES, CATEGORY_ORDER } from "@/lib/aprimoramento-categories";
 import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
@@ -27,17 +28,18 @@ export const metadata: Metadata = {
 export const dynamic = "force-dynamic";
 
 // Exercício do dia — rotação determinística por dia do ano.
-function pickFeatured() {
+function pickFeatured(all: Exercise[]) {
+  if (all.length === 0) return null;
   const now = new Date();
   const start = new Date(now.getFullYear(), 0, 0);
   const dayOfYear = Math.floor((now.getTime() - start.getTime()) / 86400000);
-  return EXERCISES[dayOfYear % EXERCISES.length];
+  return all[dayOfYear % all.length];
 }
 
-function computeStats() {
-  const total = EXERCISES.length;
-  const cats = new Set(EXERCISES.map((e) => e.category)).size;
-  const curados = EXERCISES.filter((e) => isCurated(e)).length;
+function computeStats(all: Exercise[]) {
+  const total = all.length;
+  const cats = new Set(all.map((e) => e.category)).size;
+  const curados = all.filter((e) => isCurated(e)).length;
   return { total, cats, curados };
 }
 
@@ -63,9 +65,11 @@ export default async function AprimoramentoDinamicasPage() {
     redirect("/formacao");
   }
 
-  const featured = pickFeatured();
-  const featuredCat = CATEGORIES[featured.category];
-  const stats = computeStats();
+  const exercises = await listAprimoramentoExercicios();
+  const featured = pickFeatured(exercises);
+  const stats = computeStats(exercises);
+  // featured pode ser null se banco vazio — UI lida com isso
+  const featuredCat = featured ? CATEGORIES[featured.category] : null;
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12">
@@ -109,64 +113,66 @@ export default async function AprimoramentoDinamicasPage() {
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-6">
           {/* Coluna esquerda: stats + atalhos */}
           <div className="space-y-4">
-            <StatStrip stats={stats} />
+            <StatStrip stats={stats} exercises={exercises} />
             <QuickShortcuts />
           </div>
 
           {/* Coluna direita: Exercício do dia */}
-          <Link
-            href={`/formacao/aprimoramento-dinamicas/${featured.slug}`}
-            className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] relative overflow-hidden"
-            style={{
-              background: `linear-gradient(135deg, ${featuredCat.tint} 0%, rgba(255,255,255,0.02) 100%)`,
-              border: `1px solid ${featuredCat.border}`,
-            }}
-          >
-            <div className="flex items-center gap-2 mb-3">
-              <Sparkles
-                width={14}
-                height={14}
-                aria-hidden="true"
-                style={{ color: featuredCat.color }}
-              />
-              <p
-                className="font-dm text-[10px] font-bold tracking-[0.24em] uppercase"
-                style={{ color: featuredCat.color }}
-              >
-                Exercício do dia
-              </p>
-            </div>
-
-            <div className="flex items-start gap-3 mb-2">
-              <div
-                className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-fraunces text-xs font-bold"
-                style={{
-                  background: featuredCat.tint,
-                  color: featuredCat.color,
-                  border: `1px solid ${featuredCat.border}`,
-                }}
-                aria-hidden="true"
-              >
-                {featured.number}
+          {featured && featuredCat && (
+            <Link
+              href={`/formacao/aprimoramento-dinamicas/${featured.slug}`}
+              className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] relative overflow-hidden"
+              style={{
+                background: `linear-gradient(135deg, ${featuredCat.tint} 0%, rgba(255,255,255,0.02) 100%)`,
+                border: `1px solid ${featuredCat.border}`,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-3">
+                <Sparkles
+                  width={14}
+                  height={14}
+                  aria-hidden="true"
+                  style={{ color: featuredCat.color }}
+                />
+                <p
+                  className="font-dm text-[10px] font-bold tracking-[0.24em] uppercase"
+                  style={{ color: featuredCat.color }}
+                >
+                  Exercício do dia
+                </p>
               </div>
-              <h3 className="font-fraunces text-base md:text-lg text-cream leading-snug group-hover:text-accent transition-colors flex-1 min-w-0">
-                {featured.title}
-              </h3>
-            </div>
 
-            <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-3 mb-4">
-              {featured.summary}
-            </p>
+              <div className="flex items-start gap-3 mb-2">
+                <div
+                  className="flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center font-fraunces text-xs font-bold"
+                  style={{
+                    background: featuredCat.tint,
+                    color: featuredCat.color,
+                    border: `1px solid ${featuredCat.border}`,
+                  }}
+                  aria-hidden="true"
+                >
+                  {featured.number}
+                </div>
+                <h3 className="font-fraunces text-base md:text-lg text-cream leading-snug group-hover:text-accent transition-colors flex-1 min-w-0">
+                  {featured.title}
+                </h3>
+              </div>
 
-            <div className="flex items-center justify-end mt-auto">
-              <ChevronRight
-                width={16}
-                height={16}
-                className="text-cream/30 group-hover:text-accent group-hover:translate-x-0.5 transition-all"
-                aria-hidden="true"
-              />
-            </div>
-          </Link>
+              <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-3 mb-4">
+                {featured.summary}
+              </p>
+
+              <div className="flex items-center justify-end mt-auto">
+                <ChevronRight
+                  width={16}
+                  height={16}
+                  className="text-cream/30 group-hover:text-accent group-hover:translate-x-0.5 transition-all"
+                  aria-hidden="true"
+                />
+              </div>
+            </Link>
+          )}
         </div>
       </div>
 
@@ -244,7 +250,7 @@ export default async function AprimoramentoDinamicasPage() {
         </div>
       </section>
 
-      <ExerciseCatalog exercises={EXERCISES} />
+      <ExerciseCatalog exercises={exercises} />
     </div>
   );
 }
@@ -253,8 +259,10 @@ export default async function AprimoramentoDinamicasPage() {
 
 function StatStrip({
   stats,
+  exercises,
 }: {
   stats: { total: number; cats: number; curados: number };
+  exercises: Exercise[];
 }) {
   const items: { label: string; value: string }[] = [
     { label: "Exercícios", value: String(stats.total) },
@@ -266,7 +274,7 @@ function StatStrip({
   const counts = CATEGORY_ORDER.map((slug) => ({
     slug,
     meta: CATEGORIES[slug],
-    count: EXERCISES.filter((e) => e.category === slug).length,
+    count: exercises.filter((e) => e.category === slug).length,
   })).filter((c) => c.count > 0);
 
   return (

@@ -1,7 +1,7 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { EXERCISES } from "@/lib/aprimoramento-dinamicas";
+import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercicios";
 import {
   CATEGORIES,
   CATEGORY_ORDER,
@@ -59,7 +59,8 @@ export default async function CategoriaPage({ params }: PageProps) {
     redirect("/formacao");
   }
 
-  const items = EXERCISES.filter((e) => e.category === cat.slug);
+  const allExercises = await listAprimoramentoExercicios();
+  const items = allExercises.filter((e) => e.category === cat.slug);
   const catIdx = CATEGORY_ORDER.indexOf(cat.slug);
   const prev = catIdx > 0 ? CATEGORIES[CATEGORY_ORDER[catIdx - 1]] : null;
   const next =

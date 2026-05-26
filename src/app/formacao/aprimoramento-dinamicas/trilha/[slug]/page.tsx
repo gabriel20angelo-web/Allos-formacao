@@ -6,6 +6,7 @@ import {
   getTrilhaBySlug,
   resolveTrilhaExercises,
 } from "@/lib/aprimoramento-trilhas";
+import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercicios";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import TrilhaProgress from "@/components/aprimoramento/TrilhaProgress";
@@ -58,7 +59,8 @@ export default async function TrilhaPage({ params }: PageProps) {
     redirect("/formacao");
   }
 
-  const exercises = resolveTrilhaExercises(trilha);
+  const allExercises = await listAprimoramentoExercicios();
+  const exercises = resolveTrilhaExercises(trilha, allExercises);
   const trilhaIdx = TRILHAS.findIndex((t) => t.slug === trilha.slug);
   const prev = trilhaIdx > 0 ? TRILHAS[trilhaIdx - 1] : null;
   const next = trilhaIdx < TRILHAS.length - 1 ? TRILHAS[trilhaIdx + 1] : null;

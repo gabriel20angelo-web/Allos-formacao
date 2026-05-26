@@ -1,13 +1,12 @@
 import { redirect, notFound } from "next/navigation";
 import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { extractToc, isCurated } from "@/lib/aprimoramento-dinamicas";
 import {
-  EXERCISES,
-  getExerciseBySlug,
-  extractToc,
-  getRelated,
-  isCurated,
-} from "@/lib/aprimoramento-dinamicas";
+  listAprimoramentoExercicios,
+  getAprimoramentoExercicioBySlug,
+  getRelatedFrom,
+} from "@/lib/queries/aprimoramento-exercicios";
 import { getTrilhasOf } from "@/lib/aprimoramento-trilhas";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import ExerciseBlocks from "@/components/aprimoramento/ExerciseBlocks";
@@ -27,12 +26,12 @@ interface PageProps {
   params: { slug: string };
 }
 
-export function generateStaticParams() {
-  return EXERCISES.map((e) => ({ slug: e.slug }));
-}
+// Sem generateStaticParams: rota é dynamic (depende do banco + auth gate)
 
-export function generateMetadata({ params }: PageProps): Metadata {
-  const ex = getExerciseBySlug(params.slug);
+export async function generateMetadata({
+  params,
+}: PageProps): Promise<Metadata> {
+  const ex = await getAprimoramentoExercicioBySlug(params.slug);
   if (!ex) return { title: "Exercício não encontrado — Allos Formação" };
   return {
     title: `${ex.title} — Aprimoramento de Dinâmicas`,
@@ -44,7 +43,7 @@ export function generateMetadata({ params }: PageProps): Metadata {
 export const dynamic = "force-dynamic";
 
 export default async function ExerciseDetailPage({ params }: PageProps) {
-  const exercise = getExerciseBySlug(params.slug);
+  const exercise = await getAprimoramentoExercicioBySlug(params.slug);
   if (!exercise) notFound();
 
   const supabase = await createServerSupabaseClient();
@@ -69,13 +68,18 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
     redirect("/formacao");
   }
 
-  const index = EXERCISES.findIndex((e) => e.slug === exercise.slug);
-  const prev = index > 0 ? EXERCISES[index - 1] : null;
-  const next = index < EXERCISES.length - 1 ? EXERCISES[index + 1] : null;
+  const allExercises = await listAprimoramentoExercicios();
+  const index = allExercises.findIndex((e) => e.slug === exercise.slug);
+  const prev = index > 0 ? allExercises[index - 1] : null;
+  const next =
+    index >= 0 && index < allExercises.length - 1
+      ? allExercises[index + 1]
+      : null;
+  const totalCount = allExercises.length;
 
   const toc = extractToc(exercise.blocks);
   const cat = CATEGORIES[exercise.category];
-  const related = getRelated(exercise, 3);
+  const related = getRelatedFrom(exercise, allExercises, 3);
   const trilhasOf = getTrilhasOf(exercise.slug);
   const curado = isCurated(exercise);
 
@@ -146,7 +150,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
                 {cat.label}
               </Link>
               <span className="font-dm text-[11px] text-cream/35">
-                Exercício {exercise.number} de {EXERCISES.length}
+                Exercício {exercise.number} de {totalCount}
               </span>
               {!curado && (
                 <span
