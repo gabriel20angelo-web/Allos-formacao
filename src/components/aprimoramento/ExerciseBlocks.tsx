@@ -57,6 +57,9 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
     return id;
   }
 
+  // Conta os Momentos pra desenhar a linha conectiva entre eles (a partir do 2º).
+  let momentoCount = 0;
+
   return (
     <div ref={containerRef} className="space-y-1">
       {blocks.map((block, i) => {
@@ -75,13 +78,23 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           if (level === 3) {
             const momento = parseMomento(block.text);
             if (momento) {
+              momentoCount++;
+              const isFirst = momentoCount === 1;
               return (
                 <div
                   key={i}
-                  className="reveal momento-step flex items-start gap-3 mt-8 mb-3 scroll-mt-24"
+                  className="reveal momento-step relative flex items-start gap-3 mt-8 mb-3 scroll-mt-24"
                 >
+                  {/* Linha conectiva subindo do badge — só do 2º Momento pra cima */}
+                  {!isFirst && (
+                    <span
+                      className="absolute left-[17px] -top-7 w-px h-7"
+                      style={{ background: "rgba(200,75,49,0.25)" }}
+                      aria-hidden="true"
+                    />
+                  )}
                   <div
-                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-fraunces text-base font-bold mt-0.5"
+                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-fraunces text-base font-bold mt-0.5 relative z-[1]"
                     style={{
                       background: "rgba(200,75,49,0.12)",
                       color: "#C84B31",

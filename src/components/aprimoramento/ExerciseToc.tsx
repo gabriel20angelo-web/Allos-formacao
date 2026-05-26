@@ -9,9 +9,17 @@ interface TocItem {
 
 interface Props {
   items: TocItem[];
+  /** Cor do active state — geralmente a cor da categoria do exercício. */
+  color?: string;
+  /** Tint (rgba sutil) usado no fundo do item ativo. */
+  tint?: string;
 }
 
-export default function ExerciseToc({ items }: Props) {
+export default function ExerciseToc({
+  items,
+  color = "#C84B31",
+  tint = "rgba(200,75,49,0.08)",
+}: Props) {
   const [active, setActive] = useState<string | null>(null);
 
   useEffect(() => {
@@ -59,9 +67,9 @@ export default function ExerciseToc({ items }: Props) {
                 href={`#${item.id}`}
                 className="block font-dm text-[13px] leading-relaxed py-1.5 px-3 rounded-lg transition-colors"
                 style={{
-                  color: isActive ? "#C84B31" : "rgba(253,251,247,0.5)",
-                  background: isActive ? "rgba(200,75,49,0.08)" : "transparent",
-                  borderLeft: `2px solid ${isActive ? "#C84B31" : "transparent"}`,
+                  color: isActive ? color : "rgba(253,251,247,0.5)",
+                  background: isActive ? tint : "transparent",
+                  borderLeft: `2px solid ${isActive ? color : "transparent"}`,
                   marginLeft: "-2px",
                 }}
               >

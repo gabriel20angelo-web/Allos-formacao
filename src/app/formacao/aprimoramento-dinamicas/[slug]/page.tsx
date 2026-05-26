@@ -14,6 +14,7 @@ import ExerciseToc from "@/components/aprimoramento/ExerciseToc";
 import PrintButton from "@/components/aprimoramento/PrintButton";
 import RelatedExercises from "@/components/aprimoramento/RelatedExercises";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
+import ReadingProgress from "@/components/aprimoramento/ReadingProgress";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -71,7 +72,9 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const related = getRelated(exercise, 3);
 
   return (
-    <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12">
+    <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12 relative">
+      <ReadingProgress color={cat.color} />
+
       <div className="flex items-center justify-between gap-3 mb-8 print-hide">
         <Breadcrumbs
           items={[
@@ -92,7 +95,15 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-10 lg:gap-12">
         {/* Coluna principal */}
-        <article className="min-w-0 max-w-3xl">
+        <article className="min-w-0 max-w-3xl relative">
+          {/* Gradient header — cor da categoria desbotando pra transparente */}
+          <div
+            className="absolute -top-12 -left-6 -right-6 h-64 -z-10 pointer-events-none rounded-3xl"
+            aria-hidden="true"
+            style={{
+              background: `radial-gradient(ellipse 80% 70% at 30% 0%, ${cat.tint} 0%, transparent 70%)`,
+            }}
+          />
           <header
             className="mb-8 pb-8"
             style={{ borderBottom: "1px solid rgba(255,255,255,0.07)" }}
@@ -177,7 +188,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
 
         {/* TOC lateral (sticky em desktop, oculto em mobile) */}
         <aside className="min-w-0">
-          <ExerciseToc items={toc} />
+          <ExerciseToc items={toc} color={cat.color} tint={cat.tint} />
         </aside>
       </div>
     </div>
