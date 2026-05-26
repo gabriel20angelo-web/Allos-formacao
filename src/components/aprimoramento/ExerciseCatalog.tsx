@@ -8,40 +8,31 @@ import {
   X,
   ChevronRight,
   ChevronDown,
-  Clock,
-  Users,
   Shuffle,
   ArrowDownAZ,
   LayoutGrid,
   Star,
   Check,
+  Clock,
 } from "lucide-react";
 import type {
   Exercise,
   CategorySlug,
   FormatoSlug,
-  Pessoas,
 } from "@/lib/aprimoramento-dinamicas";
 import {
   CATEGORIES,
   CATEGORY_ORDER,
   FORMATOS,
   FORMATOS_ORDER,
-  PESSOAS_LABEL,
-  PESSOAS_ORDER,
-  DURATION_BUCKETS,
-  DURATION_ORDER,
-  durationBucket,
-  formatDuracao,
-  type DurationBucket,
 } from "@/lib/aprimoramento-categories";
 import { useAuth } from "@/hooks/useAuth";
 import { useAprimoramentoEstados } from "@/hooks/useAprimoramentoEstados";
 import type { AprimoramentoEstado } from "@/lib/queries/aprimoramento";
 import { isCurated } from "@/lib/aprimoramento-dinamicas";
 
-type SortKey = "ordem" | "titulo" | "duracao-asc" | "duracao-desc";
-type GroupKey = "categoria" | "duracao" | "lista";
+type SortKey = "ordem" | "titulo";
+type GroupKey = "categoria" | "lista";
 type StatusFilter = "favorito" | "fazer-depois" | "feito";
 type CuracaoFilter = "curado" | "nao-curado";
 
@@ -72,9 +63,7 @@ function normalize(s: string): string {
 interface InitialState {
   q: string;
   cats: Set<CategorySlug>;
-  durs: Set<DurationBucket>;
   formatos: Set<FormatoSlug>;
-  pessoas: Set<Pessoas>;
   statuses: Set<StatusFilter>;
   curacoes: Set<CuracaoFilter>;
   sort: SortKey;
@@ -85,9 +74,7 @@ function emptyState(): InitialState {
   return {
     q: "",
     cats: new Set(),
-    durs: new Set(),
     formatos: new Set(),
-    pessoas: new Set(),
     statuses: new Set(),
     curacoes: new Set(),
     sort: "ordem",
@@ -105,15 +92,11 @@ function readUrl(): InitialState {
   return {
     q: p.get("q") || "",
     cats: parseSet<CategorySlug>("cat"),
-    durs: parseSet<DurationBucket>("dur"),
     formatos: parseSet<FormatoSlug>("fmt"),
-    pessoas: parseSet<Pessoas>("p"),
     statuses: parseSet<StatusFilter>("st"),
     curacoes: parseSet<CuracaoFilter>("cu"),
-    sort: ["ordem", "titulo", "duracao-asc", "duracao-desc"].includes(sort)
-      ? sort
-      : "ordem",
-    group: ["categoria", "duracao", "lista"].includes(group) ? group : "categoria",
+    sort: ["ordem", "titulo"].includes(sort) ? sort : "ordem",
+    group: ["categoria", "lista"].includes(group) ? group : "categoria",
   };
 }
 
@@ -123,12 +106,8 @@ export default function ExerciseCatalog({ exercises }: Props) {
 
   const [query, setQuery] = useState(initial.q);
   const [activeCats, setActiveCats] = useState<Set<CategorySlug>>(initial.cats);
-  const [activeDurs, setActiveDurs] = useState<Set<DurationBucket>>(initial.durs);
   const [activeFormatos, setActiveFormatos] = useState<Set<FormatoSlug>>(
     initial.formatos,
-  );
-  const [activePessoas, setActivePessoas] = useState<Set<Pessoas>>(
-    initial.pessoas,
   );
   const [activeStatuses, setActiveStatuses] = useState<Set<StatusFilter>>(
     initial.statuses,
@@ -141,9 +120,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
 
   // "Mais filtros" abre automaticamente se o estado inicial já tem algum filtro avançado.
   const [showMore, setShowMore] = useState<boolean>(
-    initial.durs.size > 0 ||
-      initial.formatos.size > 0 ||
-      initial.pessoas.size > 0 ||
+    initial.formatos.size > 0 ||
       initial.statuses.size > 0 ||
       initial.curacoes.size > 0,
   );
@@ -160,9 +137,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     const p = new URLSearchParams();
     if (query.trim()) p.set("q", query.trim());
     if (activeCats.size) p.set("cat", Array.from(activeCats).join(","));
-    if (activeDurs.size) p.set("dur", Array.from(activeDurs).join(","));
     if (activeFormatos.size) p.set("fmt", Array.from(activeFormatos).join(","));
-    if (activePessoas.size) p.set("p", Array.from(activePessoas).join(","));
     if (activeStatuses.size) p.set("st", Array.from(activeStatuses).join(","));
     if (activeCuracoes.size) p.set("cu", Array.from(activeCuracoes).join(","));
     if (sortKey !== "ordem") p.set("sort", sortKey);
@@ -175,9 +150,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
   }, [
     query,
     activeCats,
-    activeDurs,
     activeFormatos,
-    activePessoas,
     activeStatuses,
     activeCuracoes,
     sortKey,
@@ -188,9 +161,6 @@ export default function ExerciseCatalog({ exercises }: Props) {
     const q = normalize(query.trim());
     return exercises.filter((ex) => {
       if (activeCats.size > 0 && !activeCats.has(ex.category)) return false;
-      if (activeDurs.size > 0 && !activeDurs.has(durationBucket(ex.duracaoMin)))
-        return false;
-      if (activePessoas.size > 0 && !activePessoas.has(ex.pessoas)) return false;
       if (
         activeFormatos.size > 0 &&
         !ex.formato.some((f) => activeFormatos.has(f))
@@ -224,9 +194,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     exercises,
     query,
     activeCats,
-    activeDurs,
     activeFormatos,
-    activePessoas,
     activeStatuses,
     activeCuracoes,
     estados,
@@ -234,16 +202,9 @@ export default function ExerciseCatalog({ exercises }: Props) {
 
   const sorted = useMemo(() => {
     const arr = [...filtered];
-    const mid = (e: Exercise) => (e.duracaoMin[0] + e.duracaoMin[1]) / 2;
     switch (sortKey) {
       case "titulo":
         arr.sort((a, b) => a.title.localeCompare(b.title, "pt-BR"));
-        break;
-      case "duracao-asc":
-        arr.sort((a, b) => mid(a) - mid(b) || a.number - b.number);
-        break;
-      case "duracao-desc":
-        arr.sort((a, b) => mid(b) - mid(a) || a.number - b.number);
         break;
       default:
         arr.sort((a, b) => a.number - b.number);
@@ -262,25 +223,6 @@ export default function ExerciseCatalog({ exercises }: Props) {
   const grouped: Group[] = useMemo(() => {
     if (groupKey === "lista") {
       return [{ key: "lista", label: null, color: null, items: sorted }];
-    }
-    if (groupKey === "duracao") {
-      const map = new Map<DurationBucket, Exercise[]>();
-      for (const ex of sorted) {
-        const k = durationBucket(ex.duracaoMin);
-        const arr = map.get(k) ?? [];
-        arr.push(ex);
-        map.set(k, arr);
-      }
-      return DURATION_ORDER.map((k) => {
-        const meta = DURATION_BUCKETS[k];
-        return {
-          key: k,
-          label: meta.label,
-          hint: meta.hint,
-          color: meta.color,
-          items: map.get(k) ?? [],
-        };
-      }).filter((g) => g.items.length > 0);
     }
     const map = new Map<CategorySlug, Exercise[]>();
     for (const ex of sorted) {
@@ -310,9 +252,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
   const clearAll = () => {
     setQuery("");
     setActiveCats(new Set());
-    setActiveDurs(new Set());
     setActiveFormatos(new Set());
-    setActivePessoas(new Set());
     setActiveStatuses(new Set());
     setActiveCuracoes(new Set());
     setSortKey("ordem");
@@ -320,11 +260,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
   };
 
   const advancedCount =
-    activeDurs.size +
-    activeFormatos.size +
-    activePessoas.size +
-    activeStatuses.size +
-    activeCuracoes.size;
+    activeFormatos.size + activeStatuses.size + activeCuracoes.size;
 
   const hasFilters =
     query.length > 0 ||
@@ -440,8 +376,6 @@ export default function ExerciseCatalog({ exercises }: Props) {
           >
             <option value="ordem">Ordem original</option>
             <option value="titulo">Título A-Z</option>
-            <option value="duracao-asc">Mais curtos primeiro</option>
-            <option value="duracao-desc">Mais longos primeiro</option>
           </select>
         </label>
 
@@ -456,7 +390,6 @@ export default function ExerciseCatalog({ exercises }: Props) {
             aria-label="Agrupar"
           >
             <option value="categoria">Por categoria</option>
-            <option value="duracao">Por duração</option>
             <option value="lista">Lista plana</option>
           </select>
         </label>
@@ -500,41 +433,6 @@ export default function ExerciseCatalog({ exercises }: Props) {
             border: "1px solid rgba(255,255,255,0.07)",
           }}
         >
-          <ChipRow label="Duração" compact>
-            {DURATION_ORDER.map((slug) => {
-              const meta = DURATION_BUCKETS[slug];
-              const active = activeDurs.has(slug);
-              return (
-                <Chip
-                  key={slug}
-                  active={active}
-                  color={meta.color}
-                  tint={meta.tint}
-                  border={meta.border}
-                  onClick={() => toggle(activeDurs, slug, setActiveDurs)}
-                  hint={meta.hint}
-                >
-                  {meta.label}
-                </Chip>
-              );
-            })}
-          </ChipRow>
-
-          <ChipRow label="Pessoas" compact>
-            {PESSOAS_ORDER.map((slug) => {
-              const active = activePessoas.has(slug);
-              return (
-                <Chip
-                  key={slug}
-                  active={active}
-                  onClick={() => toggle(activePessoas, slug, setActivePessoas)}
-                >
-                  {PESSOAS_LABEL[slug]}
-                </Chip>
-              );
-            })}
-          </ChipRow>
-
           <ChipRow label="Formato" compact>
             {FORMATOS_ORDER.map((slug) => {
               const fmt = FORMATOS[slug];
@@ -815,14 +713,6 @@ function ExerciseCard({
       <div className="flex flex-wrap items-center gap-1.5 mt-3 pl-13">
         <CardBadge color={cat.color} tint={cat.tint} border={cat.border}>
           {primaryFormato.label}
-        </CardBadge>
-        <CardBadge>
-          <Clock width={11} height={11} aria-hidden="true" />
-          {formatDuracao(exercise.duracaoMin)}
-        </CardBadge>
-        <CardBadge>
-          <Users width={11} height={11} aria-hidden="true" />
-          {PESSOAS_LABEL[exercise.pessoas]}
         </CardBadge>
         {naoCurado && (
           <CardBadge

@@ -5,13 +5,11 @@ import { EXERCISES } from "@/lib/aprimoramento-dinamicas";
 import {
   CATEGORIES,
   CATEGORY_ORDER,
-  PESSOAS_LABEL,
-  formatDuracao,
   type CategoryMeta,
 } from "@/lib/aprimoramento-categories";
 import type { CategorySlug } from "@/lib/aprimoramento-dinamicas";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
-import { ChevronRight, Clock, Users } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -149,16 +147,6 @@ export default async function CategoriaPage({ params }: PageProps) {
                 <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-2">
                   {ex.summary}
                 </p>
-                <div className="flex items-center gap-3 font-dm text-[11px] text-cream/40 mt-2">
-                  <span className="inline-flex items-center gap-1">
-                    <Clock width={11} height={11} aria-hidden="true" />
-                    {formatDuracao(ex.duracaoMin)}
-                  </span>
-                  <span className="inline-flex items-center gap-1">
-                    <Users width={11} height={11} aria-hidden="true" />
-                    {PESSOAS_LABEL[ex.pessoas]}
-                  </span>
-                </div>
               </div>
               <ChevronRight
                 className="flex-shrink-0 text-cream/25 group-hover:text-accent group-hover:translate-x-0.5 transition-all mt-2"

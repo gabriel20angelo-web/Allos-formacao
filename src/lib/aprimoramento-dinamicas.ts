@@ -21,14 +21,13 @@ export type CategorySlug =
   | "manejo"
   | "operacional";
 
-export type Pessoas = "solo" | "dupla" | "grupo" | "supervisor";
+export type Pessoas = "solo" | "dupla" | "grupo";
 
 export type FormatoSlug =
   | "roleplay"
   | "reflexao"
   | "discussao"
-  | "preenchimento"
-  | "supervisao";
+  | "preenchimento";
 
 export interface Exercise {
   slug: string;
@@ -665,8 +664,8 @@ export const EXERCISES: Exercise[] = [
       "Capítulo 5 — Fatores da Relação. Princípio: evite os erros e, quando cometê-los, repare o relacionamento.",
     category: "relacao",
     duracaoMin: [30, 60],
-    formato: ["supervisao", "reflexao"],
-    pessoas: "supervisor",
+    formato: ["reflexao"],
+    pessoas: "grupo",
     tags: ["prática deliberada", "supervisão", "aliança", "ruptura-reparo"],
     recursos: ["gravações de 3 sessões", "supervisor ou colega"],
     blocks: [
@@ -1138,8 +1137,8 @@ export const EXERCISES: Exercise[] = [
       "A pesquisa mostra que os terapeutas não são tão responsivos e flexíveis com clientes que não estão progredindo ou piorando em seu tratamento. Em uma análise do que os terapeutas fizeram em resposta a esse feedback,…",
     category: "autoconhecimento",
     duracaoMin: [30, 45],
-    formato: ["roleplay", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["roleplay", "reflexao"],
+    pessoas: "grupo",
     tags: ["não-curado"],
     curado: false,
     blocks: [
@@ -1255,8 +1254,8 @@ export const EXERCISES: Exercise[] = [
       "A congruência é tanto intrapessoal (qualidade do terapeuta) quanto interpessoal (relacional) em sua natureza. A atenção plena, o alongamento e o relaxamento podem todos ajudar a \"ajustar corretamente seu coração\" para…",
     category: "autoconhecimento",
     duracaoMin: [30, 45],
-    formato: ["roleplay", "preenchimento", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["roleplay", "preenchimento", "reflexao"],
+    pessoas: "grupo",
     tags: ["não-curado"],
     curado: false,
     blocks: [
@@ -1319,8 +1318,8 @@ export const EXERCISES: Exercise[] = [
       "O planejamento do tratamento e a popularidade dos chamados objetivos SMART podem inadvertidamente levar à visão dos objetivos terapêuticos como estáticos. Na verdade, os objetivos, significado ou propósito do…",
     category: "relacao",
     duracaoMin: [30, 45],
-    formato: ["roleplay", "preenchimento", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["roleplay", "preenchimento", "reflexao"],
+    pessoas: "grupo",
     tags: ["não-curado"],
     curado: false,
     blocks: [
@@ -1966,7 +1965,7 @@ export const EXERCISES: Exercise[] = [
     category: "autoconhecimento",
     duracaoMin: [40, 60],
     formato: ["roleplay", "reflexao", "preenchimento"],
-    pessoas: "supervisor",
+    pessoas: "grupo",
     tags: ["não-curado"],
     curado: false,
     blocks: [
@@ -2023,8 +2022,8 @@ export const EXERCISES: Exercise[] = [
       "A interpretação psicológica dos sonhos é utilizada em diversas abordagens da psicologia, tais como a Psicologia Analítica, a Psicanálise e a Gestalt-terapia. Em vista disso, o exercício busca trabalhar a prática da…",
     category: "tecnica",
     duracaoMin: [45, 75],
-    formato: ["roleplay", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["roleplay", "reflexao"],
+    pessoas: "grupo",
     tags: ["sonhos"],
     curado: false,
     blocks: [
@@ -2352,8 +2351,8 @@ export const EXERCISES: Exercise[] = [
       "Caracterização: ajudar a identificar no decorrer da terapia elementos e sinais que indicam a necessidade de se fazer um encaminhamento para um outro profissional, como psiquiatra, neuropsicólogo, assistente social,…",
     category: "manejo",
     duracaoMin: [40, 60],
-    formato: ["discussao", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["discussao", "reflexao"],
+    pessoas: "grupo",
     tags: ["psiquiatra"],
     curado: false,
     blocks: [
@@ -2480,7 +2479,7 @@ export const EXERCISES: Exercise[] = [
     category: "autoconhecimento",
     duracaoMin: [45, 75],
     formato: ["roleplay", "reflexao", "discussao"],
-    pessoas: "supervisor",
+    pessoas: "grupo",
     tags: ["não-curado"],
     curado: false,
     blocks: [
@@ -3349,8 +3348,8 @@ export const EXERCISES: Exercise[] = [
       "Exercício individual, papel e caneta.",
     category: "autoconhecimento",
     duracaoMin: [45, 75],
-    formato: ["roleplay", "reflexao", "supervisao"],
-    pessoas: "supervisor",
+    formato: ["roleplay", "reflexao"],
+    pessoas: "grupo",
     tags: ["honorarios"],
     curado: false,
     blocks: [

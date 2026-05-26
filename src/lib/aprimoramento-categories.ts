@@ -86,7 +86,7 @@ export interface FormatoMeta {
   slug: FormatoSlug;
   label: string;
   /** identificador de ícone do lucide-react */
-  icon: "Drama" | "BrainCog" | "MessagesSquare" | "ClipboardList" | "Eye";
+  icon: "Drama" | "BrainCog" | "MessagesSquare" | "ClipboardList";
 }
 
 export const FORMATOS: Record<FormatoSlug, FormatoMeta> = {
@@ -98,14 +98,12 @@ export const FORMATOS: Record<FormatoSlug, FormatoMeta> = {
     label: "Preenchimento",
     icon: "ClipboardList",
   },
-  supervisao: { slug: "supervisao", label: "Supervisão", icon: "Eye" },
 };
 
 export const PESSOAS_LABEL: Record<Pessoas, string> = {
   solo: "Individual",
   dupla: "Em dupla",
   grupo: "Grupo",
-  supervisor: "Com supervisor",
 };
 
 export function formatDuracao([min, max]: [number, number]): string {
@@ -164,11 +162,10 @@ export function durationBucket([min, max]: [number, number]): DurationBucket {
   return "longo";
 }
 
-export const PESSOAS_ORDER = ["solo", "dupla", "grupo", "supervisor"] as const;
+export const PESSOAS_ORDER = ["solo", "dupla", "grupo"] as const;
 export const FORMATOS_ORDER = [
   "roleplay",
   "reflexao",
   "discussao",
   "preenchimento",
-  "supervisao",
 ] as const;

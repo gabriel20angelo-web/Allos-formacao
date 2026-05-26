@@ -1,11 +1,7 @@
 import Link from "next/link";
-import { ChevronRight, Clock, Users } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Exercise } from "@/lib/aprimoramento-dinamicas";
-import {
-  CATEGORIES,
-  PESSOAS_LABEL,
-  formatDuracao,
-} from "@/lib/aprimoramento-categories";
+import { CATEGORIES } from "@/lib/aprimoramento-categories";
 
 export default function RelatedExercises({
   items,
@@ -39,7 +35,7 @@ export default function RelatedExercises({
                 border: "1px solid rgba(255,255,255,0.07)",
               }}
             >
-              <div className="flex items-start gap-3 mb-2.5">
+              <div className="flex items-start gap-3">
                 <div
                   className="flex-shrink-0 w-7 h-7 rounded-lg flex items-center justify-center font-fraunces text-[11px] font-bold"
                   style={{
@@ -68,16 +64,6 @@ export default function RelatedExercises({
                   height={14}
                   aria-hidden="true"
                 />
-              </div>
-              <div className="flex items-center gap-3 font-dm text-[11px] text-cream/45 pl-10">
-                <span className="inline-flex items-center gap-1">
-                  <Clock width={10} height={10} aria-hidden="true" />
-                  {formatDuracao(ex.duracaoMin)}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Users width={10} height={10} aria-hidden="true" />
-                  {PESSOAS_LABEL[ex.pessoas]}
-                </span>
               </div>
             </Link>
           );

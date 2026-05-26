@@ -1,23 +1,17 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
-import { EXERCISES } from "@/lib/aprimoramento-dinamicas";
-import {
-  CATEGORIES,
-  CATEGORY_ORDER,
-  PESSOAS_LABEL,
-  formatDuracao,
-} from "@/lib/aprimoramento-categories";
+import { EXERCISES, isCurated } from "@/lib/aprimoramento-dinamicas";
+import { CATEGORIES, CATEGORY_ORDER } from "@/lib/aprimoramento-categories";
 import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import { TRILHAS } from "@/lib/aprimoramento-trilhas";
 import {
-  Clock,
   Sparkles,
-  User,
-  Users,
   Drama,
-  Eye,
+  BrainCog,
+  MessagesSquare,
+  Star,
   ChevronRight,
   Compass,
 } from "lucide-react";
@@ -43,11 +37,8 @@ function pickFeatured() {
 function computeStats() {
   const total = EXERCISES.length;
   const cats = new Set(EXERCISES.map((e) => e.category)).size;
-  const avgMid = Math.round(
-    EXERCISES.reduce((sum, e) => sum + (e.duracaoMin[0] + e.duracaoMin[1]) / 2, 0) /
-      total,
-  );
-  return { total, cats, avgMid };
+  const curados = EXERCISES.filter((e) => isCurated(e)).length;
+  return { total, cats, curados };
 }
 
 export default async function AprimoramentoDinamicasPage() {
@@ -167,17 +158,7 @@ export default async function AprimoramentoDinamicasPage() {
               {featured.summary}
             </p>
 
-            <div className="flex items-center justify-between mt-auto">
-              <div className="flex items-center gap-3 font-dm text-[11px] text-cream/45">
-                <span className="inline-flex items-center gap-1">
-                  <Clock width={11} height={11} aria-hidden="true" />
-                  {formatDuracao(featured.duracaoMin)}
-                </span>
-                <span className="inline-flex items-center gap-1">
-                  <Users width={11} height={11} aria-hidden="true" />
-                  {PESSOAS_LABEL[featured.pessoas]}
-                </span>
-              </div>
+            <div className="flex items-center justify-end mt-auto">
               <ChevronRight
                 width={16}
                 height={16}
@@ -273,12 +254,12 @@ export default async function AprimoramentoDinamicasPage() {
 function StatStrip({
   stats,
 }: {
-  stats: { total: number; cats: number; avgMid: number };
+  stats: { total: number; cats: number; curados: number };
 }) {
   const items: { label: string; value: string }[] = [
     { label: "Exercícios", value: String(stats.total) },
     { label: "Categorias", value: String(stats.cats) },
-    { label: "Duração média", value: `~${stats.avgMid} min` },
+    { label: "Curados", value: String(stats.curados) },
   ];
 
   // Contagem por categoria
@@ -343,24 +324,24 @@ function QuickShortcuts() {
     Icon: React.ElementType;
   }[] = [
     {
-      href: "/formacao/aprimoramento-dinamicas?dur=curto",
-      label: "Tenho até 45 min",
-      Icon: Clock,
-    },
-    {
-      href: "/formacao/aprimoramento-dinamicas?p=solo",
-      label: "Posso fazer sozinho",
-      Icon: User,
-    },
-    {
-      href: "/formacao/aprimoramento-dinamicas?p=supervisor",
-      label: "Vou supervisionar",
-      Icon: Eye,
-    },
-    {
       href: "/formacao/aprimoramento-dinamicas?fmt=roleplay",
       label: "Quero roleplay",
       Icon: Drama,
+    },
+    {
+      href: "/formacao/aprimoramento-dinamicas?fmt=reflexao",
+      label: "Pra reflexão",
+      Icon: BrainCog,
+    },
+    {
+      href: "/formacao/aprimoramento-dinamicas?fmt=discussao",
+      label: "Pra discussão",
+      Icon: MessagesSquare,
+    },
+    {
+      href: "/formacao/aprimoramento-dinamicas?cu=curado",
+      label: "Só curados",
+      Icon: Star,
     },
   ];
 

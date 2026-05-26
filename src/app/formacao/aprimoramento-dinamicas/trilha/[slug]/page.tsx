@@ -6,14 +6,10 @@ import {
   getTrilhaBySlug,
   resolveTrilhaExercises,
 } from "@/lib/aprimoramento-trilhas";
-import {
-  CATEGORIES,
-  PESSOAS_LABEL,
-  formatDuracao,
-} from "@/lib/aprimoramento-categories";
+import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import TrilhaProgress from "@/components/aprimoramento/TrilhaProgress";
-import { ChevronRight, Clock, Users } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -166,16 +162,6 @@ export default async function TrilhaPage({ params }: PageProps) {
                   <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-2">
                     {ex.summary}
                   </p>
-                  <div className="flex items-center gap-3 font-dm text-[11px] text-cream/40 mt-2">
-                    <span className="inline-flex items-center gap-1">
-                      <Clock width={11} height={11} aria-hidden="true" />
-                      {formatDuracao(ex.duracaoMin)}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <Users width={11} height={11} aria-hidden="true" />
-                      {PESSOAS_LABEL[ex.pessoas]}
-                    </span>
-                  </div>
                 </div>
 
                 <ChevronRight
