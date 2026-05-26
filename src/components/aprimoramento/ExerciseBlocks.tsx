@@ -1,31 +1,100 @@
 import type { Block } from "@/lib/aprimoramento-dinamicas";
+import { parseMomento, slugifyHeading } from "@/lib/aprimoramento-dinamicas";
 
-const HEADING_CLASSES: Record<2 | 3 | 4, string> = {
-  2: "font-fraunces text-2xl md:text-3xl text-cream mt-10 mb-4",
-  3: "font-fraunces text-lg md:text-xl text-cream mt-8 mb-3",
-  4: "font-dm text-sm font-bold tracking-widest uppercase text-accent mt-6 mb-2",
-};
+const HEADING2_CLASSES =
+  "font-fraunces text-2xl md:text-[28px] text-cream mt-12 mb-4 scroll-mt-24";
+const HEADING4_CLASSES =
+  "font-dm text-[11px] font-bold tracking-widest uppercase text-accent mt-6 mb-2";
 
 export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
+  // Gera IDs únicos pros headings level 2 (mesma lógica do extractToc).
+  const idsUsed = new Set<string>();
+  function makeId(text: string): string {
+    let id = slugifyHeading(text);
+    let suffix = 2;
+    while (id && idsUsed.has(id)) {
+      id = `${slugifyHeading(text)}-${suffix++}`;
+    }
+    if (id) idsUsed.add(id);
+    return id;
+  }
+
   return (
     <div className="space-y-1">
       {blocks.map((block, i) => {
         if (block.type === "heading") {
           const level = block.level ?? 2;
-          const Tag = level === 2 ? "h2" : level === 3 ? "h3" : "h4";
+
+          if (level === 2) {
+            const id = makeId(block.text);
+            return (
+              <h2 key={i} id={id} className={HEADING2_CLASSES}>
+                {block.text}
+              </h2>
+            );
+          }
+
+          if (level === 3) {
+            const momento = parseMomento(block.text);
+            if (momento) {
+              return (
+                <div
+                  key={i}
+                  className="flex items-start gap-3 mt-8 mb-3 scroll-mt-24"
+                >
+                  <div
+                    className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-fraunces text-base font-bold mt-0.5"
+                    style={{
+                      background: "rgba(200,75,49,0.12)",
+                      color: "#C84B31",
+                      border: "1px solid rgba(200,75,49,0.28)",
+                    }}
+                    aria-hidden="true"
+                  >
+                    {momento.number}
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="font-dm text-[10px] font-bold tracking-[0.24em] uppercase text-accent/80">
+                      Momento {momento.number}
+                    </p>
+                    {momento.label && (
+                      <h3 className="font-fraunces text-lg md:text-xl text-cream leading-snug mt-0.5">
+                        {momento.label}
+                      </h3>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <h3
+                key={i}
+                className="font-fraunces text-lg md:text-xl text-cream mt-8 mb-3"
+              >
+                {block.text}
+              </h3>
+            );
+          }
+
+          // level 4 — usado pra "Para o paciente / Para o terapeuta" etc.
           return (
-            <Tag key={i} className={HEADING_CLASSES[level]}>
+            <h4 key={i} className={HEADING4_CLASSES}>
               {block.text}
-            </Tag>
+            </h4>
           );
         }
+
         if (block.type === "paragraph") {
           return (
-            <p key={i} className="font-dm text-[15px] leading-[1.75] text-cream/80 mb-3">
+            <p
+              key={i}
+              className="font-dm text-[15px] leading-[1.75] text-cream/80 mb-3"
+            >
               {block.text}
             </p>
           );
         }
+
         if (block.type === "list") {
           return (
             <ul key={i} className="space-y-2 mb-4 pl-4">
@@ -40,17 +109,25 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             </ul>
           );
         }
+
         if (block.type === "orderedList") {
           return (
-            <ol key={i} className="space-y-2 mb-4 pl-4 list-decimal list-inside marker:text-accent marker:font-bold">
+            <ol
+              key={i}
+              className="space-y-2 mb-4 pl-4 list-decimal list-inside marker:text-accent marker:font-bold"
+            >
               {block.items.map((item, j) => (
-                <li key={j} className="font-dm text-[15px] leading-[1.75] text-cream/80 pl-1">
+                <li
+                  key={j}
+                  className="font-dm text-[15px] leading-[1.75] text-cream/80 pl-1"
+                >
                   {item}
                 </li>
               ))}
             </ol>
           );
         }
+
         if (block.type === "quote") {
           return (
             <blockquote
@@ -61,13 +138,14 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
                 &ldquo;{block.text}&rdquo;
               </p>
               {block.attribution && (
-                <footer className="mt-2 font-dm text-xs text-cream/50">
+                <footer className="mt-2 font-dm text-xs text-cream/50 not-italic">
                   — {block.attribution}
                 </footer>
               )}
             </blockquote>
           );
         }
+
         if (block.type === "callout") {
           return (
             <div
@@ -81,6 +159,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             </div>
           );
         }
+
         if (block.type === "reference") {
           return (
             <p key={i} className="font-dm text-xs text-cream/50 mb-3 italic">
@@ -99,6 +178,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             </p>
           );
         }
+
         if (block.type === "link") {
           return (
             <p key={i} className="mb-3">
@@ -125,9 +205,13 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             </p>
           );
         }
+
         if (block.type === "table") {
           return (
-            <div key={i} className="my-5 overflow-x-auto rounded-xl border border-cream/10">
+            <div
+              key={i}
+              className="my-5 overflow-x-auto rounded-xl border border-cream/10"
+            >
               <table className="w-full text-left">
                 <thead style={{ background: "rgba(255,255,255,0.04)" }}>
                   <tr>
@@ -159,6 +243,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             </div>
           );
         }
+
         return null;
       })}
     </div>

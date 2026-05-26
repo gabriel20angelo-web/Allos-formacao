@@ -14,11 +14,33 @@ export type Block =
   | { type: "link"; label: string; url: string }
   | { type: "table"; headers: string[]; rows: string[][] };
 
+export type CategorySlug =
+  | "relacao"
+  | "tecnica"
+  | "autoconhecimento"
+  | "manejo"
+  | "operacional";
+
+export type Pessoas = "solo" | "dupla" | "grupo" | "supervisor";
+
+export type FormatoSlug =
+  | "roleplay"
+  | "reflexao"
+  | "discussao"
+  | "preenchimento"
+  | "supervisao";
+
 export interface Exercise {
   slug: string;
   number: number;
   title: string;
   summary: string;
+  category: CategorySlug;
+  duracaoMin: [number, number]; // [min, max] em minutos
+  formato: FormatoSlug[];
+  pessoas: Pessoas;
+  tags: string[];
+  recursos?: string[];
   blocks: Block[];
 }
 
@@ -29,6 +51,11 @@ export const EXERCISES: Exercise[] = [
     title: "Preconceitos e estereótipos",
     summary:
       "Desenvolver decisões clínicas individualizadas em vez de suposições baseadas em pertencimento a grupos.",
+    category: "autoconhecimento",
+    duracaoMin: [45, 90],
+    formato: ["preenchimento", "discussao"],
+    pessoas: "grupo",
+    tags: ["preconceito", "interseccionalidade", "questionários"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -85,6 +112,11 @@ export const EXERCISES: Exercise[] = [
     title: "Aprendendo a Fazer Prontuário",
     summary:
       "Praticar o registro organizado e seguro de atendimentos por meio de roleplay e preenchimento conjunto.",
+    category: "operacional",
+    duracaoMin: [40, 60],
+    formato: ["roleplay", "preenchimento", "discussao"],
+    pessoas: "grupo",
+    tags: ["prontuário", "registro", "ética"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -159,6 +191,11 @@ export const EXERCISES: Exercise[] = [
     title: "Feedback Negativo",
     summary:
       "Aumentar o conforto e a responsividade do terapeuta às críticas negativas dos pacientes.",
+    category: "relacao",
+    duracaoMin: [45, 75],
+    formato: ["roleplay", "reflexao", "discussao"],
+    pessoas: "dupla",
+    tags: ["feedback", "crítica", "resiliência", "aliança"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -255,6 +292,12 @@ export const EXERCISES: Exercise[] = [
     title: "A boca fala uma coisa, o corpo outra",
     summary:
       "Sensibilizar para a expressão corporal e o descompasso entre discurso verbal e linguagem do corpo.",
+    category: "tecnica",
+    duracaoMin: [30, 60],
+    formato: ["roleplay", "discussao"],
+    pessoas: "grupo",
+    tags: ["corpo", "não-verbal", "comunicação", "terapia online"],
+    recursos: ["vídeo/filme opcional para variação"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -309,6 +352,12 @@ export const EXERCISES: Exercise[] = [
     title: "A internet está instável",
     summary:
       "Simular a perda do retorno audiovisual durante atendimento online e mapear estratégias clínicas.",
+    category: "operacional",
+    duracaoMin: [30, 45],
+    formato: ["roleplay", "discussao"],
+    pessoas: "grupo",
+    tags: ["tele-atendimento", "câmera", "presença virtual"],
+    recursos: ["chamada de vídeo"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -351,6 +400,11 @@ export const EXERCISES: Exercise[] = [
     title: "O que eu consigo e quero atender?",
     summary:
       "Mapear demandas com as quais não se sente apto e definir um plano de capacitação ou recorte de nicho.",
+    category: "autoconhecimento",
+    duracaoMin: [45, 90],
+    formato: ["reflexao", "preenchimento"],
+    pessoas: "solo",
+    tags: ["limites", "nicho", "capacitação", "plano de ação"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -443,6 +497,11 @@ export const EXERCISES: Exercise[] = [
     title: "Set Your Heart Right (Adaptado)",
     summary:
       "Adaptar a reflexão sobre a preparação pré-sessão ao estilo terapêutico individual.",
+    category: "autoconhecimento",
+    duracaoMin: [45, 60],
+    formato: ["reflexao", "discussao"],
+    pessoas: "solo",
+    tags: ["preparação", "presença", "estilo", "rotina"],
     blocks: [
       { type: "heading", text: "Objetivo" },
       {
@@ -517,6 +576,12 @@ export const EXERCISES: Exercise[] = [
     title: "Intervenção Confrontativa",
     summary:
       "Praticar intervenções confrontativas assertivas e estratégicas monitorando a resposta emocional do paciente.",
+    category: "tecnica",
+    duracaoMin: [45, 75],
+    formato: ["roleplay", "discussao"],
+    pessoas: "dupla",
+    tags: ["confronto", "transferência", "DBT", "resistência"],
+    recursos: ["vídeos externos (Perls, Fruzzetti)"],
     blocks: [
       { type: "heading", text: "Objetivo" },
       {
@@ -591,6 +656,12 @@ export const EXERCISES: Exercise[] = [
     title: "Parceria para Melhoria",
     summary:
       "Capítulo 5 — Fatores da Relação. Princípio: evite os erros e, quando cometê-los, repare o relacionamento.",
+    category: "relacao",
+    duracaoMin: [30, 60],
+    formato: ["supervisao", "reflexao"],
+    pessoas: "supervisor",
+    tags: ["prática deliberada", "supervisão", "aliança", "ruptura-reparo"],
+    recursos: ["gravações de 3 sessões", "supervisor ou colega"],
     blocks: [
       { type: "heading", text: "Princípio" },
       {
@@ -620,6 +691,11 @@ export const EXERCISES: Exercise[] = [
     title: "Abordando o desconfortável",
     summary:
       "Praticar a abordagem de áreas/tópicos que o terapeuta tende a evitar por preconceito, valores ou tabus.",
+    category: "manejo",
+    duracaoMin: [60, 90],
+    formato: ["roleplay", "reflexao", "discussao"],
+    pessoas: "dupla",
+    tags: ["tabu", "valores", "preconceito", "sexualidade", "religião", "dinheiro"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -728,6 +804,11 @@ export const EXERCISES: Exercise[] = [
     title: "Atenção aos cuidados básicos",
     summary:
       "Refletir sobre a relevância de explorar sono, alimentação, medicações e outros cuidados de saúde na clínica.",
+    category: "manejo",
+    duracaoMin: [30, 60],
+    formato: ["discussao", "reflexao"],
+    pessoas: "grupo",
+    tags: ["sono", "medicação", "saúde física", "interdisciplinaridade"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -766,6 +847,11 @@ export const EXERCISES: Exercise[] = [
     title: "Manejo de \u201Cpaciente da teoria x\u201D com a \u201Cteoria y\u201D",
     summary:
       "Refletir sobre limites e ganhos de mesclar técnicas entre abordagens, sem comprometer a linha do terapeuta.",
+    category: "tecnica",
+    duracaoMin: [45, 75],
+    formato: ["discussao", "reflexao"],
+    pessoas: "dupla",
+    tags: ["abordagens", "ecletismo", "limites teóricos"],
     blocks: [
       { type: "heading", text: "Contextualização" },
       {
@@ -818,6 +904,11 @@ export const EXERCISES: Exercise[] = [
     title: "Como parar de tentar agradar seus clientes/pacientes sempre?",
     summary:
       "Grupo de Aprimoramento — distinguir intervenções confortáveis de intervenções clinicamente necessárias.",
+    category: "relacao",
+    duracaoMin: [45, 75],
+    formato: ["roleplay", "discussao"],
+    pessoas: "dupla",
+    tags: ["agradar", "limites", "transferência", "intervenção"],
     blocks: [
       { type: "heading", text: "1º momento: Breve contextualização", level: 3 },
       {
@@ -868,4 +959,83 @@ export const EXERCISES: Exercise[] = [
 
 export function getExerciseBySlug(slug: string): Exercise | undefined {
   return EXERCISES.find((e) => e.slug === slug);
+}
+
+/** Slugifica um texto para uso como id de heading (âncora). */
+export function slugifyHeading(text: string): string {
+  return text
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 60);
+}
+
+/**
+ * Extrai um sumário (table of contents) a partir dos blocks.
+ * Inclui headings level 2 (seções principais).
+ */
+export function extractToc(blocks: Block[]): { id: string; text: string }[] {
+  const out: { id: string; text: string }[] = [];
+  const seen = new Set<string>();
+  for (const b of blocks) {
+    if (b.type !== "heading") continue;
+    const level = b.level ?? 2;
+    if (level !== 2) continue;
+    let id = slugifyHeading(b.text);
+    if (!id) continue;
+    // Garante unicidade dentro de um mesmo exercício.
+    let suffix = 2;
+    while (seen.has(id)) {
+      id = `${slugifyHeading(b.text)}-${suffix++}`;
+    }
+    seen.add(id);
+    out.push({ id, text: b.text });
+  }
+  return out;
+}
+
+/**
+ * Detecta se um heading representa um "Momento" da dinâmica.
+ * Aceita variantes: "1º Momento", "Momento 1", "Primeiro momento",
+ * "1º Momento: Reflexão sobre preparação", etc.
+ */
+export function parseMomento(
+  text: string,
+): { number: number; label: string } | null {
+  const trimmed = text.trim();
+
+  // "1º Momento" ou "1 Momento" ou "1º Momento: Label"
+  let m = trimmed.match(/^(\d+)[ºo]?\s*[Mm]omento(?:\s*[:\-—]\s*(.+))?$/);
+  if (m) {
+    return { number: Number(m[1]), label: (m[2] ?? "").trim() };
+  }
+
+  // "Momento 1" ou "Momento 1: Label"
+  m = trimmed.match(/^[Mm]omento\s+(\d+)(?:\s*[:\-—]\s*(.+))?$/);
+  if (m) {
+    return { number: Number(m[1]), label: (m[2] ?? "").trim() };
+  }
+
+  // "Primeiro momento", "Segundo momento", ...
+  const ordinais = [
+    "primeiro",
+    "segundo",
+    "terceiro",
+    "quarto",
+    "quinto",
+    "sexto",
+  ];
+  m = trimmed.match(
+    /^(Primeiro|Segundo|Terceiro|Quarto|Quinto|Sexto)\s+momento(?:\s*[:\-—]\s*(.+))?$/i,
+  );
+  if (m) {
+    const idx = ordinais.indexOf(m[1].toLowerCase());
+    if (idx >= 0) {
+      return { number: idx + 1, label: (m[2] ?? "").trim() };
+    }
+  }
+
+  return null;
 }

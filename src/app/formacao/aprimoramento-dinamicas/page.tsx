@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
-import Link from "next/link";
 import { createServerSupabaseClient } from "@/lib/supabase/server";
 import { EXERCISES } from "@/lib/aprimoramento-dinamicas";
+import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = {
@@ -37,7 +37,7 @@ export default async function AprimoramentoDinamicasPage() {
 
   return (
     <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-12">
-      <header className="mb-10 md:mb-14">
+      <header className="mb-10 md:mb-12">
         <p className="font-dm text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-3">
           Restrito a associados
         </p>
@@ -52,53 +52,7 @@ export default async function AprimoramentoDinamicasPage() {
         </p>
       </header>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-5">
-        {EXERCISES.map((ex) => (
-          <Link
-            key={ex.slug}
-            href={`/formacao/aprimoramento-dinamicas/${ex.slug}`}
-            className="group block rounded-2xl p-5 md:p-6 transition-all duration-200 hover:bg-white/[0.05]"
-            style={{
-              background: "rgba(255,255,255,0.025)",
-              border: "1px solid rgba(255,255,255,0.07)",
-            }}
-          >
-            <div className="flex items-start gap-4">
-              <div
-                className="flex-shrink-0 w-10 h-10 rounded-xl flex items-center justify-center font-fraunces text-base font-bold"
-                style={{
-                  background: "rgba(200,75,49,0.12)",
-                  color: "#C84B31",
-                  border: "1px solid rgba(200,75,49,0.25)",
-                }}
-              >
-                {ex.number}
-              </div>
-              <div className="flex-1 min-w-0">
-                <h2 className="font-fraunces text-lg md:text-xl text-cream leading-snug mb-2 group-hover:text-accent transition-colors">
-                  {ex.title}
-                </h2>
-                <p className="font-dm text-sm text-cream/55 leading-relaxed">
-                  {ex.summary}
-                </p>
-              </div>
-              <svg
-                className="flex-shrink-0 text-cream/30 group-hover:text-accent group-hover:translate-x-0.5 transition-all"
-                width="18"
-                height="18"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-                strokeLinecap="round"
-                aria-hidden="true"
-              >
-                <path d="M9 18l6-6-6-6" />
-              </svg>
-            </div>
-          </Link>
-        ))}
-      </div>
+      <ExerciseCatalog exercises={EXERCISES} />
     </div>
   );
 }
