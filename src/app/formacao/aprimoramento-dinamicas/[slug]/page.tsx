@@ -44,7 +44,8 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "associado") {
+  const allowed = profile?.role === "associado" || profile?.role === "admin";
+  if (!allowed) {
     redirect("/formacao");
   }
 

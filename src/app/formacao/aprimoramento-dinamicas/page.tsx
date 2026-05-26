@@ -30,7 +30,8 @@ export default async function AprimoramentoDinamicasPage() {
     .eq("id", user.id)
     .single();
 
-  if (profile?.role !== "associado") {
+  const allowed = profile?.role === "associado" || profile?.role === "admin";
+  if (!allowed) {
     redirect("/formacao");
   }
 

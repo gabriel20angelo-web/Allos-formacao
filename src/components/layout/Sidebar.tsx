@@ -129,7 +129,7 @@ export default function Sidebar() {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {mainNav.map((item) => {
             if (item.auth && !user) return null;
-            if (item.associadoOnly && !isAssociado) return null;
+            if (item.associadoOnly && !isAssociado && !isAdmin) return null;
             const active = isActive(item.href);
             const Icon = item.icon;
             const linkProps = item.external
@@ -326,7 +326,7 @@ export default function Sidebar() {
           paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         }}
       >
-        {mainNav.filter((i) => !(i.auth && !user) && !(i.associadoOnly && !isAssociado)).map((item) => {
+        {mainNav.filter((i) => !(i.auth && !user) && !(i.associadoOnly && !isAssociado && !isAdmin)).map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
