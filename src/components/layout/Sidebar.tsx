@@ -13,6 +13,7 @@ import {
   LayoutDashboard,
   Menu,
   ExternalLink,
+  Sparkles,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -21,6 +22,7 @@ const STORAGE_KEY = "allos-sidebar-collapsed";
 const mainNav = [
   { label: "Conteúdos", href: "/formacao", icon: Home },
   { label: "Meus cursos", href: "/formacao/meus-cursos", icon: BookOpen, auth: true },
+  { label: "Aprimoramento", href: "/formacao/aprimoramento-dinamicas", icon: Sparkles, associadoOnly: true },
   { label: "Certificado", href: "https://allos.org.br/certificado", icon: Award, external: true },
 ];
 
@@ -32,7 +34,7 @@ const externalNav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, profile, isAdmin, isInstructor, signOut } = useAuth();
+  const { user, profile, isAdmin, isInstructor, isAssociado, signOut } = useAuth();
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -127,6 +129,7 @@ export default function Sidebar() {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {mainNav.map((item) => {
             if (item.auth && !user) return null;
+            if (item.associadoOnly && !isAssociado) return null;
             const active = isActive(item.href);
             const Icon = item.icon;
             const linkProps = item.external
@@ -323,7 +326,7 @@ export default function Sidebar() {
           paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         }}
       >
-        {mainNav.filter((i) => !(i.auth && !user)).map((item) => {
+        {mainNav.filter((i) => !(i.auth && !user) && !(i.associadoOnly && !isAssociado)).map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (
