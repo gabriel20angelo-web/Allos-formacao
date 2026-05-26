@@ -11,6 +11,8 @@ export interface CategoryMeta {
   slug: CategorySlug;
   label: string;
   description: string;
+  /** Texto longo usado na página de categoria (/categoria/[slug]). */
+  longDescription: string;
   /** rgba/hex base, usado no acento (texto, ícone, ring) */
   color: string;
   /** background semi-transparente complementar */
@@ -24,6 +26,8 @@ export const CATEGORIES: Record<CategorySlug, CategoryMeta> = {
     slug: "relacao",
     label: "Relação terapêutica",
     description: "Vínculo, aliança, manejo da transferência e feedbacks",
+    longDescription:
+      "Exercícios voltados ao que acontece entre terapeuta e paciente: a postura, o vínculo, a leitura sensível do que o paciente comunica para além do verbal, a capacidade de receber crítica sem dissolver a presença clínica. Aqui se cultiva uma aliança que não confunde acolhimento com agrado.",
     color: "#1BBAB0",
     tint: "rgba(27,186,176,0.10)",
     border: "rgba(27,186,176,0.28)",
@@ -32,6 +36,8 @@ export const CATEGORIES: Record<CategorySlug, CategoryMeta> = {
     slug: "tecnica",
     label: "Técnica & Intervenção",
     description: "Repertório de intervenções, confronto, leitura do corpo, ecletismo",
+    longDescription:
+      "Repertório técnico do terapeuta: quando confrontar, como ler dissonâncias entre fala e corpo, como sustentar uma intervenção que incomoda sem perder a aliança. É a parte do ofício que se afia com prática deliberada — não basta saber, é preciso treinar.",
     color: "#C84B31",
     tint: "rgba(200,75,49,0.10)",
     border: "rgba(200,75,49,0.28)",
@@ -40,6 +46,8 @@ export const CATEGORIES: Record<CategorySlug, CategoryMeta> = {
     slug: "autoconhecimento",
     label: "Autoconhecimento",
     description: "Preconceitos, estilo, preparação, limites e nicho",
+    longDescription:
+      "Antes da técnica, há o terapeuta como instrumento. Preconceitos não nomeados, limites de nicho, preparação pré-sessão, identidade dentro da sala — esse bloco torna visíveis os filtros pelos quais sua escuta acontece, pra que você os use com intenção e não apesar deles.",
     color: "#8B5CF6",
     tint: "rgba(139,92,246,0.10)",
     border: "rgba(139,92,246,0.28)",
@@ -48,6 +56,8 @@ export const CATEGORIES: Record<CategorySlug, CategoryMeta> = {
     slug: "manejo",
     label: "Manejo difícil",
     description: "Tópicos tabu, cuidados de saúde, áreas desconfortáveis",
+    longDescription:
+      "Conversas que terapeutas costumam evitar por desconforto próprio: cuidados básicos de saúde, ideação, sexualidade, religião, dinheiro, raça. Aqui se trabalha exatamente esse músculo — abordar o difícil quando é clinicamente indicado, sem se esconder atrás da neutralidade.",
     color: "#E07A5F",
     tint: "rgba(224,122,95,0.10)",
     border: "rgba(224,122,95,0.28)",
@@ -56,6 +66,8 @@ export const CATEGORIES: Record<CategorySlug, CategoryMeta> = {
     slug: "operacional",
     label: "Operacional",
     description: "Prontuário, tele-atendimento e ferramentas do dia-a-dia",
+    longDescription:
+      "A engenharia da clínica: prontuário, tele-atendimento, contingência (internet caiu, paciente atrasou), papel administrativo. Coisas que ninguém ensina na graduação, mas que sustentam a rotina sustentável de quem atende.",
     color: "#7A8A6B",
     tint: "rgba(122,138,107,0.10)",
     border: "rgba(122,138,107,0.28)",

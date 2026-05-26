@@ -961,6 +961,55 @@ export function getExerciseBySlug(slug: string): Exercise | undefined {
   return EXERCISES.find((e) => e.slug === slug);
 }
 
+// ─── Tags helpers ───────────────────────────────────────────────────────────
+
+export function tagToSlug(tag: string): string {
+  return tag
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "");
+}
+
+export function listAllTags(): {
+  tag: string;
+  slug: string;
+  count: number;
+}[] {
+  const map = new Map<string, number>();
+  for (const ex of EXERCISES) {
+    for (const tag of ex.tags) {
+      map.set(tag, (map.get(tag) ?? 0) + 1);
+    }
+  }
+  return Array.from(map.entries())
+    .map(([tag, count]) => ({ tag, count, slug: tagToSlug(tag) }))
+    .sort(
+      (a, b) =>
+        b.count - a.count || a.tag.localeCompare(b.tag, "pt-BR"),
+    );
+}
+
+export function findTagBySlug(
+  slug: string,
+): { tag: string; exercises: Exercise[] } | null {
+  const target = slug.toLowerCase();
+  // Procura tag cuja slugify bata. Como pode haver colisão teórica, devolve a
+  // primeira (case improvável com este vocabulário pequeno).
+  for (const ex of EXERCISES) {
+    for (const tag of ex.tags) {
+      if (tagToSlug(tag) === target) {
+        return {
+          tag,
+          exercises: EXERCISES.filter((e) => e.tags.includes(tag)),
+        };
+      }
+    }
+  }
+  return null;
+}
+
 /**
  * Retorna até `n` exercícios relacionados ao atual, ordenados por relevância:
  * +3 se categoria igual · +1 por tag em comum · +0.5 por formato em comum.

@@ -581,12 +581,22 @@ export default function ExerciseCatalog({ exercises }: Props) {
                   style={{ background: group.color ?? "#FDFBF7" }}
                   aria-hidden="true"
                 />
-                <h2
-                  className="font-fraunces text-lg md:text-xl"
-                  style={{ color: group.color ?? "#FDFBF7" }}
-                >
-                  {group.label}
-                </h2>
+                {groupKey === "categoria" ? (
+                  <Link
+                    href={`/formacao/aprimoramento-dinamicas/categoria/${group.key}`}
+                    className="font-fraunces text-lg md:text-xl hover:underline underline-offset-4 transition-opacity hover:opacity-90"
+                    style={{ color: group.color ?? "#FDFBF7" }}
+                  >
+                    {group.label}
+                  </Link>
+                ) : (
+                  <h2
+                    className="font-fraunces text-lg md:text-xl"
+                    style={{ color: group.color ?? "#FDFBF7" }}
+                  >
+                    {group.label}
+                  </h2>
+                )}
                 <span className="font-dm text-[11px] text-cream/30">
                   {group.items.length}{" "}
                   {group.items.length === 1 ? "exercício" : "exercícios"}

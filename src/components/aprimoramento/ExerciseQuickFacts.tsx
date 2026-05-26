@@ -1,5 +1,7 @@
+import Link from "next/link";
 import { Clock, Users, Drama, BrainCog, MessagesSquare, ClipboardList, Eye, Package } from "lucide-react";
 import type { Exercise, FormatoSlug } from "@/lib/aprimoramento-dinamicas";
+import { tagToSlug } from "@/lib/aprimoramento-dinamicas";
 import {
   CATEGORIES,
   FORMATOS,
@@ -72,16 +74,17 @@ export default function ExerciseQuickFacts({ exercise }: { exercise: Exercise })
             Tags
           </span>
           {exercise.tags.map((tag) => (
-            <span
+            <Link
               key={tag}
-              className="font-dm text-[10.5px] px-2 py-0.5 rounded-md text-cream/55"
+              href={`/formacao/aprimoramento-dinamicas/tag/${tagToSlug(tag)}`}
+              className="font-dm text-[10.5px] px-2 py-0.5 rounded-md text-cream/55 hover:text-accent transition-colors"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 border: "1px solid rgba(255,255,255,0.06)",
               }}
             >
-              {tag}
-            </span>
+              #{tag}
+            </Link>
           ))}
         </div>
       )}

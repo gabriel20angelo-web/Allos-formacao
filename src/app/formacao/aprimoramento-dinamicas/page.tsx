@@ -10,6 +10,7 @@ import {
 } from "@/lib/aprimoramento-categories";
 import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
+import { TRILHAS } from "@/lib/aprimoramento-trilhas";
 import {
   Clock,
   Sparkles,
@@ -18,6 +19,7 @@ import {
   Drama,
   Eye,
   ChevronRight,
+  Compass,
 } from "lucide-react";
 import type { Metadata } from "next";
 
@@ -186,6 +188,80 @@ export default async function AprimoramentoDinamicasPage() {
           </Link>
         </div>
       </div>
+
+      {/* ─── Trilhas sugeridas ──────────────────────────────────────────── */}
+      <section className="mb-12 md:mb-14">
+        <header className="flex items-baseline justify-between mb-4 flex-wrap gap-2">
+          <div className="flex items-center gap-2.5">
+            <Compass
+              width={16}
+              height={16}
+              className="text-accent"
+              aria-hidden="true"
+            />
+            <h2 className="font-fraunces text-xl md:text-2xl text-cream">
+              Trilhas sugeridas
+            </h2>
+            <span className="font-dm text-[11px] text-cream/35">
+              {TRILHAS.length}
+            </span>
+          </div>
+          <p className="font-dm text-xs text-cream/40 max-w-md">
+            Sequências curadas de exercícios que fazem sentido em ordem.
+          </p>
+        </header>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
+          {TRILHAS.map((t) => (
+            <Link
+              key={t.slug}
+              href={`/formacao/aprimoramento-dinamicas/trilha/${t.slug}`}
+              className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] relative overflow-hidden"
+              style={{
+                background: `linear-gradient(135deg, ${t.tint} 0%, rgba(255,255,255,0.02) 100%)`,
+                border: `1px solid ${t.border}`,
+              }}
+            >
+              <div className="flex items-center gap-2 mb-2.5">
+                <p
+                  className="font-dm text-[10px] font-bold tracking-[0.24em] uppercase"
+                  style={{ color: t.color }}
+                >
+                  {t.pretitle}
+                </p>
+                <span className="text-cream/15" aria-hidden="true">
+                  ·
+                </span>
+                <span className="font-dm text-[11px] text-cream/40">
+                  {t.exercise_slugs.length} etapas
+                </span>
+              </div>
+
+              <h3 className="font-fraunces text-lg md:text-xl text-cream leading-snug mb-2 group-hover:text-accent transition-colors">
+                {t.title}
+              </h3>
+              <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-2">
+                {t.descricao}
+              </p>
+
+              <div className="flex items-center justify-between mt-4">
+                <span
+                  className="font-dm text-[12px] font-medium inline-flex items-center gap-1"
+                  style={{ color: t.color }}
+                >
+                  Ver trilha
+                  <ChevronRight
+                    width={13}
+                    height={13}
+                    aria-hidden="true"
+                    className="group-hover:translate-x-0.5 transition-transform"
+                  />
+                </span>
+              </div>
+            </Link>
+          ))}
+        </div>
+      </section>
 
       <ExerciseCatalog exercises={EXERCISES} />
     </div>

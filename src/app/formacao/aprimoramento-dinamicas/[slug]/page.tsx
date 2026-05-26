@@ -7,6 +7,7 @@ import {
   extractToc,
   getRelated,
 } from "@/lib/aprimoramento-dinamicas";
+import { getTrilhasOf } from "@/lib/aprimoramento-trilhas";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
 import ExerciseBlocks from "@/components/aprimoramento/ExerciseBlocks";
 import ExerciseQuickFacts from "@/components/aprimoramento/ExerciseQuickFacts";
@@ -72,6 +73,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const toc = extractToc(exercise.blocks);
   const cat = CATEGORIES[exercise.category];
   const related = getRelated(exercise, 3);
+  const trilhasOf = getTrilhasOf(exercise.slug);
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12 relative">
@@ -122,8 +124,9 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
               >
                 {exercise.number}
               </div>
-              <span
-                className="font-dm text-[10px] font-semibold tracking-[0.28em] uppercase px-2.5 py-1 rounded-md"
+              <Link
+                href={`/formacao/aprimoramento-dinamicas/categoria/${cat.slug}`}
+                className="font-dm text-[10px] font-semibold tracking-[0.28em] uppercase px-2.5 py-1 rounded-md transition-opacity hover:opacity-80"
                 style={{
                   color: cat.color,
                   background: cat.tint,
@@ -131,7 +134,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
                 }}
               >
                 {cat.label}
-              </span>
+              </Link>
               <span className="font-dm text-[11px] text-cream/35">
                 Exercício {exercise.number} de {EXERCISES.length}
               </span>
@@ -142,6 +145,42 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             <p className="font-dm text-base md:text-lg text-cream/65 leading-relaxed">
               {exercise.summary}
             </p>
+
+            {trilhasOf.length > 0 && (
+              <div className="flex flex-wrap items-center gap-2 mt-5">
+                <span className="font-dm text-[10px] font-semibold tracking-[0.22em] uppercase text-cream/35">
+                  Etapa de
+                </span>
+                {trilhasOf.map(({ trilha, step, total }) => (
+                  <Link
+                    key={trilha.slug}
+                    href={`/formacao/aprimoramento-dinamicas/trilha/${trilha.slug}`}
+                    className="group font-dm text-[12px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full transition-all hover:translate-y-[-1px]"
+                    style={{
+                      color: trilha.color,
+                      background: trilha.tint,
+                      border: `1px solid ${trilha.border}`,
+                    }}
+                    title={trilha.descricao}
+                  >
+                    <span
+                      className="inline-flex items-center justify-center w-4 h-4 rounded-full font-fraunces text-[10px] font-bold"
+                      style={{
+                        background: "rgba(0,0,0,0.18)",
+                        color: trilha.color,
+                      }}
+                      aria-hidden="true"
+                    >
+                      {step}
+                    </span>
+                    {trilha.title}
+                    <span className="text-cream/35 font-dm text-[10px]">
+                      {step}/{total}
+                    </span>
+                  </Link>
+                ))}
+              </div>
+            )}
           </header>
 
           <ExerciseToolbar
