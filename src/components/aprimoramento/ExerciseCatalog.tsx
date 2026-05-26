@@ -614,15 +614,29 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
   return (
     <Link
       href={`/formacao/aprimoramento-dinamicas/${exercise.slug}`}
-      className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px]"
-      style={{
-        background: "rgba(255,255,255,0.025)",
-        border: "1px solid rgba(255,255,255,0.07)",
+      className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      style={
+        {
+          background: "rgba(255,255,255,0.025)",
+          border: "1px solid rgba(255,255,255,0.07)",
+          // Cor da categoria como CSS var → usada em hover/border via :hover
+          ["--cat-color" as string]: cat.color,
+          ["--cat-tint" as string]: cat.tint,
+          ["--cat-border" as string]: cat.border,
+        } as React.CSSProperties
+      }
+      onMouseEnter={(e) => {
+        e.currentTarget.style.borderColor = cat.border;
+        e.currentTarget.style.boxShadow = `0 8px 24px -10px ${cat.tint}`;
+      }}
+      onMouseLeave={(e) => {
+        e.currentTarget.style.borderColor = "rgba(255,255,255,0.07)";
+        e.currentTarget.style.boxShadow = "none";
       }}
     >
       <div className="flex items-start gap-4 mb-3">
         <div
-          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center font-fraunces text-sm font-bold"
+          className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center font-fraunces text-sm font-bold transition-transform group-hover:scale-105"
           style={{
             background: cat.tint,
             color: cat.color,
@@ -636,7 +650,8 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
           <h3 className="font-fraunces text-base md:text-lg text-cream leading-snug mb-1.5 group-hover:text-accent transition-colors">
             {exercise.title}
           </h3>
-          <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-2">
+          {/* Hover preview: line-clamp expande de 2 → 4 ao passar o mouse */}
+          <p className="font-dm text-[13px] text-cream/55 leading-relaxed line-clamp-2 group-hover:line-clamp-4 transition-all">
             {exercise.summary}
           </p>
         </div>

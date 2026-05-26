@@ -208,6 +208,95 @@ body::after {
   50% { box-shadow: 0 0 40px rgba(200, 75, 49, 0.2); }
 }
 
+/* ─── Print mode ────────────────────────────────────────────────────────────
+   Pensado pra Aprimoramento de Dinâmicas (e qualquer página de leitura):
+   esconde chrome (sidebar, nav, TOC), neutraliza cores, garante page-breaks
+   limpos. Marcar elementos com `print-hide` ou `data-print="hide"` para sumir. */
+@media print {
+  @page { margin: 1.5cm; }
+
+  html, body {
+    background: white !important;
+    color: black !important;
+    overflow: visible !important;
+  }
+  body::before, body::after { display: none !important; }
+
+  nav, aside, footer, .print-hide, [data-print="hide"] {
+    display: none !important;
+  }
+
+  *, *::before, *::after {
+    color: black !important;
+    background-color: transparent !important;
+    background-image: none !important;
+    box-shadow: none !important;
+    text-shadow: none !important;
+    border-color: #ccc !important;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: black !important;
+    page-break-after: avoid;
+    break-after: avoid-page;
+  }
+
+  a, a:link, a:visited {
+    color: #1a4eab !important;
+    text-decoration: underline !important;
+  }
+  a[href^="http"]::after {
+    content: " (" attr(href) ")";
+    font-size: 80%;
+    color: #555 !important;
+    word-break: break-all;
+  }
+
+  blockquote {
+    border-left: 3px solid #C84B31 !important;
+    padding-left: 1rem !important;
+    color: #333 !important;
+    page-break-inside: avoid;
+    break-inside: avoid-page;
+  }
+
+  ul, ol, p, table { page-break-inside: avoid; break-inside: avoid-page; }
+
+  /* Reveal-on-scroll: força tudo visível na impressão */
+  .reveal { opacity: 1 !important; transform: none !important; }
+
+  /* Layout: tira fixed-positions e ocupa todo o papel */
+  main, article {
+    margin: 0 !important;
+    padding: 0 !important;
+    max-width: 100% !important;
+    width: 100% !important;
+    display: block !important;
+  }
+  body * { position: static !important; }
+}
+
+/* Reveal-on-scroll — usado nos blocks do Aprimoramento de Dinâmicas.
+   Estado inicial: invisível e deslocado pra baixo; depois entra suavemente. */
+.reveal {
+  opacity: 0;
+  transform: translateY(10px);
+  transition: opacity .55s cubic-bezier(.22,.61,.36,1),
+              transform .55s cubic-bezier(.22,.61,.36,1);
+  will-change: opacity, transform;
+}
+.reveal-shown {
+  opacity: 1;
+  transform: translateY(0);
+}
+@media (prefers-reduced-motion: reduce) {
+  .reveal, .reveal-shown {
+    opacity: 1 !important;
+    transform: none !important;
+    transition: none !important;
+  }
+}
+
 /* Gradient text utility */
 .text-gradient-orange {
   background: linear-gradient(135deg, #D4854A 0%, #C84B31 50%, #A33D27 100%);

@@ -1,12 +1,50 @@
+"use client";
+
+import { useEffect, useRef } from "react";
 import type { Block } from "@/lib/aprimoramento-dinamicas";
 import { parseMomento, slugifyHeading } from "@/lib/aprimoramento-dinamicas";
 
 const HEADING2_CLASSES =
-  "font-fraunces text-2xl md:text-[28px] text-cream mt-12 mb-4 scroll-mt-24";
+  "reveal font-fraunces text-2xl md:text-[28px] text-cream mt-12 mb-4 scroll-mt-24";
 const HEADING4_CLASSES =
-  "font-dm text-[11px] font-bold tracking-widest uppercase text-accent mt-6 mb-2";
+  "reveal font-dm text-[11px] font-bold tracking-widest uppercase text-accent mt-6 mb-2";
 
 export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
+  // Reveal-on-scroll: aplica `reveal-shown` em cada elemento `.reveal` quando
+  // entra na viewport. Respeita prefers-reduced-motion mostrando tudo de cara.
+  useEffect(() => {
+    const root = containerRef.current;
+    if (!root) return;
+
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    if (reduce) {
+      root
+        .querySelectorAll<HTMLElement>(".reveal")
+        .forEach((el) => el.classList.add("reveal-shown"));
+      return;
+    }
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          if (entry.isIntersecting) {
+            entry.target.classList.add("reveal-shown");
+            observer.unobserve(entry.target);
+          }
+        }
+      },
+      { rootMargin: "0px 0px -8% 0px", threshold: 0.04 },
+    );
+
+    root.querySelectorAll(".reveal").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [blocks]);
+
   // Gera IDs únicos pros headings level 2 (mesma lógica do extractToc).
   const idsUsed = new Set<string>();
   function makeId(text: string): string {
@@ -20,7 +58,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
   }
 
   return (
-    <div className="space-y-1">
+    <div ref={containerRef} className="space-y-1">
       {blocks.map((block, i) => {
         if (block.type === "heading") {
           const level = block.level ?? 2;
@@ -40,7 +78,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               return (
                 <div
                   key={i}
-                  className="flex items-start gap-3 mt-8 mb-3 scroll-mt-24"
+                  className="reveal momento-step flex items-start gap-3 mt-8 mb-3 scroll-mt-24"
                 >
                   <div
                     className="flex-shrink-0 w-9 h-9 rounded-full flex items-center justify-center font-fraunces text-base font-bold mt-0.5"
@@ -69,7 +107,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             return (
               <h3
                 key={i}
-                className="font-fraunces text-lg md:text-xl text-cream mt-8 mb-3"
+                className="reveal font-fraunces text-lg md:text-xl text-cream mt-8 mb-3"
               >
                 {block.text}
               </h3>
@@ -88,7 +126,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <p
               key={i}
-              className="font-dm text-[15px] leading-[1.75] text-cream/80 mb-3"
+              className="reveal font-dm text-[15px] leading-[1.75] text-cream/80 mb-3"
             >
               {block.text}
             </p>
@@ -97,7 +135,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
 
         if (block.type === "list") {
           return (
-            <ul key={i} className="space-y-2 mb-4 pl-4">
+            <ul key={i} className="reveal space-y-2 mb-4 pl-4">
               {block.items.map((item, j) => (
                 <li
                   key={j}
@@ -114,7 +152,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <ol
               key={i}
-              className="space-y-2 mb-4 pl-4 list-decimal list-inside marker:text-accent marker:font-bold"
+              className="reveal space-y-2 mb-4 pl-4 list-decimal list-inside marker:text-accent marker:font-bold"
             >
               {block.items.map((item, j) => (
                 <li
@@ -132,7 +170,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <blockquote
               key={i}
-              className="border-l-2 border-accent/60 pl-5 my-6 italic"
+              className="reveal border-l-2 border-accent/60 pl-5 my-6 italic"
             >
               <p className="font-fraunces text-[16px] leading-[1.75] text-cream/85">
                 &ldquo;{block.text}&rdquo;
@@ -150,7 +188,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <div
               key={i}
-              className="my-5 rounded-xl p-4 border border-cream/10"
+              className="reveal my-5 rounded-xl p-4 border border-cream/10"
               style={{ background: "rgba(200,75,49,0.06)" }}
             >
               <p className="font-dm text-[13px] leading-[1.7] text-cream/70 italic">
@@ -162,7 +200,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
 
         if (block.type === "reference") {
           return (
-            <p key={i} className="font-dm text-xs text-cream/50 mb-3 italic">
+            <p key={i} className="reveal font-dm text-xs text-cream/50 mb-3 italic">
               {block.url ? (
                 <a
                   href={block.url}
@@ -181,7 +219,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
 
         if (block.type === "link") {
           return (
-            <p key={i} className="mb-3">
+            <p key={i} className="reveal mb-3">
               <a
                 href={block.url}
                 target="_blank"
@@ -210,7 +248,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <div
               key={i}
-              className="my-5 overflow-x-auto rounded-xl border border-cream/10"
+              className="reveal my-5 overflow-x-auto rounded-xl border border-cream/10"
             >
               <table className="w-full text-left">
                 <thead style={{ background: "rgba(255,255,255,0.04)" }}>
