@@ -9,3 +9,4 @@
 
 export * from "./condutores";
 export * from "./whatsapp-templates";
+export * from "./aprimoramento";

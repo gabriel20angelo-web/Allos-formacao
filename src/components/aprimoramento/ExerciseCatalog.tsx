@@ -13,6 +13,8 @@ import {
   Shuffle,
   ArrowDownAZ,
   LayoutGrid,
+  Star,
+  Check,
 } from "lucide-react";
 import type {
   Exercise,
@@ -33,9 +35,20 @@ import {
   formatDuracao,
   type DurationBucket,
 } from "@/lib/aprimoramento-categories";
+import { useAuth } from "@/hooks/useAuth";
+import { useAprimoramentoEstados } from "@/hooks/useAprimoramentoEstados";
+import type { AprimoramentoEstado } from "@/lib/queries/aprimoramento";
 
 type SortKey = "ordem" | "titulo" | "duracao-asc" | "duracao-desc";
 type GroupKey = "categoria" | "duracao" | "lista";
+type StatusFilter = "favorito" | "fazer-depois" | "feito";
+
+const STATUS_FILTER_ORDER: StatusFilter[] = ["favorito", "fazer-depois", "feito"];
+const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
+  favorito: "★ Favoritos",
+  "fazer-depois": "⏰ Para fazer",
+  feito: "✓ Já fiz",
+};
 
 interface Props {
   exercises: Exercise[];
@@ -54,6 +67,7 @@ interface InitialState {
   durs: Set<DurationBucket>;
   formatos: Set<FormatoSlug>;
   pessoas: Set<Pessoas>;
+  statuses: Set<StatusFilter>;
   sort: SortKey;
   group: GroupKey;
 }
@@ -65,6 +79,7 @@ function emptyState(): InitialState {
     durs: new Set(),
     formatos: new Set(),
     pessoas: new Set(),
+    statuses: new Set(),
     sort: "ordem",
     group: "categoria",
   };
@@ -83,6 +98,7 @@ function readUrl(): InitialState {
     durs: parseSet<DurationBucket>("dur"),
     formatos: parseSet<FormatoSlug>("fmt"),
     pessoas: parseSet<Pessoas>("p"),
+    statuses: parseSet<StatusFilter>("st"),
     sort: ["ordem", "titulo", "duracao-asc", "duracao-desc"].includes(sort)
       ? sort
       : "ordem",
@@ -103,6 +119,9 @@ export default function ExerciseCatalog({ exercises }: Props) {
   const [activePessoas, setActivePessoas] = useState<Set<Pessoas>>(
     initial.pessoas,
   );
+  const [activeStatuses, setActiveStatuses] = useState<Set<StatusFilter>>(
+    initial.statuses,
+  );
   const [sortKey, setSortKey] = useState<SortKey>(initial.sort);
   const [groupKey, setGroupKey] = useState<GroupKey>(initial.group);
 
@@ -110,8 +129,13 @@ export default function ExerciseCatalog({ exercises }: Props) {
   const [showMore, setShowMore] = useState<boolean>(
     initial.durs.size > 0 ||
       initial.formatos.size > 0 ||
-      initial.pessoas.size > 0,
+      initial.pessoas.size > 0 ||
+      initial.statuses.size > 0,
   );
+
+  // Estado pessoal (favoritos, feito, depois, notas). null userId desliga o fetch.
+  const { user } = useAuth();
+  const { states: estados } = useAprimoramentoEstados(user?.id ?? null);
 
   const total = exercises.length;
 
@@ -124,6 +148,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     if (activeDurs.size) p.set("dur", Array.from(activeDurs).join(","));
     if (activeFormatos.size) p.set("fmt", Array.from(activeFormatos).join(","));
     if (activePessoas.size) p.set("p", Array.from(activePessoas).join(","));
+    if (activeStatuses.size) p.set("st", Array.from(activeStatuses).join(","));
     if (sortKey !== "ordem") p.set("sort", sortKey);
     if (groupKey !== "categoria") p.set("group", groupKey);
     const qs = p.toString();
@@ -137,6 +162,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     activeDurs,
     activeFormatos,
     activePessoas,
+    activeStatuses,
     sortKey,
     groupKey,
   ]);
@@ -153,6 +179,19 @@ export default function ExerciseCatalog({ exercises }: Props) {
         !ex.formato.some((f) => activeFormatos.has(f))
       )
         return false;
+      if (activeStatuses.size > 0) {
+        const est = estados.get(ex.slug);
+        const matches = STATUS_FILTER_ORDER.some((s) => {
+          if (!activeStatuses.has(s)) return false;
+          if (s === "feito") {
+            // "Já fiz" inclui qualquer estado com done_count > 0, mesmo que o
+            // status atual não seja "feito" (user pode estar de favorito agora).
+            return (est?.done_count ?? 0) > 0;
+          }
+          return est?.status === s;
+        });
+        if (!matches) return false;
+      }
       if (!q) return true;
       const hay = normalize([ex.title, ex.summary, ...ex.tags].join(" "));
       return hay.includes(q);
@@ -164,6 +203,8 @@ export default function ExerciseCatalog({ exercises }: Props) {
     activeDurs,
     activeFormatos,
     activePessoas,
+    activeStatuses,
+    estados,
   ]);
 
   const sorted = useMemo(() => {
@@ -247,12 +288,16 @@ export default function ExerciseCatalog({ exercises }: Props) {
     setActiveDurs(new Set());
     setActiveFormatos(new Set());
     setActivePessoas(new Set());
+    setActiveStatuses(new Set());
     setSortKey("ordem");
     setGroupKey("categoria");
   };
 
   const advancedCount =
-    activeDurs.size + activeFormatos.size + activePessoas.size;
+    activeDurs.size +
+    activeFormatos.size +
+    activePessoas.size +
+    activeStatuses.size;
 
   const hasFilters =
     query.length > 0 ||
@@ -480,6 +525,25 @@ export default function ExerciseCatalog({ exercises }: Props) {
               );
             })}
           </ChipRow>
+
+          {user?.id && (
+            <ChipRow label="Minha trilha" compact>
+              {STATUS_FILTER_ORDER.map((slug) => {
+                const active = activeStatuses.has(slug);
+                return (
+                  <Chip
+                    key={slug}
+                    active={active}
+                    onClick={() =>
+                      toggle(activeStatuses, slug, setActiveStatuses)
+                    }
+                  >
+                    {STATUS_FILTER_LABEL[slug]}
+                  </Chip>
+                );
+              })}
+            </ChipRow>
+          )}
         </div>
       )}
 
@@ -537,7 +601,11 @@ export default function ExerciseCatalog({ exercises }: Props) {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3 md:gap-4">
               {group.items.map((ex) => (
-                <ExerciseCard key={ex.slug} exercise={ex} />
+                <ExerciseCard
+                  key={ex.slug}
+                  exercise={ex}
+                  estado={estados.get(ex.slug)}
+                />
               ))}
             </div>
           </section>
@@ -608,13 +676,22 @@ function Chip({
   );
 }
 
-function ExerciseCard({ exercise }: { exercise: Exercise }) {
+function ExerciseCard({
+  exercise,
+  estado,
+}: {
+  exercise: Exercise;
+  estado?: AprimoramentoEstado;
+}) {
   const cat = CATEGORIES[exercise.category];
   const primaryFormato = FORMATOS[exercise.formato[0]];
+  const doneCount = estado?.done_count ?? 0;
+  const isFav = estado?.status === "favorito";
+  const isDepois = estado?.status === "fazer-depois";
   return (
     <Link
       href={`/formacao/aprimoramento-dinamicas/${exercise.slug}`}
-      className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+      className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 relative"
       style={
         {
           background: "rgba(255,255,255,0.025)",
@@ -675,6 +752,45 @@ function ExerciseCard({ exercise }: { exercise: Exercise }) {
           <Users width={11} height={11} aria-hidden="true" />
           {PESSOAS_LABEL[exercise.pessoas]}
         </CardBadge>
+
+        {/* Badges de estado pessoal — sempre alinhadas ao fim do row */}
+        {(isFav || isDepois || doneCount > 0) && (
+          <div className="ml-auto flex items-center gap-1">
+            {isFav && (
+              <CardBadge
+                color="#F59E0B"
+                tint="rgba(245,158,11,0.10)"
+                border="rgba(245,158,11,0.28)"
+              >
+                <Star
+                  width={10}
+                  height={10}
+                  aria-hidden="true"
+                  fill="currentColor"
+                />
+              </CardBadge>
+            )}
+            {isDepois && (
+              <CardBadge
+                color="#60A5FA"
+                tint="rgba(96,165,250,0.10)"
+                border="rgba(96,165,250,0.28)"
+              >
+                <Clock width={10} height={10} aria-hidden="true" />
+              </CardBadge>
+            )}
+            {doneCount > 0 && (
+              <CardBadge
+                color="#34D399"
+                tint="rgba(52,211,153,0.10)"
+                border="rgba(52,211,153,0.28)"
+              >
+                <Check width={10} height={10} aria-hidden="true" />
+                {doneCount > 1 && <span className="ml-0.5">{doneCount}×</span>}
+              </CardBadge>
+            )}
+          </div>
+        )}
       </div>
     </Link>
   );

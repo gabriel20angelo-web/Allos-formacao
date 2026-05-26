@@ -7,3 +7,4 @@ export { useCategories } from "./useCategories";
 export { useCondutores } from "./useCondutores";
 export { useSupabase } from "./useSupabase";
 export { useWhatsAppTemplates } from "./useWhatsAppTemplates";
+export { useAprimoramentoEstados } from "./useAprimoramentoEstados";

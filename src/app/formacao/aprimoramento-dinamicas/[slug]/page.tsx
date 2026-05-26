@@ -15,6 +15,8 @@ import PrintButton from "@/components/aprimoramento/PrintButton";
 import RelatedExercises from "@/components/aprimoramento/RelatedExercises";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import ReadingProgress from "@/components/aprimoramento/ReadingProgress";
+import ExerciseToolbar from "@/components/aprimoramento/ExerciseToolbar";
+import ExerciseNotes from "@/components/aprimoramento/ExerciseNotes";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -142,8 +144,22 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             </p>
           </header>
 
+          <ExerciseToolbar
+            slug={exercise.slug}
+            color={cat.color}
+            tint={cat.tint}
+            border={cat.border}
+          />
+
           <ExerciseQuickFacts exercise={exercise} />
           <ExerciseBlocks blocks={exercise.blocks} />
+
+          <ExerciseNotes
+            slug={exercise.slug}
+            color={cat.color}
+            tint={cat.tint}
+            border={cat.border}
+          />
 
           <RelatedExercises items={related} />
 
