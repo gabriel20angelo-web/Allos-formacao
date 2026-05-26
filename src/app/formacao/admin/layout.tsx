@@ -20,11 +20,13 @@ import {
   X,
   User,
   Calendar,
+  Users,
 } from "lucide-react";
 
 const navItems = [
   { href: "/formacao/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/formacao/admin/formacao-base", label: "Formação", icon: Calendar },
+  { href: "/formacao/admin/associados", label: "Associados", icon: Users },
   { href: "/formacao/admin/certificados", label: "Certificados", icon: Award },
   { href: "/formacao/admin/moderacao", label: "Moderação", icon: MessageSquare },
   { href: "/formacao/admin/configuracoes", label: "Configurações", icon: Settings },
@@ -33,6 +35,9 @@ const navItems = [
 const pageTitles: Record<string, string> = {
   "/formacao/admin": "Dashboard",
   "/formacao/admin/formacao-base": "Formação",
+  "/formacao/admin/associados": "Associados",
+  "/formacao/admin/associados/aprimoramento": "Aprimoramento de Dinâmicas",
+  "/formacao/admin/associados/sugestoes": "Sugestões",
   "/formacao/admin/certificados": "Certificados",
   "/formacao/admin/moderacao": "Moderação",
   "/formacao/admin/configuracoes": "Configurações",
