@@ -100,3 +100,63 @@ export function formatDuracao([min, max]: [number, number]): string {
   if (min === max) return `${min} min`;
   return `${min}-${max} min`;
 }
+
+// ─── Buckets de duração (curto / médio / longo) ─────────────────────────────
+// Usados pra filtrar e agrupar no catálogo. Thresholds escolhidos pra dar uma
+// distribuição balanceada entre os 13 exercícios atuais (~4/6/3).
+
+export type DurationBucket = "curto" | "medio" | "longo";
+
+export interface DurationBucketMeta {
+  slug: DurationBucket;
+  label: string;
+  hint: string;
+  color: string;
+  tint: string;
+  border: string;
+}
+
+export const DURATION_BUCKETS: Record<DurationBucket, DurationBucketMeta> = {
+  curto: {
+    slug: "curto",
+    label: "Curto",
+    hint: "até 45 min",
+    color: "#3ECFBE",
+    tint: "rgba(62,207,190,0.10)",
+    border: "rgba(62,207,190,0.28)",
+  },
+  medio: {
+    slug: "medio",
+    label: "Médio",
+    hint: "45 a 60 min",
+    color: "#D4854A",
+    tint: "rgba(212,133,74,0.10)",
+    border: "rgba(212,133,74,0.28)",
+  },
+  longo: {
+    slug: "longo",
+    label: "Longo",
+    hint: "60 min ou mais",
+    color: "#A78BFA",
+    tint: "rgba(167,139,250,0.10)",
+    border: "rgba(167,139,250,0.28)",
+  },
+};
+
+export const DURATION_ORDER: DurationBucket[] = ["curto", "medio", "longo"];
+
+export function durationBucket([min, max]: [number, number]): DurationBucket {
+  const mid = (min + max) / 2;
+  if (mid <= 45) return "curto";
+  if (mid <= 60) return "medio";
+  return "longo";
+}
+
+export const PESSOAS_ORDER = ["solo", "dupla", "grupo", "supervisor"] as const;
+export const FORMATOS_ORDER = [
+  "roleplay",
+  "reflexao",
+  "discussao",
+  "preenchimento",
+  "supervisao",
+] as const;
