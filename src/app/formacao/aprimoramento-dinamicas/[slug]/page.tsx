@@ -6,6 +6,7 @@ import {
   getExerciseBySlug,
   extractToc,
   getRelated,
+  isCurated,
 } from "@/lib/aprimoramento-dinamicas";
 import { getTrilhasOf } from "@/lib/aprimoramento-trilhas";
 import { CATEGORIES } from "@/lib/aprimoramento-categories";
@@ -76,6 +77,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const cat = CATEGORIES[exercise.category];
   const related = getRelated(exercise, 3);
   const trilhasOf = getTrilhasOf(exercise.slug);
+  const curado = isCurated(exercise);
 
   return (
     <div className="max-w-6xl mx-auto px-4 md:px-8 py-8 md:py-12 relative">
@@ -146,6 +148,19 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
               <span className="font-dm text-[11px] text-cream/35">
                 Exercício {exercise.number} de {EXERCISES.length}
               </span>
+              {!curado && (
+                <span
+                  className="font-dm text-[10px] font-semibold tracking-[0.22em] uppercase px-2 py-1 rounded-md"
+                  style={{
+                    color: "#D4854A",
+                    background: "rgba(212,133,74,0.10)",
+                    border: "1px solid rgba(212,133,74,0.28)",
+                  }}
+                  title="Exercício importado da lista bruta, ainda sem revisão de curadoria"
+                >
+                  Não-curado
+                </span>
+              )}
             </div>
             <h1 className="font-fraunces text-3xl md:text-4xl text-cream leading-tight mb-4">
               {exercise.title}
@@ -208,6 +223,31 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
           </div>
 
           <ExerciseQuickFacts exercise={exercise} />
+
+          {!curado && (
+            <div
+              className="rounded-2xl p-4 mb-6 print-hide"
+              style={{
+                background: "rgba(212,133,74,0.06)",
+                border: "1px solid rgba(212,133,74,0.20)",
+              }}
+              role="note"
+            >
+              <p
+                className="font-dm text-[10px] font-semibold tracking-[0.24em] uppercase mb-1.5"
+                style={{ color: "#D4854A" }}
+              >
+                Exercício não-curado
+              </p>
+              <p className="font-dm text-[13px] leading-relaxed text-cream/65">
+                Importado da lista bruta da Allos. O texto preserva o original,
+                mas pode ter sequência improvisada, repetições ou dependência
+                de contexto que não está aqui. Use como rascunho — confirme
+                duração, materiais e adequação antes de conduzir.
+              </p>
+            </div>
+          )}
+
           <ExerciseBlocks blocks={exercise.blocks} />
 
           <ExerciseNotes

@@ -38,10 +38,18 @@ import {
 import { useAuth } from "@/hooks/useAuth";
 import { useAprimoramentoEstados } from "@/hooks/useAprimoramentoEstados";
 import type { AprimoramentoEstado } from "@/lib/queries/aprimoramento";
+import { isCurated } from "@/lib/aprimoramento-dinamicas";
 
 type SortKey = "ordem" | "titulo" | "duracao-asc" | "duracao-desc";
 type GroupKey = "categoria" | "duracao" | "lista";
 type StatusFilter = "favorito" | "fazer-depois" | "feito";
+type CuracaoFilter = "curado" | "nao-curado";
+
+const CURACAO_FILTER_ORDER: CuracaoFilter[] = ["curado", "nao-curado"];
+const CURACAO_FILTER_LABEL: Record<CuracaoFilter, string> = {
+  curado: "Curados",
+  "nao-curado": "Não-curados",
+};
 
 const STATUS_FILTER_ORDER: StatusFilter[] = ["favorito", "fazer-depois", "feito"];
 const STATUS_FILTER_LABEL: Record<StatusFilter, string> = {
@@ -68,6 +76,7 @@ interface InitialState {
   formatos: Set<FormatoSlug>;
   pessoas: Set<Pessoas>;
   statuses: Set<StatusFilter>;
+  curacoes: Set<CuracaoFilter>;
   sort: SortKey;
   group: GroupKey;
 }
@@ -80,6 +89,7 @@ function emptyState(): InitialState {
     formatos: new Set(),
     pessoas: new Set(),
     statuses: new Set(),
+    curacoes: new Set(),
     sort: "ordem",
     group: "categoria",
   };
@@ -99,6 +109,7 @@ function readUrl(): InitialState {
     formatos: parseSet<FormatoSlug>("fmt"),
     pessoas: parseSet<Pessoas>("p"),
     statuses: parseSet<StatusFilter>("st"),
+    curacoes: parseSet<CuracaoFilter>("cu"),
     sort: ["ordem", "titulo", "duracao-asc", "duracao-desc"].includes(sort)
       ? sort
       : "ordem",
@@ -122,6 +133,9 @@ export default function ExerciseCatalog({ exercises }: Props) {
   const [activeStatuses, setActiveStatuses] = useState<Set<StatusFilter>>(
     initial.statuses,
   );
+  const [activeCuracoes, setActiveCuracoes] = useState<Set<CuracaoFilter>>(
+    initial.curacoes,
+  );
   const [sortKey, setSortKey] = useState<SortKey>(initial.sort);
   const [groupKey, setGroupKey] = useState<GroupKey>(initial.group);
 
@@ -130,7 +144,8 @@ export default function ExerciseCatalog({ exercises }: Props) {
     initial.durs.size > 0 ||
       initial.formatos.size > 0 ||
       initial.pessoas.size > 0 ||
-      initial.statuses.size > 0,
+      initial.statuses.size > 0 ||
+      initial.curacoes.size > 0,
   );
 
   // Estado pessoal (favoritos, feito, depois, notas). null userId desliga o fetch.
@@ -149,6 +164,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     if (activeFormatos.size) p.set("fmt", Array.from(activeFormatos).join(","));
     if (activePessoas.size) p.set("p", Array.from(activePessoas).join(","));
     if (activeStatuses.size) p.set("st", Array.from(activeStatuses).join(","));
+    if (activeCuracoes.size) p.set("cu", Array.from(activeCuracoes).join(","));
     if (sortKey !== "ordem") p.set("sort", sortKey);
     if (groupKey !== "categoria") p.set("group", groupKey);
     const qs = p.toString();
@@ -163,6 +179,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     activeFormatos,
     activePessoas,
     activeStatuses,
+    activeCuracoes,
     sortKey,
     groupKey,
   ]);
@@ -192,6 +209,13 @@ export default function ExerciseCatalog({ exercises }: Props) {
         });
         if (!matches) return false;
       }
+      if (activeCuracoes.size > 0) {
+        const curado = isCurated(ex);
+        const wantCurado = activeCuracoes.has("curado");
+        const wantNaoCurado = activeCuracoes.has("nao-curado");
+        if (curado && !wantCurado) return false;
+        if (!curado && !wantNaoCurado) return false;
+      }
       if (!q) return true;
       const hay = normalize([ex.title, ex.summary, ...ex.tags].join(" "));
       return hay.includes(q);
@@ -204,6 +228,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     activeFormatos,
     activePessoas,
     activeStatuses,
+    activeCuracoes,
     estados,
   ]);
 
@@ -289,6 +314,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
     setActiveFormatos(new Set());
     setActivePessoas(new Set());
     setActiveStatuses(new Set());
+    setActiveCuracoes(new Set());
     setSortKey("ordem");
     setGroupKey("categoria");
   };
@@ -297,7 +323,8 @@ export default function ExerciseCatalog({ exercises }: Props) {
     activeDurs.size +
     activeFormatos.size +
     activePessoas.size +
-    activeStatuses.size;
+    activeStatuses.size +
+    activeCuracoes.size;
 
   const hasFilters =
     query.length > 0 ||
@@ -544,6 +571,40 @@ export default function ExerciseCatalog({ exercises }: Props) {
               })}
             </ChipRow>
           )}
+
+          <ChipRow label="Curadoria" compact>
+            {CURACAO_FILTER_ORDER.map((slug) => {
+              const active = activeCuracoes.has(slug);
+              const isNaoCurado = slug === "nao-curado";
+              return (
+                <Chip
+                  key={slug}
+                  active={active}
+                  color={isNaoCurado ? "#D4854A" : "#34D399"}
+                  tint={
+                    isNaoCurado
+                      ? "rgba(212,133,74,0.10)"
+                      : "rgba(52,211,153,0.10)"
+                  }
+                  border={
+                    isNaoCurado
+                      ? "rgba(212,133,74,0.28)"
+                      : "rgba(52,211,153,0.28)"
+                  }
+                  onClick={() =>
+                    toggle(activeCuracoes, slug, setActiveCuracoes)
+                  }
+                  hint={
+                    isNaoCurado
+                      ? "Exercícios brutos da lista não-curada"
+                      : "Exercícios revisados pelo time"
+                  }
+                >
+                  {CURACAO_FILTER_LABEL[slug]}
+                </Chip>
+              );
+            })}
+          </ChipRow>
         </div>
       )}
 
@@ -698,6 +759,7 @@ function ExerciseCard({
   const doneCount = estado?.done_count ?? 0;
   const isFav = estado?.status === "favorito";
   const isDepois = estado?.status === "fazer-depois";
+  const naoCurado = !isCurated(exercise);
   return (
     <Link
       href={`/formacao/aprimoramento-dinamicas/${exercise.slug}`}
@@ -762,6 +824,15 @@ function ExerciseCard({
           <Users width={11} height={11} aria-hidden="true" />
           {PESSOAS_LABEL[exercise.pessoas]}
         </CardBadge>
+        {naoCurado && (
+          <CardBadge
+            color="#D4854A"
+            tint="rgba(212,133,74,0.10)"
+            border="rgba(212,133,74,0.28)"
+          >
+            Não-curado
+          </CardBadge>
+        )}
 
         {/* Badges de estado pessoal — sempre alinhadas ao fim do row */}
         {(isFav || isDepois || doneCount > 0) && (
