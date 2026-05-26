@@ -18,6 +18,8 @@ import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
 import ReadingProgress from "@/components/aprimoramento/ReadingProgress";
 import ExerciseToolbar from "@/components/aprimoramento/ExerciseToolbar";
 import ExerciseNotes from "@/components/aprimoramento/ExerciseNotes";
+import FacilitatorButton from "@/components/aprimoramento/FacilitatorButton";
+import ReadingPrefs from "@/components/aprimoramento/ReadingPrefs";
 import type { Metadata } from "next";
 
 interface PageProps {
@@ -94,12 +96,18 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             { label: exercise.title },
           ]}
         />
-        <PrintButton />
+        <div className="flex items-center gap-2">
+          <ReadingPrefs />
+          <PrintButton />
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-[1fr_220px] gap-10 lg:gap-12">
         {/* Coluna principal */}
-        <article className="min-w-0 max-w-3xl relative">
+        <article
+          className="min-w-0 relative"
+          style={{ maxWidth: "var(--ap-reading-mw, 48rem)" }}
+        >
           {/* Gradient header — cor da categoria desbotando pra transparente */}
           <div
             className="absolute -top-12 -left-6 -right-6 h-64 -z-10 pointer-events-none rounded-3xl"
@@ -189,6 +197,15 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             tint={cat.tint}
             border={cat.border}
           />
+
+          <div className="mb-8 -mt-2 print-hide">
+            <FacilitatorButton
+              exercise={exercise}
+              color={cat.color}
+              tint={cat.tint}
+              border={cat.border}
+            />
+          </div>
 
           <ExerciseQuickFacts exercise={exercise} />
           <ExerciseBlocks blocks={exercise.blocks} />

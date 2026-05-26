@@ -276,6 +276,14 @@ body::after {
   body * { position: static !important; }
 }
 
+/* ─── Reading prefs (Aprimoramento de Dinâmicas) ───────────────────────────
+   CSS vars setadas pelo ReadingPrefs.tsx via document.documentElement.style.
+   Defaults batem com o que estava hardcoded antes (15px, 48rem). */
+:root {
+  --ap-reading-fs: 15px;
+  --ap-reading-mw: 48rem; /* 768px — equivalente ao max-w-3xl antigo */
+}
+
 /* Reveal-on-scroll — usado nos blocks do Aprimoramento de Dinâmicas.
    Estado inicial: invisível e deslocado pra baixo; depois entra suavemente. */
 .reveal {

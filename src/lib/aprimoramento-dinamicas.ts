@@ -961,6 +961,88 @@ export function getExerciseBySlug(slug: string): Exercise | undefined {
   return EXERCISES.find((e) => e.slug === slug);
 }
 
+// ─── Modo Facilitador: particionar blocks em sections navegáveis ───────────
+
+export interface FacilitatorSection {
+  id: string;
+  label: string;
+  isMomento: boolean;
+  momentoNumber: number | null;
+  blocks: Block[];
+}
+
+/**
+ * Quebra o array de blocks em sections navegáveis pelo modo Facilitador.
+ *
+ * Estratégia:
+ * - Se o exercício tem Momentos (heading level 3 que parseMomento bate),
+ *   cada Momento vira uma section, e tudo que vier antes do primeiro Momento
+ *   (Contextualização, etc.) vira sections separadas por heading level 2.
+ * - Se não tem Momentos, particiona apenas por heading level 2.
+ *
+ * Blocks órfãos (antes de qualquer heading) caem em uma section "Introdução".
+ */
+export function partitionSections(blocks: Block[]): FacilitatorSection[] {
+  const hasMomentos = blocks.some(
+    (b) => b.type === "heading" && (b.level ?? 2) === 3 && parseMomento(b.text),
+  );
+
+  const sections: FacilitatorSection[] = [];
+  let current: FacilitatorSection | null = null;
+
+  function makeSection(
+    label: string,
+    isMomento: boolean,
+    momentoNumber: number | null,
+  ): FacilitatorSection {
+    return {
+      id: `sec-${sections.length}`,
+      label,
+      isMomento,
+      momentoNumber,
+      blocks: [],
+    };
+  }
+
+  function flush() {
+    if (current && current.blocks.length > 0) sections.push(current);
+  }
+
+  for (const block of blocks) {
+    if (block.type === "heading") {
+      const level = block.level ?? 2;
+
+      if (hasMomentos && level === 3) {
+        const momento = parseMomento(block.text);
+        if (momento) {
+          flush();
+          current = makeSection(
+            momento.label || `Momento ${momento.number}`,
+            true,
+            momento.number,
+          );
+          continue;
+        }
+      }
+      if (level === 2) {
+        flush();
+        current = makeSection(block.text, false, null);
+        continue;
+      }
+      // level 4 e headings level 3 sem matching de Momento ficam dentro da
+      // section atual como sub-headings.
+    }
+
+    if (current === null) {
+      current = makeSection("Introdução", false, null);
+    }
+    current.blocks.push(block);
+  }
+
+  flush();
+  return sections;
+}
+
 // ─── Tags helpers ───────────────────────────────────────────────────────────
 
 export function tagToSlug(tag: string): string {

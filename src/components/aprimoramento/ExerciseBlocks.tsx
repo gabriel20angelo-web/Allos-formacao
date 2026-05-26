@@ -139,7 +139,8 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <p
               key={i}
-              className="reveal font-dm text-[15px] leading-[1.75] text-cream/80 mb-3"
+              className="reveal font-dm leading-[1.75] text-cream/80 mb-3"
+              style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
             >
               {block.text}
             </p>
@@ -152,7 +153,8 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               {block.items.map((item, j) => (
                 <li
                   key={j}
-                  className="font-dm text-[15px] leading-[1.75] text-cream/80 relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-accent"
+                  className="font-dm leading-[1.75] text-cream/80 relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-accent"
+                  style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
                 >
                   {item}
                 </li>
@@ -170,7 +172,8 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               {block.items.map((item, j) => (
                 <li
                   key={j}
-                  className="font-dm text-[15px] leading-[1.75] text-cream/80 pl-1"
+                  className="font-dm leading-[1.75] text-cream/80 pl-1"
+                  style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
                 >
                   {item}
                 </li>
@@ -185,7 +188,12 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               key={i}
               className="reveal border-l-2 border-accent/60 pl-5 my-6 italic"
             >
-              <p className="font-fraunces text-[16px] leading-[1.75] text-cream/85">
+              <p
+                className="font-fraunces leading-[1.75] text-cream/85"
+                style={{
+                  fontSize: "calc(var(--ap-reading-fs, 15px) + 1px)",
+                }}
+              >
                 &ldquo;{block.text}&rdquo;
               </p>
               {block.attribution && (
