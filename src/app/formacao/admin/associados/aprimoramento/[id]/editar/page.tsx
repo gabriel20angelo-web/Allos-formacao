@@ -1,8 +1,15 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, ChevronLeft } from "lucide-react";
+import { Shield, Loader2 } from "lucide-react";
+import { toast } from "sonner";
+import ExerciseEditor from "@/components/admin/aprimoramento/ExerciseEditor";
+import {
+  getByIdForAdmin,
+  updateExercicio,
+  type AdminExercicioRow,
+} from "@/lib/queries/aprimoramento-exercicios-admin";
 
 export default function EditarExercicioPage({
   params,
@@ -10,6 +17,20 @@ export default function EditarExercicioPage({
   params: { id: string };
 }) {
   const { isAdmin } = useAuth();
+  const [row, setRow] = useState<AdminExercicioRow | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+    getByIdForAdmin(params.id).then((r) => {
+      if (cancelled) return;
+      setRow(r);
+      setLoading(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [params.id]);
 
   if (!isAdmin) {
     return (
@@ -20,34 +41,58 @@ export default function EditarExercicioPage({
     );
   }
 
-  return (
-    <div className="max-w-3xl">
-      <Link
-        href="/formacao/admin/associados/aprimoramento"
-        className="font-dm text-[12px] inline-flex items-center gap-1 text-cream/55 hover:text-accent transition-colors mb-6"
-      >
-        <ChevronLeft width={14} height={14} aria-hidden="true" />
-        Aprimoramento de Dinâmicas
-      </Link>
-
-      <h1 className="font-fraunces text-3xl text-cream mb-3">
-        Editar exercício
-      </h1>
-      <p className="font-dm text-sm text-cream/55 mb-2">
-        ID: <code className="text-xs text-cream/40">{params.id}</code>
+  if (loading) {
+    return (
+      <p className="font-dm text-sm text-cream/40 text-center py-12 inline-flex items-center gap-2">
+        <Loader2 className="animate-spin" width={14} height={14} /> Carregando…
       </p>
+    );
+  }
 
-      <div
-        className="rounded-2xl p-8 text-center mt-6"
-        style={{ border: "1.5px dashed rgba(255,255,255,0.08)" }}
-      >
-        <p className="font-dm text-sm text-cream/45 mb-2">
-          Em construção — Sprint 3E
-        </p>
-        <p className="font-dm text-xs text-cream/30">
-          Editor com identificação, conteúdo markdown e preview ao vivo.
-        </p>
-      </div>
-    </div>
+  if (!row) {
+    return (
+      <p className="font-dm text-sm text-cream/40 text-center py-12">
+        Exercício não encontrado.
+      </p>
+    );
+  }
+
+  return (
+    <ExerciseEditor
+      mode="editar"
+      initial={{
+        id: row.id,
+        slug: row.slug,
+        number: row.number,
+        title: row.title,
+        summary: row.summary,
+        category: row.category,
+        formato: row.formato,
+        tags: row.tags,
+        recursos: row.recursos,
+        blocks: row.blocks,
+        curado: row.curado,
+        status: row.status,
+      }}
+      onSubmit={async (data) => {
+        const { error } = await updateExercicio(row.id, {
+          slug: data.slug,
+          title: data.title,
+          summary: data.summary,
+          category: data.category,
+          formato: data.formato,
+          tags: data.tags,
+          recursos: data.recursos,
+          blocks: data.blocks,
+          curado: data.curado,
+          status: data.status,
+        });
+        if (error) {
+          toast.error(`Falha ao salvar: ${error.message}`);
+          return false;
+        }
+        return true;
+      }}
+    />
   );
 }

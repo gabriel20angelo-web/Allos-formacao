@@ -55,6 +55,19 @@ function mapRow(row: AdminRowRaw): AdminExercicioRow {
  * Lista todos os exercícios pro admin (publicado + rascunho + arquivado).
  * RLS já garante que só admin (ou dono em rascunho) vê tudo.
  */
+export async function getByIdForAdmin(
+  id: string,
+): Promise<AdminExercicioRow | null> {
+  const sb = createClient();
+  const { data, error } = await sb
+    .from(TABLE)
+    .select("*")
+    .eq("id", id)
+    .maybeSingle();
+  if (error || !data) return null;
+  return mapRow(data as AdminRowRaw);
+}
+
 export async function listAllForAdmin(): Promise<AdminExercicioRow[]> {
   const sb = createClient();
   const { data, error } = await sb

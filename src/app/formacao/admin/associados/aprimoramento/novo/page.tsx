@@ -1,11 +1,22 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, ChevronLeft } from "lucide-react";
+import { Shield } from "lucide-react";
+import { toast } from "sonner";
+import ExerciseEditor from "@/components/admin/aprimoramento/ExerciseEditor";
+import {
+  createExercicio,
+  nextExerciseNumber,
+} from "@/lib/queries/aprimoramento-exercicios-admin";
 
 export default function NovoExercicioPage() {
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
+  const [nextNumber, setNextNumber] = useState<number | null>(null);
+
+  useEffect(() => {
+    nextExerciseNumber().then(setNextNumber);
+  }, []);
 
   if (!isAdmin) {
     return (
@@ -16,34 +27,30 @@ export default function NovoExercicioPage() {
     );
   }
 
-  return (
-    <div className="max-w-3xl">
-      <Link
-        href="/formacao/admin/associados/aprimoramento"
-        className="font-dm text-[12px] inline-flex items-center gap-1 text-cream/55 hover:text-accent transition-colors mb-6"
-      >
-        <ChevronLeft width={14} height={14} aria-hidden="true" />
-        Aprimoramento de Dinâmicas
-      </Link>
-
-      <h1 className="font-fraunces text-3xl text-cream mb-3">
-        Novo exercício
-      </h1>
-      <p className="font-dm text-sm text-cream/55 mb-8">
-        Crie um exercício pra adicionar ao acervo.
+  if (nextNumber === null) {
+    return (
+      <p className="font-dm text-sm text-cream/40 text-center py-12">
+        Preparando editor…
       </p>
+    );
+  }
 
-      <div
-        className="rounded-2xl p-8 text-center"
-        style={{ border: "1.5px dashed rgba(255,255,255,0.08)" }}
-      >
-        <p className="font-dm text-sm text-cream/45 mb-2">
-          Em construção — Sprint 3E
-        </p>
-        <p className="font-dm text-xs text-cream/30">
-          Editor com identificação, conteúdo markdown e preview ao vivo.
-        </p>
-      </div>
-    </div>
+  return (
+    <ExerciseEditor
+      mode="novo"
+      initial={{ number: nextNumber, status: "publicado", curado: false }}
+      onSubmit={async (data) => {
+        if (!user) return false;
+        const { error } = await createExercicio(
+          { ...data, number: nextNumber },
+          user.id,
+        );
+        if (error) {
+          toast.error(`Falha ao criar: ${error.message}`);
+          return false;
+        }
+        return true;
+      }}
+    />
   );
 }
