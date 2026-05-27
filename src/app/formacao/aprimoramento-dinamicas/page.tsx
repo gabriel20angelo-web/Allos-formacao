@@ -6,6 +6,7 @@ import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercic
 import { CATEGORIES, CATEGORY_ORDER } from "@/lib/aprimoramento-categories";
 import ExerciseCatalog from "@/components/aprimoramento/ExerciseCatalog";
 import Breadcrumbs from "@/components/aprimoramento/Breadcrumbs";
+import SuggestIdeaTrigger from "@/components/aprimoramento/SuggestIdeaTrigger";
 import { TRILHAS } from "@/lib/aprimoramento-trilhas";
 import {
   Sparkles,
@@ -111,10 +112,11 @@ export default async function AprimoramentoDinamicasPage() {
 
         {/* Stat strip + Featured */}
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-6">
-          {/* Coluna esquerda: stats + atalhos */}
+          {/* Coluna esquerda: stats + atalhos + sugerir */}
           <div className="space-y-4">
             <StatStrip stats={stats} exercises={exercises} />
             <QuickShortcuts />
+            <SuggestIdeaTrigger />
           </div>
 
           {/* Coluna direita: Exercício do dia */}
