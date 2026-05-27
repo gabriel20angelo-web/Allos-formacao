@@ -22,11 +22,22 @@ import {
   Calendar,
   Users,
 } from "lucide-react";
+import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
 
-const navItems = [
+const navItems: {
+  href: string;
+  label: string;
+  icon: typeof LayoutDashboard;
+  badgeKey?: "sugestoes-pendentes";
+}[] = [
   { href: "/formacao/admin", label: "Dashboard", icon: LayoutDashboard },
   { href: "/formacao/admin/formacao-base", label: "Formação", icon: Calendar },
-  { href: "/formacao/admin/associados", label: "Associados", icon: Users },
+  {
+    href: "/formacao/admin/associados",
+    label: "Associados",
+    icon: Users,
+    badgeKey: "sugestoes-pendentes",
+  },
   { href: "/formacao/admin/certificados", label: "Certificados", icon: Award },
   { href: "/formacao/admin/moderacao", label: "Moderação", icon: MessageSquare },
   { href: "/formacao/admin/configuracoes", label: "Configurações", icon: Settings },
@@ -51,8 +62,22 @@ export default function AdminLayout({
   const { profile, loading, signOut, isAdmin, isInstructor } = useAuth();
   const pathname = usePathname();
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  const [pendingSugestoes, setPendingSugestoes] = useState(0);
   // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
   // (lines 100-112) — no client-side useEffect needed.
+
+  useEffect(() => {
+    if (!isAdmin) return;
+    let cancelled = false;
+    countSugestoesPendentes()
+      .then((n) => {
+        if (!cancelled) setPendingSugestoes(n);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [isAdmin, pathname]);
 
   // useEffect ANTES de qualquer early return pra respeitar Rules of Hooks.
   useEffect(() => {
@@ -176,7 +201,27 @@ export default function AdminLayout({
               }
             >
               <item.icon className="h-4 w-4" />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {item.badgeKey === "sugestoes-pendentes" &&
+                pendingSugestoes > 0 && (
+                  <span
+                    className="font-dm text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                    style={{
+                      color: isActive ? "#FDFBF7" : "#D4A857",
+                      background: isActive
+                        ? "rgba(255,255,255,0.18)"
+                        : "rgba(212,168,87,0.14)",
+                      border: `1px solid ${
+                        isActive
+                          ? "rgba(255,255,255,0.28)"
+                          : "rgba(212,168,87,0.32)"
+                      }`,
+                    }}
+                    aria-label={`${pendingSugestoes} sugestões pendentes`}
+                  >
+                    {pendingSugestoes}
+                  </span>
+                )}
             </Link>
           );
         })}
