@@ -470,12 +470,12 @@ export default function AnalyticsPage() {
       className="space-y-8"
     >
       {/* ── Course Selector ──────────────────────────────────── */}
-      <div className="flex items-center gap-4 flex-wrap">
+      <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
         <h2 className="font-fraunces text-xl text-[#FDFBF7]">Analytics</h2>
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <button
             onClick={() => setDropdownOpen(!dropdownOpen)}
-            className="font-dm text-sm px-4 py-2 rounded-xl flex items-center gap-2 min-w-[240px] justify-between"
+            className="font-dm text-sm px-4 py-2 rounded-xl flex items-center gap-2 w-full sm:min-w-[240px] justify-between"
             style={{
               background: "rgba(255,255,255,0.03)",
               border: "1px solid rgba(255,255,255,0.06)",
@@ -668,7 +668,7 @@ export default function AnalyticsPage() {
                     className="p-3 rounded-lg"
                     style={{ background: "rgba(255,255,255,0.02)" }}
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                       <div className="flex items-center gap-2">
                         <Stars rating={r.rating} />
                         <span className="font-dm text-xs text-[#FDFBF7]/50">
@@ -859,74 +859,132 @@ export default function AnalyticsPage() {
             {detailData.students.length === 0 ? (
               <p className="font-dm text-sm text-[#FDFBF7]/40">Nenhum aluno inscrito.</p>
             ) : (
-              <div className="overflow-x-auto">
-                <table className="w-full">
-                  <thead>
-                    <tr
-                      className="font-dm text-xs text-[#FDFBF7]/40"
-                      style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
-                    >
-                      <th className="text-left py-2 pr-4">Nome</th>
-                      <th className="text-left py-2 pr-4">Status</th>
-                      <th className="text-left py-2 pr-4">Progresso</th>
-                      <th className="text-left py-2 pr-4">Aulas</th>
-                      <th className="text-left py-2">Ultima atividade</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {detailData.students.map((s) => (
+              <>
+                {/* Desktop table */}
+                <div className="hidden md:block overflow-x-auto">
+                  <table className="w-full">
+                    <thead>
                       <tr
-                        key={s.userId}
-                        className="font-dm text-sm"
-                        style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+                        className="font-dm text-xs text-[#FDFBF7]/40"
+                        style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
                       >
-                        <td className="py-2 pr-4 text-[#FDFBF7]/80">{s.name}</td>
-                        <td className="py-2 pr-4">
-                          <span
-                            className="text-xs px-2 py-0.5 rounded-full"
-                            style={{
-                              background:
-                                s.status === "completed"
-                                  ? "rgba(34,197,94,0.1)"
-                                  : s.status === "cancelled"
-                                  ? "rgba(239,68,68,0.1)"
-                                  : "rgba(200,75,49,0.1)",
-                              color:
-                                s.status === "completed"
-                                  ? "#22c55e"
-                                  : s.status === "cancelled"
-                                  ? "#ef4444"
-                                  : "#C84B31",
-                            }}
-                          >
-                            {s.status === "completed"
-                              ? "Concluido"
-                              : s.status === "cancelled"
-                              ? "Cancelado"
-                              : "Ativo"}
-                          </span>
-                        </td>
-                        <td className="py-2 pr-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-20">
-                              <Bar value={s.progress} max={100} />
-                            </div>
-                            <span className="text-xs text-[#FDFBF7]/50">
-                              {s.progress}%
-                            </span>
-                          </div>
-                        </td>
-                        <td className="py-2 pr-4 text-xs text-[#FDFBF7]/50">
-                          {s.completedLessons}/{s.totalLessons}
-                        </td>
-                        <td className="py-2 text-xs text-[#FDFBF7]/40">
-                          {formatDate(s.lastActivity)}
-                        </td>
+                        <th className="text-left py-2 pr-4">Nome</th>
+                        <th className="text-left py-2 pr-4">Status</th>
+                        <th className="text-left py-2 pr-4">Progresso</th>
+                        <th className="text-left py-2 pr-4">Aulas</th>
+                        <th className="text-left py-2">Ultima atividade</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+                    </thead>
+                    <tbody>
+                      {detailData.students.map((s) => (
+                        <tr
+                          key={s.userId}
+                          className="font-dm text-sm"
+                          style={{ borderBottom: "1px solid rgba(255,255,255,0.03)" }}
+                        >
+                          <td className="py-2 pr-4 text-[#FDFBF7]/80">{s.name}</td>
+                          <td className="py-2 pr-4">
+                            <span
+                              className="text-xs px-2 py-0.5 rounded-full"
+                              style={{
+                                background:
+                                  s.status === "completed"
+                                    ? "rgba(34,197,94,0.1)"
+                                    : s.status === "cancelled"
+                                    ? "rgba(239,68,68,0.1)"
+                                    : "rgba(200,75,49,0.1)",
+                                color:
+                                  s.status === "completed"
+                                    ? "#22c55e"
+                                    : s.status === "cancelled"
+                                    ? "#ef4444"
+                                    : "#C84B31",
+                              }}
+                            >
+                              {s.status === "completed"
+                                ? "Concluido"
+                                : s.status === "cancelled"
+                                ? "Cancelado"
+                                : "Ativo"}
+                            </span>
+                          </td>
+                          <td className="py-2 pr-4">
+                            <div className="flex items-center gap-2">
+                              <div className="w-20">
+                                <Bar value={s.progress} max={100} />
+                              </div>
+                              <span className="text-xs text-[#FDFBF7]/50">
+                                {s.progress}%
+                              </span>
+                            </div>
+                          </td>
+                          <td className="py-2 pr-4 text-xs text-[#FDFBF7]/50">
+                            {s.completedLessons}/{s.totalLessons}
+                          </td>
+                          <td className="py-2 text-xs text-[#FDFBF7]/40">
+                            {formatDate(s.lastActivity)}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* Mobile cards */}
+                <div className="md:hidden space-y-3">
+                  {detailData.students.map((s) => (
+                    <div
+                      key={s.userId}
+                      className="rounded-[14px] p-3.5"
+                      style={{
+                        background: "rgba(255,255,255,0.03)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="font-dm text-sm text-[#FDFBF7]/80 truncate max-w-[65%]">
+                          {s.name}
+                        </span>
+                        <span
+                          className="text-xs px-2 py-0.5 rounded-full flex-shrink-0"
+                          style={{
+                            background:
+                              s.status === "completed"
+                                ? "rgba(34,197,94,0.1)"
+                                : s.status === "cancelled"
+                                ? "rgba(239,68,68,0.1)"
+                                : "rgba(200,75,49,0.1)",
+                            color:
+                              s.status === "completed"
+                                ? "#22c55e"
+                                : s.status === "cancelled"
+                                ? "#ef4444"
+                                : "#C84B31",
+                          }}
+                        >
+                          {s.status === "completed"
+                            ? "Concluido"
+                            : s.status === "cancelled"
+                            ? "Cancelado"
+                            : "Ativo"}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 mb-1.5">
+                        <div className="flex-1">
+                          <Bar value={s.progress} max={100} />
+                        </div>
+                        <span className="font-dm text-xs text-[#FDFBF7]/50 flex-shrink-0 w-10 text-right">
+                          {s.progress}%
+                        </span>
+                      </div>
+                      <div className="flex justify-between font-dm text-xs text-[#FDFBF7]/40">
+                        <span>{s.completedLessons}/{s.totalLessons} aulas</span>
+                        <span>{formatDate(s.lastActivity)}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </Card>
 
@@ -946,7 +1004,7 @@ export default function AnalyticsPage() {
                     className="p-3 rounded-lg"
                     style={{ background: "rgba(255,255,255,0.02)" }}
                   >
-                    <div className="flex items-center justify-between mb-1">
+                    <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                       <div className="flex items-center gap-2">
                         <Stars rating={r.rating} />
                         <span className="font-dm text-xs text-[#FDFBF7]/50">

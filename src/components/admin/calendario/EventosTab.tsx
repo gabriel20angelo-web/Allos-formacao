@@ -239,7 +239,7 @@ export default function EventosTab() {
           <motion.div
             key={evento.id}
             layout
-            className={`flex items-center justify-between px-4 py-3 rounded-xl bg-surface-2 border ${
+            className={`flex flex-col sm:flex-row sm:items-center sm:justify-between px-4 py-3 rounded-xl bg-surface-2 border gap-3 ${
               evento.permanente
                 ? "border-amber-400/30"
                 : "border-border-soft"
@@ -268,7 +268,7 @@ export default function EventosTab() {
                   {evento.descricao}
                 </p>
               )}
-              <div className="flex gap-3 ml-6 mt-1">
+              <div className="flex flex-wrap gap-x-3 gap-y-0.5 ml-6 mt-1">
                 <span className="text-[10px] font-dm text-cream-30">
                   Início:{" "}
                   {new Date(evento.data_inicio).toLocaleString("pt-BR")}
@@ -278,7 +278,7 @@ export default function EventosTab() {
                 </span>
               </div>
             </div>
-            <div className="flex items-center gap-2 flex-shrink-0">
+            <div className="flex items-center gap-2 flex-shrink-0 flex-wrap">
               <button
                 onClick={() =>
                   togglePermanente(evento.id, !evento.permanente)

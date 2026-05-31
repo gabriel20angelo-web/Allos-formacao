@@ -417,7 +417,7 @@ export default function AtividadesPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <div className="flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
                   onClick={() => router.push(`/formacao/admin/atividades/${item.id}`)}
                   className="p-1.5 rounded-lg text-cream/20 hover:text-[#C84B31] hover:bg-[#C84B31]/10 transition-all"

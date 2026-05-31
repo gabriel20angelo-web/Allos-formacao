@@ -115,7 +115,7 @@ export default function AtividadeDetailPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-64 rounded-lg" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => (
             <Skeleton key={i} className="h-28 rounded-xl" />
           ))}
@@ -323,14 +323,14 @@ export default function AtividadeDetailPage() {
                 className="p-4 rounded-xl"
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
-                    <p className="text-sm font-medium text-[#FDFBF7] font-dm">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium text-[#FDFBF7] font-dm truncate">
                       {s.nome_completo}
                     </p>
-                    <p className="text-xs text-[#FDFBF7]/40 font-dm">{s.email}</p>
+                    <p className="text-xs text-[#FDFBF7]/40 font-dm truncate">{s.email}</p>
                   </div>
-                  <div className="flex items-center gap-3 text-right">
+                  <div className="flex items-center gap-3 text-right flex-shrink-0">
                     <div>
                       <p className="text-xs text-[#FDFBF7]/30 font-dm">Grupo</p>
                       <p className="text-sm font-bold text-[#FDFBF7] font-dm">{s.nota_grupo}</p>

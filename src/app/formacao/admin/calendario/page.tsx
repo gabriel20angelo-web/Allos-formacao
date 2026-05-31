@@ -1260,7 +1260,7 @@ export default function CalendarioPage() {
 
       {/* Sub-tabs */}
       <div
-        className="flex gap-1 p-1 rounded-xl w-fit"
+        className="flex flex-wrap gap-1 p-1 rounded-xl"
         style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         {SUB_TABS.map((tab) => {
@@ -1269,15 +1269,16 @@ export default function CalendarioPage() {
             <button
               key={tab.key}
               onClick={() => setSubTab(tab.key)}
-              className="flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-dm transition-all duration-200"
+              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-dm transition-all duration-200"
               style={{
                 background: active ? "rgba(200,75,49,0.15)" : "transparent",
                 color: active ? "#C84B31" : "rgba(253,251,247,0.5)",
                 fontWeight: active ? 600 : 400,
               }}
             >
-              <tab.icon className="h-4 w-4" />
-              {tab.label}
+              <tab.icon className="h-4 w-4 flex-shrink-0" />
+              <span className="hidden sm:inline">{tab.label}</span>
+              <span className="sm:hidden">{tab.label.split(" ")[0]}</span>
             </button>
           );
         })}
@@ -1824,12 +1825,12 @@ export default function CalendarioPage() {
         {subTab === "cronograma" && (
           <motion.div key="cronograma" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="space-y-5">
             <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <ImageIcon className="h-4 w-4" style={{ color: "#C84B31" }} />
                   <h3 className="font-fraunces font-semibold text-base" style={{ color: "#FDFBF7" }}>Quadro de Horários</h3>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="ghost" onClick={() => drawCronograma()}>
                     <RefreshCw className="h-3.5 w-3.5" /> Atualizar
                   </Button>
@@ -1854,12 +1855,12 @@ export default function CalendarioPage() {
             <WhatsAppTemplates />
 
             <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
                   <h3 className="font-fraunces font-semibold text-base" style={{ color: "#FDFBF7" }}>Mensagem para WhatsApp</h3>
                 </div>
-                <div className="flex gap-2">
+                <div className="flex gap-2 flex-wrap">
                   <Button size="sm" variant="ghost" onClick={regenerateWhatsApp}>
                     <RefreshCw className="h-3.5 w-3.5" /> Regenerar
                   </Button>

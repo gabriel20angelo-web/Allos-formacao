@@ -327,7 +327,7 @@ export default function AdminAlunosPage() {
       <motion.div
         initial={{ opacity: 0, y: -10 }}
         animate={{ opacity: 1, y: 0 }}
-        className="flex items-center justify-between mb-8"
+        className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-8"
       >
         <div>
           <h1 className="font-fraunces font-bold text-2xl text-cream tracking-tight">
@@ -378,7 +378,7 @@ export default function AdminAlunosPage() {
           initial={{ opacity: 0, y: -5 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 0.05 }}
-          className="mb-6 px-4 py-3 rounded-[12px] flex items-center gap-2 text-sm"
+          className="mb-6 px-4 py-3 rounded-[12px] flex flex-wrap items-center gap-2 text-sm"
           style={{
             background: "rgba(255,255,255,0.03)",
             border: "1px solid rgba(255,255,255,0.06)",
@@ -437,7 +437,7 @@ export default function AdminAlunosPage() {
 
         {/* Status filter tabs */}
         <div
-          className="flex items-center gap-1 p-1 rounded-[10px]"
+          className="flex flex-wrap items-center gap-1 p-1 rounded-[10px]"
           style={{
             background: "rgba(255,255,255,0.03)",
             border: "1px solid rgba(255,255,255,0.06)",
@@ -465,8 +465,9 @@ export default function AdminAlunosPage() {
         </div>
       </motion.div>
 
+      {/* TABLE — desktop only */}
       <div
-        className="rounded-[16px] overflow-hidden"
+        className="hidden md:block rounded-[16px] overflow-hidden"
         style={{
           background: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",
@@ -477,9 +478,9 @@ export default function AdminAlunosPage() {
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Aluno</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50 hidden md:table-cell">Email</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Email</th>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Cursos</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50 hidden md:table-cell">Desde</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Desde</th>
               </tr>
             </thead>
             <tbody>
@@ -515,19 +516,16 @@ export default function AdminAlunosPage() {
                               <User className="h-4 w-4 text-accent" />
                             )}
                           </div>
-                          {/* Activity indicator dot */}
                           <span
                             className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#121212]"
-                            style={{
-                              backgroundColor: dotStyle.bg,
-                            }}
+                            style={{ backgroundColor: dotStyle.bg }}
                             title={dotStyle.label}
                           />
                         </div>
                         <span className="font-medium text-cream">{student.full_name}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-cream/40 hidden md:table-cell">{student.email}</td>
+                    <td className="px-4 py-3 text-cream/40">{student.email}</td>
                     <td className="px-4 py-3">
                       <div className="flex flex-wrap gap-1">
                         {student.enrollments.slice(0, 3).map((e) => (
@@ -541,7 +539,7 @@ export default function AdminAlunosPage() {
                         )}
                       </div>
                     </td>
-                    <td className="px-4 py-3 text-cream/30 text-xs hidden md:table-cell">
+                    <td className="px-4 py-3 text-cream/30 text-xs">
                       {formatDate(student.created_at)}
                     </td>
                   </tr>
@@ -559,6 +557,75 @@ export default function AdminAlunosPage() {
         </div>
       </div>
 
+      {/* CARDS — mobile only */}
+      <div className="md:hidden space-y-3">
+        {filtered.length === 0 && (
+          <p className="text-center text-cream/35 py-8">Nenhum aluno encontrado.</p>
+        )}
+        {filtered.map((student) => {
+          const activityColor = getActivityColor(student.enrollments);
+          const dotStyle = activityDotStyles[activityColor];
+          return (
+            <button
+              key={student.id}
+              className="w-full text-left rounded-[14px] p-3.5 transition-colors active:bg-white/[0.04]"
+              style={{
+                background: "rgba(255,255,255,0.03)",
+                border: "1px solid rgba(255,255,255,0.06)",
+              }}
+              onClick={() => {
+                setSelectedStudent(student);
+                loadStudentProgress(student);
+              }}
+            >
+              {/* Row 1: avatar + name + since */}
+              <div className="flex items-center gap-3 mb-2">
+                <div className="relative flex-shrink-0">
+                  <div
+                    className="w-9 h-9 rounded-full flex items-center justify-center"
+                    style={{ background: "rgba(200,75,49,0.1)" }}
+                  >
+                    {student.avatar_url ? (
+                      <Image
+                        src={student.avatar_url}
+                        alt=""
+                        width={36}
+                        height={36}
+                        className="w-9 h-9 rounded-full object-cover"
+                      />
+                    ) : (
+                      <User className="h-4 w-4 text-accent" />
+                    )}
+                  </div>
+                  <span
+                    className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full ring-2 ring-[#121212]"
+                    style={{ backgroundColor: dotStyle.bg }}
+                    title={dotStyle.label}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-medium text-cream text-sm truncate">{student.full_name}</p>
+                  <p className="text-xs text-cream/40 truncate">{student.email}</p>
+                </div>
+                <span className="text-xs text-cream/30 flex-shrink-0">{formatDate(student.created_at)}</span>
+              </div>
+              {/* Row 2: course badges */}
+              <div className="flex flex-wrap gap-1">
+                {student.enrollments.slice(0, 3).map((e) => (
+                  <Badge key={e.id} variant={e.status === "completed" ? "published" : "draft"}>
+                    {e.course?.title?.substring(0, 22)}
+                    {(e.course?.title?.length || 0) > 22 ? "..." : ""}
+                  </Badge>
+                ))}
+                {student.enrollments.length > 3 && (
+                  <Badge variant="archived">+{student.enrollments.length - 3}</Badge>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Student detail modal */}
       <Modal
         open={!!selectedStudent}
@@ -567,7 +634,7 @@ export default function AdminAlunosPage() {
           setUnenrollConfirm(null);
         }}
         title={selectedStudent?.full_name || ""}
-        maxWidth="max-w-xl"
+        maxWidth="max-w-xl w-[calc(100%-2rem)]"
       >
         {selectedStudent && (
           <div className="space-y-4">
@@ -592,11 +659,11 @@ export default function AdminAlunosPage() {
                       background: "rgba(255,255,255,0.02)",
                     }}
                   >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-sm font-medium text-cream">
+                    <div className="flex flex-wrap items-start justify-between gap-2 mb-1">
+                      <span className="text-sm font-medium text-cream flex-1 min-w-0">
                         {e.course?.title}
                       </span>
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         <Badge variant={e.status === "completed" ? "published" : "draft"}>
                           {e.status === "completed" ? "Concluído" : "Em andamento"}
                         </Badge>

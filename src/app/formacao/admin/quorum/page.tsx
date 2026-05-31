@@ -274,8 +274,8 @@ export default function QuorumPage() {
       </div>
 
       {/* Period selector + nav */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
-        <div className="flex gap-1">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+        <div className="flex flex-wrap gap-1">
           {(Object.keys(PERIODO_LABELS) as Periodo[]).map((p) => (
             <button
               key={p}
@@ -295,7 +295,7 @@ export default function QuorumPage() {
           <button onClick={() => setOffset((o) => o - 1)} className="p-2 rounded-lg hover:bg-white/5 text-cream/50 hover:text-cream transition-colors">
             <ChevronLeft className="h-5 w-5" />
           </button>
-          <span className="text-sm text-cream/70 min-w-[160px] text-center">{range.label}</span>
+          <span className="text-sm text-cream/70 min-w-[120px] sm:min-w-[160px] text-center">{range.label}</span>
           <button onClick={() => setOffset((o) => o + 1)} disabled={offset >= 0} className="p-2 rounded-lg hover:bg-white/5 text-cream/50 hover:text-cream transition-colors disabled:opacity-30">
             <ChevronRight className="h-5 w-5" />
           </button>
@@ -403,7 +403,7 @@ export default function QuorumPage() {
                           background: selectedPresenca?.id === reg.id ? "rgba(108,92,231,0.1)" : "rgba(255,255,255,0.02)",
                           border: selectedPresenca?.id === reg.id ? "1px solid rgba(108,92,231,0.3)" : "1px solid transparent",
                         }}>
-                        <div className="flex items-center justify-between flex-wrap gap-2">
+                        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
                           <div className="flex items-center gap-3 flex-wrap">
                             <div className="flex items-center gap-1.5 text-cream/50">
                               <Clock className="h-3.5 w-3.5" />
@@ -419,7 +419,7 @@ export default function QuorumPage() {
                               <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "rgba(253,203,110,0.1)", color: "#fdcb6e" }}>manual</span>
                             )}
                           </div>
-                          <div className="flex items-center gap-4">
+                          <div className="flex items-center gap-4 sm:gap-4">
                             <div className="text-right">
                               <span className="text-lg font-bold text-cream">{reg.media_participantes.toFixed(1)}</span>
                               <span className="text-xs text-cream/30 ml-1">media</span>

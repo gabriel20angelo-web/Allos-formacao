@@ -227,7 +227,7 @@ export default function EstatisticasPage() {
   return (
     <div className="space-y-8">
       {/* Period selector */}
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         {(Object.keys(PERIODO_LABELS) as Periodo[]).map((p) => (
           <button key={p} onClick={() => setPeriodo(p)}
             className="font-dm text-xs px-3 py-1.5 rounded-full transition-all"
@@ -278,7 +278,7 @@ export default function EstatisticasPage() {
       {/* Status breakdown bar */}
       {statusStats.total > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2, duration: 0.4 }}
-          className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          className="rounded-xl p-4 sm:p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-2 mb-5">
             <Activity className="h-4 w-4 text-[#C84B31]" />
             <h3 className="font-fraunces font-bold text-base text-[#FDFBF7]">Status dos slots</h3>
@@ -311,7 +311,7 @@ export default function EstatisticasPage() {
       {/* Quorum stats from Meet */}
       {quorumStats && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.4 }}
-          className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          className="rounded-xl p-4 sm:p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-2 mb-5">
             <Users className="h-4 w-4 text-[#C84B31]" />
             <h3 className="font-fraunces font-bold text-base text-[#FDFBF7]">Quórum do Meet</h3>
@@ -372,42 +372,78 @@ export default function EstatisticasPage() {
       {/* Conductor ranking from slot logs */}
       {conductorStats.length > 0 && (
         <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.4 }}
-          className="rounded-xl p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+          className="rounded-xl p-4 sm:p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
           <div className="flex items-center gap-2 mb-5">
             <Trophy className="h-4 w-4 text-[#C84B31]" />
             <h3 className="font-fraunces font-bold text-base text-[#FDFBF7]">Ranking de condutores (calendário)</h3>
           </div>
-          <div className="grid gap-2 px-4 py-2 mb-1 font-dm text-[10px] uppercase tracking-wider text-[#FDFBF7]/25"
-            style={{ gridTemplateColumns: "1fr 60px 72px 80px 1fr" }}>
-            <span>Nome</span>
-            <span className="text-center">Alocados</span>
-            <span className="text-center">Conduzidos</span>
-            <span className="text-center">Desmarcados</span>
-            <span>Taxa</span>
+
+          {/* Desktop: grid com colunas fixas */}
+          <div className="hidden md:block">
+            <div className="grid gap-2 px-4 py-2 mb-1 font-dm text-[10px] uppercase tracking-wider text-[#FDFBF7]/25"
+              style={{ gridTemplateColumns: "1fr 60px 72px 80px 1fr" }}>
+              <span>Nome</span>
+              <span className="text-center">Alocados</span>
+              <span className="text-center">Conduzidos</span>
+              <span className="text-center">Desmarcados</span>
+              <span>Taxa</span>
+            </div>
+            <div className="space-y-1">
+              {conductorStats.map((c, i) => {
+                const taxaColor = c.taxa >= 80 ? "#22c55e" : c.taxa >= 50 ? "#f59e0b" : "#ef4444";
+                return (
+                  <div key={c.nome}
+                    className="grid gap-2 px-4 py-3 rounded-lg items-center hover:bg-white/[0.02]"
+                    style={{
+                      gridTemplateColumns: "1fr 60px 72px 80px 1fr",
+                      background: i === 0 ? "rgba(212,175,55,0.04)" : "transparent",
+                      border: i === 0 ? "1px solid rgba(212,175,55,0.1)" : "1px solid transparent",
+                    }}>
+                    <div className="flex items-center gap-2">
+                      {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
+                      <span className="font-dm text-sm text-[#FDFBF7] truncate">{c.nome}</span>
+                    </div>
+                    <span className="font-dm text-sm text-[#FDFBF7]/50 text-center">{c.total}</span>
+                    <span className="font-dm text-sm text-center" style={{ color: "#22c55e" }}>{c.conduzidos}</span>
+                    <span className="font-dm text-sm text-center" style={{ color: c.desmarcados > 0 ? "#8b5cf6" : "#FDFBF7", opacity: c.desmarcados > 0 ? 1 : 0.3 }}>{c.desmarcados}</span>
+                    <div className="flex items-center gap-3">
+                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
+                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${c.taxa}%`, background: taxaColor }} />
+                      </div>
+                      <span className="font-dm text-xs font-semibold w-10 text-right" style={{ color: taxaColor }}>{c.taxa}%</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           </div>
-          <div className="space-y-1">
+
+          {/* Mobile: cards empilhados */}
+          <div className="md:hidden space-y-3">
             {conductorStats.map((c, i) => {
               const taxaColor = c.taxa >= 80 ? "#22c55e" : c.taxa >= 50 ? "#f59e0b" : "#ef4444";
               return (
-                <div key={c.nome}
-                  className="grid gap-2 px-4 py-3 rounded-lg items-center hover:bg-white/[0.02]"
+                <div key={c.nome} className="rounded-lg px-4 py-3"
                   style={{
-                    gridTemplateColumns: "1fr 60px 72px 80px 1fr",
-                    background: i === 0 ? "rgba(212,175,55,0.04)" : "transparent",
-                    border: i === 0 ? "1px solid rgba(212,175,55,0.1)" : "1px solid transparent",
+                    background: i === 0 ? "rgba(212,175,55,0.04)" : "rgba(255,255,255,0.02)",
+                    border: i === 0 ? "1px solid rgba(212,175,55,0.1)" : "1px solid rgba(255,255,255,0.05)",
                   }}>
-                  <div className="flex items-center gap-2">
-                    {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
-                    <span className="font-dm text-sm text-[#FDFBF7] truncate">{c.nome}</span>
-                  </div>
-                  <span className="font-dm text-sm text-[#FDFBF7]/50 text-center">{c.total}</span>
-                  <span className="font-dm text-sm text-center" style={{ color: "#22c55e" }}>{c.conduzidos}</span>
-                  <span className="font-dm text-sm text-center" style={{ color: c.desmarcados > 0 ? "#8b5cf6" : "#FDFBF7", opacity: c.desmarcados > 0 ? 1 : 0.3 }}>{c.desmarcados}</span>
-                  <div className="flex items-center gap-3">
-                    <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                      <div className="h-full rounded-full transition-all duration-500" style={{ width: `${c.taxa}%`, background: taxaColor }} />
+                  <div className="flex items-center justify-between mb-2">
+                    <div className="flex items-center gap-2">
+                      {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
+                      <span className="font-dm text-sm text-[#FDFBF7] font-medium">{c.nome}</span>
                     </div>
-                    <span className="font-dm text-xs font-semibold w-10 text-right" style={{ color: taxaColor }}>{c.taxa}%</span>
+                    <span className="font-dm text-sm font-semibold" style={{ color: taxaColor }}>{c.taxa}%</span>
+                  </div>
+                  <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: "rgba(255,255,255,0.06)" }}>
+                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${c.taxa}%`, background: taxaColor }} />
+                  </div>
+                  <div className="flex gap-4">
+                    <span className="font-dm text-[11px] text-[#FDFBF7]/40">Alocados: <span className="text-[#FDFBF7]/60">{c.total}</span></span>
+                    <span className="font-dm text-[11px] text-[#FDFBF7]/40">Conduzidos: <span style={{ color: "#22c55e" }}>{c.conduzidos}</span></span>
+                    {c.desmarcados > 0 && (
+                      <span className="font-dm text-[11px] text-[#FDFBF7]/40">Desmarcados: <span style={{ color: "#8b5cf6" }}>{c.desmarcados}</span></span>
+                    )}
                   </div>
                 </div>
               );

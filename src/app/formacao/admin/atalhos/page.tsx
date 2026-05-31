@@ -256,7 +256,7 @@ export default function AtalhosPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div
-          className="rounded-[14px] p-12 text-center"
+          className="rounded-[14px] p-8 sm:p-12 text-center"
           style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
         >
           <LinkIcon className="h-10 w-10 mx-auto text-cream/20 mb-3" />
@@ -277,7 +277,7 @@ export default function AtalhosPage() {
               initial={{ opacity: 0, y: 4 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.02 }}
-              className="rounded-[12px] p-4 flex items-start gap-4 group"
+              className="rounded-[12px] p-4 flex flex-col sm:flex-row sm:items-start gap-3 group"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <div className="flex-1 min-w-0">
@@ -300,7 +300,7 @@ export default function AtalhosPage() {
                 </a>
               </div>
 
-              <div className="flex items-center gap-1 flex-shrink-0">
+              <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-auto">
                 <div className="text-right mr-2">
                   <div className="text-sm font-mono text-cream/80">{link.clicks}</div>
                   <div className="text-[10px] text-cream/40 uppercase tracking-wider">
@@ -374,7 +374,7 @@ export default function AtalhosPage() {
             value={newLabel}
             onChange={(e) => setNewLabel(e.target.value)}
           />
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
             <Button
               variant="ghost"
               onClick={() => {
@@ -427,7 +427,7 @@ export default function AtalhosPage() {
               {editTarget.clicks} {editTarget.clicks === 1 ? "clique" : "cliques"} acumulado{editTarget.clicks === 1 ? "" : "s"}.
             </p>
           )}
-          <div className="flex justify-end gap-2 pt-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2 pt-2">
             <Button variant="ghost" onClick={() => setEditTarget(null)}>
               Cancelar
             </Button>
@@ -449,7 +449,7 @@ export default function AtalhosPage() {
             Remover o atalho <span className="font-mono text-cream">/{deleteTarget?.slug}</span>?
             O link <span className="font-mono text-cream/60">{APP_URL.replace(/^https?:\/\//, "")}/formacao/{deleteTarget?.slug}</span> deixará de funcionar.
           </p>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
               Cancelar
             </Button>
