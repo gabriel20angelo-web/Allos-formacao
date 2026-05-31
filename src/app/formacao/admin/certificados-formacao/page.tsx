@@ -211,7 +211,7 @@ export default function AdminCertificadosFormacaoPage() {
         initial={{ opacity: 0, y: 8 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="flex gap-3"
+        className="flex flex-col sm:flex-row gap-3"
       >
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-zinc-500" />
@@ -305,8 +305,8 @@ export default function AdminCertificadosFormacaoPage() {
               </p>
             </div>
 
-            {/* Breakdown table */}
-            <div className="overflow-hidden rounded-lg border border-zinc-700/50">
+            {/* Breakdown table — desktop */}
+            <div className="hidden md:block overflow-hidden rounded-lg border border-zinc-700/50">
               <table className="w-full text-left font-dm text-sm">
                 <thead className="border-b border-zinc-700/50 bg-zinc-800/60">
                   <tr>
@@ -331,6 +331,42 @@ export default function AdminCertificadosFormacaoPage() {
                   ))}
                 </tbody>
               </table>
+            </div>
+
+            {/* Breakdown cards — mobile */}
+            <div className="md:hidden space-y-3">
+              {Object.entries(breakdown).map(([activityName, info]) => (
+                <div
+                  key={activityName}
+                  className="rounded-[14px] p-3.5"
+                  style={{
+                    background: "rgba(255,255,255,0.03)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <p className="font-dm text-sm font-medium text-zinc-200 mb-2">
+                    {activityName}
+                  </p>
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 font-dm text-xs text-zinc-400">
+                    <span>
+                      <span className="text-zinc-500">Presenças: </span>
+                      <span className="text-zinc-300">{info.count}</span>
+                    </span>
+                    <span>
+                      <span className="text-zinc-500">Horas: </span>
+                      <span className="text-zinc-300">{info.horas}h</span>
+                    </span>
+                    <span>
+                      <span className="text-zinc-500">Período: </span>
+                      <span className="text-zinc-400">
+                        {info.dataInicio === info.dataFim
+                          ? info.dataInicio
+                          : `${info.dataInicio} a ${info.dataFim}`}
+                      </span>
+                    </span>
+                  </div>
+                </div>
+              ))}
             </div>
 
             {/* Actions */}

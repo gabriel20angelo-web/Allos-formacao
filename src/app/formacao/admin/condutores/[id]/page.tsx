@@ -146,7 +146,7 @@ export default function CondutorDetailPage() {
     return (
       <div className="space-y-4">
         <Skeleton className="h-10 w-64 rounded-lg" />
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-28 rounded-xl" />)}
         </div>
         <Skeleton className="h-64 rounded-xl" />
@@ -200,7 +200,7 @@ export default function CondutorDetailPage() {
       </div>
 
       {condutor.observacoes && (
-        <p className="text-sm text-[#FDFBF7]/50 font-dm pl-14">{condutor.observacoes}</p>
+        <p className="text-sm text-[#FDFBF7]/50 font-dm pl-0 sm:pl-14">{condutor.observacoes}</p>
       )}
 
       {/* Stats cards */}
@@ -243,18 +243,18 @@ export default function CondutorDetailPage() {
             <Users size={16} style={{ color: "#6c5ce7" }} />
             <h2 className="text-sm font-fraunces font-semibold text-[#FDFBF7]">Quórum do Meet</h2>
           </div>
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-3 sm:grid-cols-3 gap-4">
             <div className="text-center">
               <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.count}</p>
-              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Grupos registrados</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Grupos</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.media.toFixed(1)}</p>
-              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Média de participantes</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Média</p>
             </div>
             <div className="text-center">
               <p className="text-2xl font-fraunces font-bold text-[#FDFBF7]">{quorumData.pico}</p>
-              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Pico máximo</p>
+              <p className="text-[10px] text-[#FDFBF7]/35 font-dm">Pico</p>
             </div>
           </div>
           {Object.keys(quorumData.porAtividade).length > 1 && (
@@ -323,9 +323,9 @@ export default function CondutorDetailPage() {
                           <div className="pt-3" />
                           {a.feedbacks.map((f, i) => (
                             <div key={i} className="p-3 rounded-lg" style={{ background: "rgba(255,255,255,0.02)" }}>
-                              <div className="flex items-center justify-between mb-1">
+                              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1 mb-1">
                                 <span className="text-xs font-medium text-[#FDFBF7]/70 font-dm">{f.nome_completo}</span>
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <span className="text-xs font-dm">
                                     <span className="text-[#FDFBF7]/30">condutor </span>
                                     <span className="text-[#C84B31] font-bold">{f.nota_condutor}/10</span>
@@ -372,12 +372,12 @@ export default function CondutorDetailPage() {
                 className="p-4 rounded-xl"
                 style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
               >
-                <div className="flex items-start justify-between mb-2">
-                  <div>
+                <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 mb-2">
+                  <div className="min-w-0">
                     <p className="text-sm font-medium text-[#FDFBF7] font-dm">{s.nome_completo}</p>
                     <p className="text-xs text-[#FDFBF7]/40 font-dm">{s.atividade_nome}</p>
                   </div>
-                  <div className="flex items-center gap-3 text-right">
+                  <div className="flex items-center gap-3 flex-shrink-0">
                     <div>
                       <p className="text-xs text-[#FDFBF7]/30 font-dm">Condutor</p>
                       <p className="text-sm font-bold text-[#C84B31] font-dm">{s.nota_condutor}</p>

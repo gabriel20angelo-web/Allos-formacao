@@ -410,9 +410,9 @@ export default function AprimoramentoAdminPage() {
         )}
       </div>
 
-      {/* Tabela */}
+      {/* Tabela — visível só em md+ */}
       <div
-        className="rounded-xl overflow-hidden"
+        className="hidden md:block rounded-xl overflow-hidden"
         style={{
           background: "rgba(255,255,255,0.02)",
           border: "1px solid rgba(255,255,255,0.07)",
@@ -478,6 +478,183 @@ export default function AprimoramentoAdminPage() {
               onDelete={() => setDeleteTarget(row)}
             />
           ))
+        )}
+      </div>
+
+      {/* Cards — visíveis só em mobile (< md) */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="p-8 text-center text-cream/40 font-dm text-sm">
+            <Loader2 className="animate-spin inline mr-2" width={14} height={14} />
+            Carregando exercícios…
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="p-12 text-center font-dm text-sm text-cream/40">
+            Nenhum exercício corresponde aos filtros.
+          </div>
+        ) : (
+          sorted.map((row) => {
+            const cat = CATEGORIES[row.category];
+            const curado = isCurated(row);
+            const arquivado = row.status === "arquivado";
+            const busy = busyId === row.id;
+            return (
+              <div
+                key={row.id}
+                className="rounded-[14px] p-3.5"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {/* Topo: número + título */}
+                <div className="flex items-start gap-2 mb-2">
+                  <span className="font-fraunces text-sm text-cream/50 shrink-0 mt-0.5">
+                    #{row.number}
+                  </span>
+                  <div className="min-w-0 flex-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        router.push(
+                          `/formacao/admin/associados/aprimoramento/${row.id}/editar`,
+                        )
+                      }
+                      className="font-fraunces text-sm text-cream hover:text-accent transition-colors text-left line-clamp-2 w-full"
+                    >
+                      {row.title}
+                    </button>
+                    <p className="font-dm text-[10.5px] text-cream/35 truncate mt-0.5">
+                      {row.slug}
+                    </p>
+                  </div>
+                </div>
+
+                {/* Meta: categoria + status + curado */}
+                <div className="flex flex-wrap gap-1.5 mb-3">
+                  <span
+                    className="font-dm text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md"
+                    style={{
+                      color: cat.color,
+                      background: cat.tint,
+                      border: `1px solid ${cat.border}`,
+                    }}
+                  >
+                    {cat.label}
+                  </span>
+                  <Badge
+                    label={
+                      row.status === "publicado"
+                        ? "Publicado"
+                        : row.status === "rascunho"
+                          ? "Rascunho"
+                          : "Arquivado"
+                    }
+                    color={
+                      row.status === "publicado"
+                        ? "#34D399"
+                        : row.status === "rascunho"
+                          ? "#D4854A"
+                          : "#9CA3AF"
+                    }
+                  />
+                  {!curado && <Badge label="Não-curado" color="#D4854A" />}
+                  <span className="font-dm text-[10px] text-cream/35 self-center ml-auto">
+                    {formatDistanceToNow(new Date(row.updatedAt), {
+                      addSuffix: true,
+                      locale: ptBR,
+                    })}
+                  </span>
+                </div>
+
+                {/* Ações rotuladas */}
+                <div className="flex flex-wrap gap-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      router.push(
+                        `/formacao/admin/associados/aprimoramento/${row.id}/editar`,
+                      )
+                    }
+                    disabled={busy}
+                    className="font-dm text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors disabled:opacity-30"
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      color: "rgba(253,251,247,0.75)",
+                    }}
+                  >
+                    <Edit width={12} height={12} aria-hidden="true" />
+                    Editar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => window.open(`/formacao/aprimoramento-dinamicas/${row.slug}`, "_blank")}
+                    className="font-dm text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors"
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      color: "rgba(253,251,247,0.75)",
+                    }}
+                  >
+                    <ExternalLink width={12} height={12} aria-hidden="true" />
+                    Ver
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetCurado(row, !curado)}
+                    disabled={busy}
+                    className="font-dm text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors disabled:opacity-30"
+                    style={{
+                      background: curado ? "rgba(245,158,11,0.10)" : "rgba(255,255,255,0.05)",
+                      border: `1px solid ${curado ? "rgba(245,158,11,0.25)" : "rgba(255,255,255,0.09)"}`,
+                      color: curado ? "#F59E0B" : "rgba(253,251,247,0.75)",
+                    }}
+                  >
+                    <Star
+                      width={12}
+                      height={12}
+                      aria-hidden="true"
+                      fill={curado ? "currentColor" : "none"}
+                    />
+                    {curado ? "Curado" : "Curar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => handleSetStatus(row, arquivado ? "publicado" : "arquivado")}
+                    disabled={busy}
+                    className="font-dm text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors disabled:opacity-30"
+                    style={{
+                      background: "rgba(255,255,255,0.05)",
+                      border: "1px solid rgba(255,255,255,0.09)",
+                      color: "rgba(253,251,247,0.75)",
+                    }}
+                  >
+                    {arquivado ? (
+                      <ArchiveRestore width={12} height={12} aria-hidden="true" />
+                    ) : (
+                      <Archive width={12} height={12} aria-hidden="true" />
+                    )}
+                    {arquivado ? "Desarquivar" : "Arquivar"}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(row)}
+                    disabled={busy}
+                    className="font-dm text-xs px-3 py-2 rounded-lg inline-flex items-center gap-1.5 transition-colors disabled:opacity-30"
+                    style={{
+                      background: "rgba(248,113,113,0.06)",
+                      border: "1px solid rgba(248,113,113,0.15)",
+                      color: "rgba(248,113,113,0.80)",
+                    }}
+                  >
+                    <Trash2 width={12} height={12} aria-hidden="true" />
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 

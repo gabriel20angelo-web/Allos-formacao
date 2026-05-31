@@ -1222,7 +1222,7 @@ export default function AdminDashboard() {
         initial={{ opacity: 0, y: -6 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1, duration: 0.3 }}
-        className="flex gap-2 mb-8"
+        className="flex flex-wrap gap-2 mb-8"
       >
         {(
           [

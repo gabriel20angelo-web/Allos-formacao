@@ -118,7 +118,7 @@ export default function AdminNotesSection({ userId }: Props) {
         </div>
 
         {/* Add new note */}
-        <div className="flex gap-2 mb-4">
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
           <textarea
             value={newNoteText}
             onChange={(e) => setNewNoteText(e.target.value)}
@@ -133,7 +133,7 @@ export default function AdminNotesSection({ userId }: Props) {
           <button
             onClick={addNote}
             disabled={!newNoteText.trim()}
-            className="self-end flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-[8px] transition-all disabled:opacity-30 bg-accent-soft text-accent"
+            className="self-end sm:self-end flex items-center justify-center gap-1.5 font-dm text-xs px-3 py-2 rounded-[8px] transition-all disabled:opacity-30 bg-accent-soft text-accent"
           >
             <Plus className="h-3.5 w-3.5" />
             Adicionar
@@ -210,7 +210,7 @@ export default function AdminNotesSection({ userId }: Props) {
                           minute: "2-digit",
                         })}
                       </p>
-                      <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                      <div className="flex gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
                         <button
                           onClick={() => {
                             setEditingNoteId(note.id);

@@ -82,7 +82,7 @@ export default function AssociadosIndexPage() {
 
   return (
     <div className="max-w-5xl">
-      <header className="mb-8">
+      <header className="mb-6 sm:mb-8">
         <p className="font-dm text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-2">
           Painel admin
         </p>

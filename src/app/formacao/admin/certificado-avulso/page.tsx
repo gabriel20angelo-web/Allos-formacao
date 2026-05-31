@@ -269,7 +269,7 @@ export default function CertificadoAvulsoPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-2 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-dm text-cream/50 mb-1.5">Carga horaria</label>
                   <input
@@ -325,7 +325,7 @@ export default function CertificadoAvulsoPage() {
                 </p>
               </div>
 
-              <div className="flex gap-2 pt-2">
+              <div className="flex flex-wrap gap-2 pt-2">
                 <button
                   onClick={preview}
                   className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-dm font-semibold transition-all"

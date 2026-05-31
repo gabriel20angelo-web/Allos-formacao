@@ -242,7 +242,7 @@ export default function ModeracaoPage() {
         initial={{ opacity: 0, y: -5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.05 }}
-        className="flex flex-wrap items-center gap-3 mb-6 px-4 py-3 rounded-[12px]"
+        className="flex flex-wrap items-center gap-x-3 gap-y-2 mb-6 px-4 py-3 rounded-[12px]"
         style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         <div className="flex items-center gap-2">
@@ -251,11 +251,11 @@ export default function ModeracaoPage() {
             <span className="text-cream font-semibold">{reviews.length}</span> avaliações
           </span>
         </div>
-        <span className="text-cream/15">·</span>
+        <span className="text-cream/15 hidden sm:inline">·</span>
         <span className="text-sm text-cream/60">
           Rating médio: <span className="text-cream font-semibold">{averageRating.toFixed(1)}</span>
         </span>
-        <span className="text-cream/15">·</span>
+        <span className="text-cream/15 hidden sm:inline">·</span>
         <div className="flex items-center gap-2">
           <MessageSquare className="h-4 w-4 text-accent" />
           <span className="text-sm text-cream/60">
@@ -269,10 +269,10 @@ export default function ModeracaoPage() {
         initial={{ opacity: 0, y: -5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex flex-wrap items-center gap-3 mb-6"
+        className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center gap-3 mb-6"
       >
         {/* Search */}
-        <div className="relative flex-1 min-w-[180px] max-w-xs">
+        <div className="relative w-full sm:flex-1 sm:min-w-[180px] sm:max-w-xs">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
           <input
             type="text"
@@ -284,11 +284,11 @@ export default function ModeracaoPage() {
         </div>
 
         {/* Course filter */}
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <select
             value={selectedCourseId}
             onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2 rounded-[10px] text-sm text-cream bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/40"
+            className="appearance-none w-full sm:w-auto pl-4 pr-9 py-2 rounded-[10px] text-sm text-cream bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/40"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             <option value="all" className="bg-[#1a1a1a] text-cream">Todos os cursos</option>
@@ -304,7 +304,7 @@ export default function ModeracaoPage() {
         {/* Rating filter (reviews tab only) */}
         {tab === "reviews" && (
           <div
-            className="flex gap-0.5 p-1 rounded-[10px]"
+            className="flex flex-wrap gap-0.5 p-1 rounded-[10px]"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             {([
@@ -338,27 +338,27 @@ export default function ModeracaoPage() {
       <div className="flex gap-1 mb-6 rounded-[12px] p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
         <button
           onClick={() => setTab("reviews")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-[10px] transition-all duration-200 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs sm:text-sm font-medium rounded-[10px] transition-all duration-200 ${
             tab === "reviews" ? "text-white font-semibold" : "text-cream/40 hover:text-cream/70"
           }`}
           style={tab === "reviews" ? { background: "linear-gradient(135deg, #C84B31, #A33D27)" } : {}}
         >
-          <Star className="h-4 w-4" />
-          Avaliações ({filteredReviews.length})
+          <Star className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">Aval. ({filteredReviews.length})</span>
         </button>
         <button
           onClick={() => setTab("comments")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-[10px] transition-all duration-200 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs sm:text-sm font-medium rounded-[10px] transition-all duration-200 ${
             tab === "comments" ? "text-white font-semibold" : "text-cream/40 hover:text-cream/70"
           }`}
           style={tab === "comments" ? { background: "linear-gradient(135deg, #C84B31, #A33D27)" } : {}}
         >
-          <MessageSquare className="h-4 w-4" />
-          Comentários ({filteredComments.length})
+          <MessageSquare className="h-4 w-4 flex-shrink-0" />
+          <span className="truncate">Coment. ({filteredComments.length})</span>
         </button>
         <button
           onClick={() => setTab("duvidas")}
-          className={`flex-1 flex items-center justify-center gap-2 py-2.5 text-sm font-medium rounded-[10px] transition-all duration-200 ${
+          className={`flex-1 flex items-center justify-center gap-1.5 py-2.5 text-xs sm:text-sm font-medium rounded-[10px] transition-all duration-200 ${
             tab === "duvidas" ? "text-white font-semibold" : "text-cream/40 hover:text-cream/70"
           }`}
           style={tab === "duvidas" ? { background: "linear-gradient(135deg, #C84B31, #A33D27)" } : {}}
@@ -396,7 +396,7 @@ export default function ModeracaoPage() {
                   )}
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1">
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                     <span className="text-sm font-medium text-cream">{review.user?.full_name || "Anônimo"}</span>
                     <ReviewStars value={review.rating} size="sm" />
                     <span className="text-xs text-cream/25">{formatRelativeDate(review.created_at)}</span>
@@ -408,7 +408,7 @@ export default function ModeracaoPage() {
                 </div>
                 <button
                   onClick={() => setDeleteTarget({ type: "reviews", id: review.id, label: `avaliação de ${review.user?.full_name || "Anônimo"}` })}
-                  className="p-2 rounded-lg text-cream/20 hover:text-red-400 hover:bg-red-400/10 transition-all self-start flex-shrink-0"
+                  className="p-2 rounded-lg text-cream/20 hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100 self-start flex-shrink-0"
                   aria-label="Excluir avaliação"
                 >
                   <Trash2 className="h-4 w-4" />
@@ -449,7 +449,7 @@ export default function ModeracaoPage() {
                     )}
                   </div>
                   <div className="flex-1 min-w-0">
-                    <div className="flex items-center gap-2 mb-1">
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mb-1">
                       <span className="text-sm font-medium text-cream">{comment.user?.full_name || "Anônimo"}</span>
                       <span className="text-xs text-cream/25">{formatRelativeDate(comment.created_at)}</span>
                     </div>
@@ -475,7 +475,7 @@ export default function ModeracaoPage() {
                   </div>
                   <button
                     onClick={() => setDeleteTarget({ type: "comments", id: comment.id, label: `comentário de ${comment.user?.full_name || "Anônimo"}` })}
-                    className="p-2 rounded-lg text-cream/20 hover:text-red-400 hover:bg-red-400/10 transition-all self-start flex-shrink-0"
+                    className="p-2 rounded-lg text-cream/20 hover:text-red-400 hover:bg-red-400/10 transition-all opacity-100 self-start flex-shrink-0"
                     aria-label="Excluir comentário"
                   >
                     <Trash2 className="h-4 w-4" />
@@ -544,7 +544,7 @@ export default function ModeracaoPage() {
                 Tem certeza que deseja excluir a {deleteTarget.label}? Esta ação não pode ser desfeita.
               </p>
             </div>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
               <Button variant="danger" loading={deleting} onClick={handleDelete}>Excluir</Button>
             </div>

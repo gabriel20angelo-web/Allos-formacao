@@ -335,11 +335,11 @@ export default function AdminEnviosPage() {
       className="space-y-6"
     >
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
         <h1 className="text-2xl font-fraunces font-semibold text-[#FDFBF7]">
           Envios de Feedback
         </h1>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <input
             ref={fileInputRef}
             type="file"
@@ -409,7 +409,7 @@ export default function AdminEnviosPage() {
           <select
             value={atividadeFilter}
             onChange={(e) => setAtividadeFilter(e.target.value)}
-            className={`${inputStyle} min-w-[180px]`}
+            className={`${inputStyle} w-full sm:min-w-[180px] sm:w-auto`}
           >
             <option value="all">Todas as atividades</option>
             {atividades.map((a) => (
@@ -419,27 +419,31 @@ export default function AdminEnviosPage() {
             ))}
           </select>
 
-          <div className="flex items-center gap-2">
-            <Calendar size={14} className="text-[#FDFBF7]/30" />
-            <input
-              type="date"
-              value={dateFrom}
-              onChange={(e) => {
-                setDateFrom(e.target.value);
-                setTimeFilter("all");
-              }}
-              className={`${inputStyle} w-[140px]`}
-            />
-            <span className="text-[#FDFBF7]/30 text-xs">ate</span>
-            <input
-              type="date"
-              value={dateTo}
-              onChange={(e) => {
-                setDateTo(e.target.value);
-                setTimeFilter("all");
-              }}
-              className={`${inputStyle} w-[140px]`}
-            />
+          <div className="flex flex-col sm:flex-row sm:items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-2">
+              <Calendar size={14} className="text-[#FDFBF7]/30 flex-shrink-0" />
+              <input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => {
+                  setDateFrom(e.target.value);
+                  setTimeFilter("all");
+                }}
+                className={`${inputStyle} w-full sm:w-[140px]`}
+              />
+            </div>
+            <div className="flex items-center gap-2">
+              <span className="text-[#FDFBF7]/30 text-xs">ate</span>
+              <input
+                type="date"
+                value={dateTo}
+                onChange={(e) => {
+                  setDateTo(e.target.value);
+                  setTimeFilter("all");
+                }}
+                className={`${inputStyle} w-full sm:w-[140px]`}
+              />
+            </div>
           </div>
         </div>
 
@@ -477,43 +481,207 @@ export default function AdminEnviosPage() {
           <p>Nenhum envio encontrado</p>
         </div>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-[rgba(255,255,255,0.06)]">
-          <table className="w-full text-sm font-dm">
-            <thead>
-              <tr className="border-b border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)]">
-                <th className="px-3 py-3 text-left">
-                  <button onClick={toggleSelectAll} className="text-[#FDFBF7]/50 hover:text-[#FDFBF7]">
-                    {allSelected ? <CheckSquare size={16} /> : <Square size={16} />}
-                  </button>
-                </th>
-                <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Nome</th>
-                <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Email</th>
-                <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Atividade</th>
-                <th className="px-3 py-3 text-center text-[#FDFBF7]/50 font-medium">Nota Grupo</th>
-                <th className="px-3 py-3 text-center text-[#FDFBF7]/50 font-medium">Nota Condutor</th>
-                <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Data</th>
-                <th className="px-3 py-3" />
-              </tr>
-            </thead>
-            <tbody>
-              <AnimatePresence mode="popLayout">
-                {filtered.map((s) => {
-                  const isExpanded = expandedId === s.id;
-                  const atv = atividades.find(a => a.nome === s.atividade_nome);
-                  const ch = atv?.carga_horaria || 2;
-                  return (
-                    <motion.tr
-                      key={s.id}
-                      layout
-                      initial={{ opacity: 0 }}
-                      animate={{ opacity: 1 }}
-                      exit={{ opacity: 0 }}
-                      className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)] transition-colors align-top"
-                    >
-                      <td className="px-3 py-2.5">
+        <>
+          {/* Desktop table */}
+          <div className="hidden md:block overflow-x-auto rounded-xl border border-[rgba(255,255,255,0.06)]">
+            <table className="w-full text-sm font-dm">
+              <thead>
+                <tr className="border-b border-[rgba(255,255,255,0.06)] bg-[rgba(255,255,255,0.03)]">
+                  <th className="px-3 py-3 text-left">
+                    <button onClick={toggleSelectAll} className="text-[#FDFBF7]/50 hover:text-[#FDFBF7]">
+                      {allSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+                    </button>
+                  </th>
+                  <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Nome</th>
+                  <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Email</th>
+                  <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Atividade</th>
+                  <th className="px-3 py-3 text-center text-[#FDFBF7]/50 font-medium">Nota Grupo</th>
+                  <th className="px-3 py-3 text-center text-[#FDFBF7]/50 font-medium">Nota Condutor</th>
+                  <th className="px-3 py-3 text-left text-[#FDFBF7]/50 font-medium">Data</th>
+                  <th className="px-3 py-3" />
+                </tr>
+              </thead>
+              <tbody>
+                <AnimatePresence mode="popLayout">
+                  {filtered.map((s) => {
+                    const isExpanded = expandedId === s.id;
+                    const atv = atividades.find(a => a.nome === s.atividade_nome);
+                    const ch = atv?.carga_horaria || 2;
+                    return (
+                      <motion.tr
+                        key={s.id}
+                        layout
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        exit={{ opacity: 0 }}
+                        className="border-b border-[rgba(255,255,255,0.04)] hover:bg-[rgba(255,255,255,0.02)] transition-colors align-top"
+                      >
+                        <td className="px-3 py-2.5">
+                          <button
+                            onClick={() => toggleSelect(s.id)}
+                            className="text-[#FDFBF7]/50 hover:text-[#FDFBF7]"
+                          >
+                            {selected.has(s.id) ? (
+                              <CheckSquare size={16} className="text-[#C84B31]" />
+                            ) : (
+                              <Square size={16} />
+                            )}
+                          </button>
+                        </td>
+                        <td className="px-3 py-2.5 text-[#FDFBF7]">{s.nome_completo}</td>
+                        <td className="px-3 py-2.5 text-[#FDFBF7]/60">{s.email}</td>
+                        <td className="px-3 py-2.5 text-[#FDFBF7]/70">{s.atividade_nome}</td>
+                        <td className="px-3 py-2.5 text-center text-[#FDFBF7]/70">{s.nota_grupo}</td>
+                        <td className="px-3 py-2.5 text-center text-[#FDFBF7]/70">{s.nota_condutor}</td>
+                        <td className="px-3 py-2.5 text-[#FDFBF7]/50">
+                          {new Date(s.created_at).toLocaleDateString("pt-BR")}
+                        </td>
+                        <td className="px-3 py-2.5">
+                          <div className="flex items-center gap-1">
+                            <button
+                              onClick={() => setExpandedId(isExpanded ? null : s.id)}
+                              className="text-[#FDFBF7]/30 hover:text-[#FDFBF7]/70 transition-colors"
+                              title="Ver detalhes"
+                            >
+                              <ChevronDown size={15} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                            </button>
+                            <button
+                              onClick={() => setDeleteId(s.id)}
+                              className="text-[#FDFBF7]/30 hover:text-red-400 transition-colors"
+                            >
+                              <Trash2 size={15} />
+                            </button>
+                          </div>
+                          {/* Expanded detail panel */}
+                          <AnimatePresence>
+                            {isExpanded && (
+                              <motion.div
+                                initial={{ opacity: 0, height: 0 }}
+                                animate={{ opacity: 1, height: "auto" }}
+                                exit={{ opacity: 0, height: 0 }}
+                                className="col-span-8 mt-3 -mx-3"
+                                style={{ width: "calc(100% + 1.5rem)" }}
+                              >
+                                <div className="p-4 rounded-xl space-y-4" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                                  {/* Condutores */}
+                                  {s.condutores && s.condutores.length > 0 && (
+                                    <div className="flex items-start gap-2">
+                                      <Users size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
+                                      <div>
+                                        <p className="text-xs text-[#FDFBF7]/40 mb-1">Condutores</p>
+                                        <div className="flex flex-wrap gap-1.5">
+                                          {s.condutores.map((c) => (
+                                            <span key={c} className="text-xs px-2 py-0.5 rounded-full text-[#FDFBF7]/70" style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.15)" }}>
+                                              {c}
+                                            </span>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Notas */}
+                                  <div className="flex items-start gap-2">
+                                    <Star size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
+                                    <div className="flex gap-4">
+                                      <div>
+                                        <p className="text-xs text-[#FDFBF7]/40">Nota Grupo</p>
+                                        <p className="text-sm text-[#FDFBF7] font-medium">{s.nota_grupo}/10</p>
+                                      </div>
+                                      <div>
+                                        <p className="text-xs text-[#FDFBF7]/40">Nota Condutor</p>
+                                        <p className="text-sm text-[#FDFBF7] font-medium">{s.nota_condutor}/10</p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Relato */}
+                                  {s.relato && (
+                                    <div className="flex items-start gap-2">
+                                      <MessageSquare size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
+                                      <div>
+                                        <p className="text-xs text-[#FDFBF7]/40 mb-1">Relato</p>
+                                        <p className="text-sm text-[#FDFBF7]/70 leading-relaxed">{s.relato}</p>
+                                      </div>
+                                    </div>
+                                  )}
+
+                                  {/* Certificado */}
+                                  <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                                    {showCertFor === s.id ? (
+                                      <div className="space-y-3">
+                                        <div className="flex items-center justify-between">
+                                          <p className="text-xs text-[#FDFBF7]/40">Certificado de Participação</p>
+                                          <button
+                                            onClick={() => setShowCertFor(null)}
+                                            className="text-xs text-[#FDFBF7]/30 hover:text-[#FDFBF7]/60"
+                                          >
+                                            Fechar preview
+                                          </button>
+                                        </div>
+                                        <CertificateGenerator
+                                          data={{
+                                            nomeParticipante: s.nome_social || s.nome_completo,
+                                            atividade: s.atividade_nome,
+                                            data: s.created_at.split("T")[0],
+                                            cargaHoraria: ch,
+                                            cargaHorariaExtenso: horasExtenso(ch),
+                                          }}
+                                        />
+                                      </div>
+                                    ) : (
+                                      <button
+                                        onClick={() => setShowCertFor(s.id)}
+                                        className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium"
+                                      >
+                                        <Download size={14} />
+                                        Gerar e baixar certificado
+                                      </button>
+                                    )}
+                                  </div>
+                                </div>
+                              </motion.div>
+                            )}
+                          </AnimatePresence>
+                        </td>
+                      </motion.tr>
+                    );
+                  })}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+
+          {/* Mobile cards */}
+          <div className="md:hidden space-y-3">
+            {/* Select all row */}
+            <div className="flex items-center gap-2 px-1">
+              <button onClick={toggleSelectAll} className="text-[#FDFBF7]/50 hover:text-[#FDFBF7]">
+                {allSelected ? <CheckSquare size={16} /> : <Square size={16} />}
+              </button>
+              <span className="text-xs font-dm text-[#FDFBF7]/40">Selecionar todos</span>
+            </div>
+            <AnimatePresence mode="popLayout">
+              {filtered.map((s) => {
+                const isExpanded = expandedId === s.id;
+                const atv = atividades.find(a => a.nome === s.atividade_nome);
+                const ch = atv?.carga_horaria || 2;
+                return (
+                  <motion.div
+                    key={s.id}
+                    layout
+                    initial={{ opacity: 0 }}
+                    animate={{ opacity: 1 }}
+                    exit={{ opacity: 0 }}
+                    className="rounded-[14px] p-3.5 font-dm"
+                    style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                  >
+                    {/* Card header */}
+                    <div className="flex items-start justify-between gap-2 mb-2">
+                      <div className="flex items-start gap-2 min-w-0">
                         <button
                           onClick={() => toggleSelect(s.id)}
-                          className="text-[#FDFBF7]/50 hover:text-[#FDFBF7]"
+                          className="text-[#FDFBF7]/50 mt-0.5 flex-shrink-0"
                         >
                           {selected.has(s.id) ? (
                             <CheckSquare size={16} className="text-[#C84B31]" />
@@ -521,130 +689,128 @@ export default function AdminEnviosPage() {
                             <Square size={16} />
                           )}
                         </button>
-                      </td>
-                      <td className="px-3 py-2.5 text-[#FDFBF7]">{s.nome_completo}</td>
-                      <td className="px-3 py-2.5 text-[#FDFBF7]/60">{s.email}</td>
-                      <td className="px-3 py-2.5 text-[#FDFBF7]/70">{s.atividade_nome}</td>
-                      <td className="px-3 py-2.5 text-center text-[#FDFBF7]/70">{s.nota_grupo}</td>
-                      <td className="px-3 py-2.5 text-center text-[#FDFBF7]/70">{s.nota_condutor}</td>
-                      <td className="px-3 py-2.5 text-[#FDFBF7]/50">
-                        {new Date(s.created_at).toLocaleDateString("pt-BR")}
-                      </td>
-                      <td className="px-3 py-2.5">
-                        <div className="flex items-center gap-1">
-                          <button
-                            onClick={() => setExpandedId(isExpanded ? null : s.id)}
-                            className="text-[#FDFBF7]/30 hover:text-[#FDFBF7]/70 transition-colors"
-                            title="Ver detalhes"
-                          >
-                            <ChevronDown size={15} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />
-                          </button>
-                          <button
-                            onClick={() => setDeleteId(s.id)}
-                            className="text-[#FDFBF7]/30 hover:text-red-400 transition-colors"
-                          >
-                            <Trash2 size={15} />
-                          </button>
+                        <div className="min-w-0">
+                          <p className="text-sm text-[#FDFBF7] font-medium truncate">{s.nome_completo}</p>
+                          <p className="text-xs text-[#FDFBF7]/50 truncate">{s.email}</p>
                         </div>
-                        {/* Expanded detail panel */}
-                        <AnimatePresence>
-                          {isExpanded && (
-                            <motion.div
-                              initial={{ opacity: 0, height: 0 }}
-                              animate={{ opacity: 1, height: "auto" }}
-                              exit={{ opacity: 0, height: 0 }}
-                              className="col-span-8 mt-3 -mx-3"
-                              style={{ width: "calc(100% + 1.5rem)" }}
-                            >
-                              <div className="p-4 rounded-xl space-y-4" style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                                {/* Condutores */}
-                                {s.condutores && s.condutores.length > 0 && (
-                                  <div className="flex items-start gap-2">
-                                    <Users size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
-                                    <div>
-                                      <p className="text-xs text-[#FDFBF7]/40 mb-1">Condutores</p>
-                                      <div className="flex flex-wrap gap-1.5">
-                                        {s.condutores.map((c) => (
-                                          <span key={c} className="text-xs px-2 py-0.5 rounded-full text-[#FDFBF7]/70" style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.15)" }}>
-                                            {c}
-                                          </span>
-                                        ))}
-                                      </div>
-                                    </div>
-                                  </div>
-                                )}
+                      </div>
+                      <span className="text-xs text-[#FDFBF7]/40 flex-shrink-0">
+                        {new Date(s.created_at).toLocaleDateString("pt-BR")}
+                      </span>
+                    </div>
 
-                                {/* Notas */}
-                                <div className="flex items-start gap-2">
-                                  <Star size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
-                                  <div className="flex gap-4">
-                                    <div>
-                                      <p className="text-xs text-[#FDFBF7]/40">Nota Grupo</p>
-                                      <p className="text-sm text-[#FDFBF7] font-medium">{s.nota_grupo}/10</p>
-                                    </div>
-                                    <div>
-                                      <p className="text-xs text-[#FDFBF7]/40">Nota Condutor</p>
-                                      <p className="text-sm text-[#FDFBF7] font-medium">{s.nota_condutor}/10</p>
-                                    </div>
-                                  </div>
-                                </div>
+                    {/* Atividade + notas */}
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 mb-3">
+                      <span className="text-xs text-[#FDFBF7]/60">{s.atividade_nome}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs text-[#FDFBF7]/40">Grupo:</span>
+                        <span className="text-xs text-[#FDFBF7]/80 font-medium">{s.nota_grupo}/10</span>
+                        <span className="text-xs text-[#FDFBF7]/40">Condutor:</span>
+                        <span className="text-xs text-[#FDFBF7]/80 font-medium">{s.nota_condutor}/10</span>
+                      </div>
+                    </div>
 
-                                {/* Relato */}
-                                {s.relato && (
-                                  <div className="flex items-start gap-2">
-                                    <MessageSquare size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
-                                    <div>
-                                      <p className="text-xs text-[#FDFBF7]/40 mb-1">Relato</p>
-                                      <p className="text-sm text-[#FDFBF7]/70 leading-relaxed">{s.relato}</p>
-                                    </div>
-                                  </div>
-                                )}
+                    {/* Action buttons */}
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setExpandedId(isExpanded ? null : s.id)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg text-[#FDFBF7]/70"
+                        style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.08)" }}
+                      >
+                        <ChevronDown size={14} className={`transition-transform ${isExpanded ? "rotate-180" : ""}`} />
+                        {isExpanded ? "Fechar" : "Detalhes"}
+                      </button>
+                      <button
+                        onClick={() => setDeleteId(s.id)}
+                        className="flex items-center gap-1.5 px-3 py-2 text-xs rounded-lg text-red-400"
+                        style={{ background: "rgba(239,68,68,0.08)", border: "1px solid rgba(239,68,68,0.15)" }}
+                      >
+                        <Trash2 size={14} />
+                        Excluir
+                      </button>
+                    </div>
 
-                                {/* Certificado */}
-                                <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
-                                  {showCertFor === s.id ? (
-                                    <div className="space-y-3">
-                                      <div className="flex items-center justify-between">
-                                        <p className="text-xs text-[#FDFBF7]/40">Certificado de Participação</p>
-                                        <button
-                                          onClick={() => setShowCertFor(null)}
-                                          className="text-xs text-[#FDFBF7]/30 hover:text-[#FDFBF7]/60"
-                                        >
-                                          Fechar preview
-                                        </button>
-                                      </div>
-                                      <CertificateGenerator
-                                        data={{
-                                          nomeParticipante: s.nome_social || s.nome_completo,
-                                          atividade: s.atividade_nome,
-                                          data: s.created_at.split("T")[0],
-                                          cargaHoraria: ch,
-                                          cargaHorariaExtenso: horasExtenso(ch),
-                                        }}
-                                      />
-                                    </div>
-                                  ) : (
-                                    <button
-                                      onClick={() => setShowCertFor(s.id)}
-                                      className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium"
-                                    >
-                                      <Download size={14} />
-                                      Gerar e baixar certificado
-                                    </button>
-                                  )}
+                    {/* Expanded detail panel */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ opacity: 0, height: 0 }}
+                          animate={{ opacity: 1, height: "auto" }}
+                          exit={{ opacity: 0, height: 0 }}
+                          className="mt-3 overflow-hidden"
+                        >
+                          <div className="pt-3 border-t border-[rgba(255,255,255,0.06)] space-y-4">
+                            {/* Condutores */}
+                            {s.condutores && s.condutores.length > 0 && (
+                              <div className="flex items-start gap-2">
+                                <Users size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-[#FDFBF7]/40 mb-1">Condutores</p>
+                                  <div className="flex flex-wrap gap-1.5">
+                                    {s.condutores.map((c) => (
+                                      <span key={c} className="text-xs px-2 py-0.5 rounded-full text-[#FDFBF7]/70" style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.15)" }}>
+                                        {c}
+                                      </span>
+                                    ))}
+                                  </div>
                                 </div>
                               </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
-                      </td>
-                    </motion.tr>
-                  );
-                })}
-              </AnimatePresence>
-            </tbody>
-          </table>
-        </div>
+                            )}
+
+                            {/* Relato */}
+                            {s.relato && (
+                              <div className="flex items-start gap-2">
+                                <MessageSquare size={14} className="text-[#C84B31] mt-0.5 flex-shrink-0" />
+                                <div>
+                                  <p className="text-xs text-[#FDFBF7]/40 mb-1">Relato</p>
+                                  <p className="text-sm text-[#FDFBF7]/70 leading-relaxed">{s.relato}</p>
+                                </div>
+                              </div>
+                            )}
+
+                            {/* Certificado */}
+                            <div className="pt-2 border-t border-[rgba(255,255,255,0.06)]">
+                              {showCertFor === s.id ? (
+                                <div className="space-y-3">
+                                  <div className="flex items-center justify-between">
+                                    <p className="text-xs text-[#FDFBF7]/40">Certificado de Participação</p>
+                                    <button
+                                      onClick={() => setShowCertFor(null)}
+                                      className="text-xs text-[#FDFBF7]/30 hover:text-[#FDFBF7]/60"
+                                    >
+                                      Fechar preview
+                                    </button>
+                                  </div>
+                                  <CertificateGenerator
+                                    data={{
+                                      nomeParticipante: s.nome_social || s.nome_completo,
+                                      atividade: s.atividade_nome,
+                                      data: s.created_at.split("T")[0],
+                                      cargaHoraria: ch,
+                                      cargaHorariaExtenso: horasExtenso(ch),
+                                    }}
+                                  />
+                                </div>
+                              ) : (
+                                <button
+                                  onClick={() => setShowCertFor(s.id)}
+                                  className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium"
+                                >
+                                  <Download size={14} />
+                                  Gerar e baixar certificado
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
+          </div>
+        </>
       )}
 
       {/* Individual delete modal */}
@@ -657,7 +823,7 @@ export default function AdminEnviosPage() {
           <p className="font-dm text-sm text-[#FDFBF7]/60">
             Tem certeza que deseja excluir este envio? Esta acao nao pode ser desfeita.
           </p>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setDeleteId(null)}>
               Cancelar
             </Button>
@@ -687,7 +853,7 @@ export default function AdminEnviosPage() {
             Tem certeza que deseja excluir {selected.size} envio(s) selecionado(s)? Esta
             acao nao pode ser desfeita.
           </p>
-          <div className="flex justify-end gap-2">
+          <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-2">
             <Button variant="ghost" size="sm" onClick={() => setBulkDeleteOpen(false)}>
               Cancelar
             </Button>

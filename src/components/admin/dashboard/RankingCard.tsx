@@ -41,12 +41,12 @@ export default function RankingCard({
 
   return (
     <Card>
-      <div className="flex items-center gap-2 mb-3">
-        <Trophy className="h-4 w-4" style={{ color: "#FBBC05" }} />
-        <h3 className="font-dm text-sm font-semibold text-cream/70">
+      <div className="flex flex-wrap items-center gap-2 mb-3">
+        <Trophy className="h-4 w-4 flex-shrink-0" style={{ color: "#FBBC05" }} />
+        <h3 className="font-dm text-sm font-semibold text-cream/70 flex-1">
           Top Participantes
         </h3>
-        <div className="flex gap-1 ml-auto">
+        <div className="flex gap-1">
           {(Object.keys(labels) as RType[]).map((t) => (
             <button
               key={t}

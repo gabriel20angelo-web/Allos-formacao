@@ -183,7 +183,7 @@ export default function AdminDuvidasPage() {
         transition={{ delay: 0.1 }}
         className="flex flex-wrap items-center gap-3 mb-6"
       >
-        <div className="relative flex-1 min-w-[200px] max-w-lg">
+        <div className="relative flex-1 min-w-0 sm:min-w-[200px] max-w-lg w-full sm:w-auto">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
           <input
             type="text"
@@ -234,7 +234,7 @@ export default function AdminDuvidasPage() {
               initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: Math.min(i * 0.03, 0.3) }}
-              className="rounded-[14px] p-5 transition-all"
+              className="rounded-[14px] p-4 sm:p-5 transition-all"
               style={{
                 background: q.answered ? "rgba(46,158,143,0.03)" : "rgba(255,255,255,0.03)",
                 border: q.answered
@@ -243,7 +243,7 @@ export default function AdminDuvidasPage() {
               }}
             >
               {/* Header */}
-              <div className="flex items-start justify-between gap-4 mb-3">
+              <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-3">
                 <div className="flex items-center gap-3 min-w-0">
                   <div
                     className="w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0"
@@ -253,11 +253,11 @@ export default function AdminDuvidasPage() {
                   </div>
                   <div className="min-w-0">
                     <p className="text-sm font-medium text-cream truncate">{q.user_name}</p>
-                    <div className="flex items-center gap-3 text-xs text-cream/30">
+                    <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-cream/30">
                       {q.user_email && (
-                        <span className="flex items-center gap-1 truncate">
+                        <span className="flex items-center gap-1 truncate max-w-full">
                           <Mail className="h-3 w-3 flex-shrink-0" />
-                          {q.user_email}
+                          <span className="truncate">{q.user_email}</span>
                         </span>
                       )}
                       <span className="flex items-center gap-1 flex-shrink-0">
@@ -268,11 +268,11 @@ export default function AdminDuvidasPage() {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 flex-shrink-0">
+                <div className="flex items-center gap-2 flex-shrink-0 pl-11 sm:pl-0">
                   {/* Toggle answered */}
                   <button
                     onClick={() => toggleAnswered(q)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium transition-all ${
+                    className={`flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition-all ${
                       q.answered
                         ? "text-teal bg-teal/10 hover:bg-teal/15"
                         : "text-cream/40 bg-white/5 hover:text-accent hover:bg-accent/10"
@@ -287,7 +287,7 @@ export default function AdminDuvidasPage() {
 
                   <button
                     onClick={() => setDeleteTarget(q)}
-                    className="p-1.5 text-cream/15 hover:text-red-400 rounded transition-colors"
+                    className="p-2 text-cream/15 hover:text-red-400 rounded transition-colors"
                     aria-label="Excluir dúvida"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -296,7 +296,7 @@ export default function AdminDuvidasPage() {
               </div>
 
               {/* Question text */}
-              <p className="text-sm text-cream/70 leading-relaxed pl-11">
+              <p className="text-sm text-cream/70 leading-relaxed sm:pl-11">
                 {q.question}
               </p>
             </motion.div>
@@ -318,7 +318,7 @@ export default function AdminDuvidasPage() {
             <p className="text-sm text-cream/40 p-3 rounded-lg" style={{ background: "rgba(255,255,255,0.03)" }}>
               &ldquo;{deleteTarget.question.substring(0, 200)}{deleteTarget.question.length > 200 ? "..." : ""}&rdquo;
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
               <Button variant="danger" loading={deleting} onClick={handleDelete}>Excluir</Button>
             </div>

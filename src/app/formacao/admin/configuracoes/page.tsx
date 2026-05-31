@@ -181,7 +181,7 @@ function ProfessoresTab() {
           return (
             <div
               key={inst.id}
-              className="flex items-center gap-4 p-4 rounded-[12px] group"
+              className="flex flex-wrap items-center gap-3 p-4 rounded-[12px] group"
               style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <div
@@ -211,15 +211,17 @@ function ProfessoresTab() {
                   </p>
                 )}
               </div>
-              <Badge variant={inst.role}>{roleLabels[inst.role]}</Badge>
-              <button
-                onClick={() => openAssign(inst)}
-                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
-                style={{ background: "rgba(46,158,143,0.1)", border: "1px solid rgba(46,158,143,0.2)", color: "#2E9E8F" }}
-              >
-                <BookOpen className="h-3 w-3 inline mr-1" />
-                Cursos
-              </button>
+              <div className="flex items-center gap-2 flex-shrink-0">
+                <Badge variant={inst.role}>{roleLabels[inst.role]}</Badge>
+                <button
+                  onClick={() => openAssign(inst)}
+                  className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80"
+                  style={{ background: "rgba(46,158,143,0.1)", border: "1px solid rgba(46,158,143,0.2)", color: "#2E9E8F" }}
+                >
+                  <BookOpen className="h-3 w-3 inline mr-1" />
+                  Cursos
+                </button>
+              </div>
             </div>
           );
         })}
@@ -291,7 +293,7 @@ function ProfessoresTab() {
               })}
             </div>
 
-            <div className="flex justify-between items-center pt-2">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <span className="text-xs text-cream/30">
                 {selectedCourses.size} curso{selectedCourses.size !== 1 ? "s" : ""} selecionado{selectedCourses.size !== 1 ? "s" : ""}
               </span>
@@ -470,8 +472,9 @@ export default function AdminConfiguracoesPage() {
         </div>
       </div>
 
+      {/* Desktop: tabela */}
       <div
-        className="rounded-[16px] overflow-hidden"
+        className="hidden md:block rounded-[16px] overflow-hidden"
         style={{
           background: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",
@@ -482,7 +485,7 @@ export default function AdminConfiguracoesPage() {
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Nome</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50 hidden md:table-cell">Email</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Email</th>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Permissão</th>
                 <th className="text-right px-4 py-3 font-semibold text-cream/50">Ação</th>
               </tr>
@@ -502,7 +505,7 @@ export default function AdminConfiguracoesPage() {
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-3 text-cream/40 hidden md:table-cell">{user.email}</td>
+                  <td className="px-4 py-3 text-cream/40">{user.email}</td>
                   <td className="px-4 py-3">
                     <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
                   </td>
@@ -526,6 +529,53 @@ export default function AdminConfiguracoesPage() {
         {/* Load more */}
         {hasMore && (
           <div className="p-4 text-center" style={{ borderTop: "1px solid rgba(255,255,255,0.04)" }}>
+            <button
+              onClick={() => setVisibleCount((prev) => prev + ROLES_PER_PAGE)}
+              className="text-sm text-cream/40 hover:text-cream/60 transition-colors"
+            >
+              Mostrar mais ({filtered.length - visibleCount} restantes)
+            </button>
+          </div>
+        )}
+      </div>
+
+      {/* Mobile: cards */}
+      <div className="md:hidden space-y-3">
+        {visible.map((user) => (
+          <div
+            key={user.id}
+            className="rounded-[14px] p-3.5"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <div className="min-w-0">
+                <p className="font-dm text-sm font-medium text-cream truncate">
+                  {user.full_name}
+                  {user.id === profile?.id && (
+                    <span className="text-[10px] text-cream/25 font-dm ml-1">(você)</span>
+                  )}
+                </p>
+                <p className="font-dm text-[11px] text-cream/40 truncate mt-0.5">{user.email}</p>
+              </div>
+              <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
+            </div>
+            <div className="flex flex-wrap gap-2 mt-2.5">
+              <button
+                onClick={() => {
+                  setEditingUser(user);
+                  setNewRole(user.role);
+                }}
+                className="px-3 py-2 text-xs rounded-lg font-medium transition-all hover:opacity-80"
+                style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.2)", color: "#C84B31" }}
+              >
+                Alterar permissão
+              </button>
+            </div>
+          </div>
+        ))}
+
+        {hasMore && (
+          <div className="pt-1 text-center">
             <button
               onClick={() => setVisibleCount((prev) => prev + ROLES_PER_PAGE)}
               className="text-sm text-cream/40 hover:text-cream/60 transition-colors"
@@ -587,7 +637,7 @@ export default function AdminConfiguracoesPage() {
               </div>
             )}
 
-            <div className="flex justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:justify-end gap-3 pt-2">
               <Button variant="ghost" onClick={() => setEditingUser(null)}>
                 Cancelar
               </Button>

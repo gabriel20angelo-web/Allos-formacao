@@ -297,14 +297,14 @@ export default function CondutoresPage() {
               initial={{ opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: i * 0.03 }}
-              className="flex items-center justify-between p-4 rounded-[12px] group transition-all duration-200 hover:bg-white/[.02]"
+              className="flex flex-col sm:flex-row sm:items-center justify-between p-4 rounded-[12px] group transition-all duration-200 hover:bg-white/[.02] gap-3"
               style={{
                 background: "rgba(255,255,255,0.02)",
                 border: "1px solid rgba(255,255,255,0.06)",
               }}
             >
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2.5">
+                <div className="flex flex-wrap items-center gap-2">
                   <p className="text-sm font-medium text-cream font-dm truncate">
                     {item.nome}
                   </p>
@@ -354,7 +354,7 @@ export default function CondutoresPage() {
                 )}
               </div>
 
-              <div className="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+              <div className="flex items-center gap-1.5 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity flex-shrink-0">
                 <button
                   onClick={() => router.push(`/formacao/admin/condutores/${item.id}`)}
                   className="p-1.5 rounded-lg text-cream/20 hover:text-[#C84B31] hover:bg-[#C84B31]/10 transition-all"
@@ -433,7 +433,7 @@ export default function CondutoresPage() {
                 className="w-full px-4 py-2.5 dark-input rounded-[10px] text-sm font-dm resize-none"
               />
             </div>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <Button variant="ghost" onClick={() => setEditTarget(null)}>
                 Cancelar
               </Button>
@@ -452,7 +452,7 @@ export default function CondutoresPage() {
               <span className="font-medium text-cream">"{deleteTarget.nome}"</span>?
               Esta ação não pode ser desfeita.
             </p>
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)}>
                 Cancelar
               </Button>

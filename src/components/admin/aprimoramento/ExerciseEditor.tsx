@@ -207,7 +207,7 @@ export default function ExerciseEditor({ mode, initial, onSubmit }: Props) {
         Aprimoramento de Dinâmicas
       </Link>
 
-      <header className="flex items-start justify-between gap-4 mb-6 flex-wrap">
+      <header className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-6">
         <div>
           <p className="font-dm text-[11px] font-semibold tracking-[0.28em] uppercase text-accent mb-2">
             {mode === "novo" ? "Novo exercício" : "Editar exercício"}
@@ -522,7 +522,7 @@ function Field({
 function MarkdownHelp() {
   const [open, setOpen] = useState(false);
   return (
-    <>
+    <div className="relative">
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -532,7 +532,7 @@ function MarkdownHelp() {
       </button>
       {open && (
         <div
-          className="absolute z-10 mt-8 right-0 rounded-xl p-4 max-w-md text-[11.5px] font-dm"
+          className="absolute z-10 mt-2 right-0 rounded-xl p-4 max-w-md w-[calc(100vw-2rem)] sm:w-96 text-[11.5px] font-dm"
           style={{
             background: "rgba(20,20,20,0.96)",
             border: "1px solid rgba(255,255,255,0.10)",
@@ -569,6 +569,6 @@ Texto destacado
           </pre>
         </div>
       )}
-    </>
+    </div>
   );
 }

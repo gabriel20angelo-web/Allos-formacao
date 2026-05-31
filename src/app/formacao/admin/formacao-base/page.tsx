@@ -62,14 +62,14 @@ export default function FormacaoBasePage() {
   return (
     <div>
       {/* Sub-tab bar */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-4 sm:mb-6">
         {TABS.map(({ key, label, icon: Icon }) => {
           const active = activeTab === key;
           return (
             <button
               key={key}
               onClick={() => setActiveTab(key)}
-              className="font-dm text-xs px-4 py-2 rounded-full flex items-center gap-1.5 transition-all"
+              className="font-dm text-xs px-3 py-2 sm:px-4 rounded-full flex items-center gap-1.5 transition-all min-h-[36px]"
               style={{
                 backgroundColor: active ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
                 color: active ? "#C84B31" : "rgba(253,251,247,0.4)",

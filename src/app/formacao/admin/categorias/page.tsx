@@ -298,7 +298,7 @@ export default function CategoriasPage() {
                         type="button"
                         onClick={() => handleMoveCategory(i, "up")}
                         disabled={i === 0}
-                        className="p-0.5 text-cream/20 hover:text-cream/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        className="p-1 md:p-0.5 text-cream/20 hover:text-cream/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                       >
                         <ArrowUp className="h-3 w-3" />
                       </button>
@@ -306,7 +306,7 @@ export default function CategoriasPage() {
                         type="button"
                         onClick={() => handleMoveCategory(i, "down")}
                         disabled={i === categories.length - 1}
-                        className="p-0.5 text-cream/20 hover:text-cream/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
+                        className="p-1 md:p-0.5 text-cream/20 hover:text-cream/60 disabled:opacity-20 disabled:cursor-not-allowed transition-colors"
                       >
                         <ArrowDown className="h-3 w-3" />
                       </button>
@@ -351,7 +351,7 @@ export default function CategoriasPage() {
                     {courses.length > 0 && (
                       <button
                         onClick={() => setExpandedCat(isExpanded ? null : cat.id)}
-                        className="p-1.5 rounded-lg text-cream/20 hover:text-cream/50 hover:bg-white/[0.04] transition-all"
+                        className="p-2 md:p-1.5 rounded-lg text-cream/20 hover:text-cream/50 hover:bg-white/[0.04] transition-all"
                         title="Ver cursos"
                       >
                         {isExpanded ? <ChevronDown className="h-3.5 w-3.5" /> : <ChevronRight className="h-3.5 w-3.5" />}
@@ -359,14 +359,14 @@ export default function CategoriasPage() {
                     )}
                     <button
                       onClick={() => { setEditingId(cat.id); setEditName(cat.name); }}
-                      className="p-1.5 rounded-lg text-cream/15 hover:text-amber-400 hover:bg-amber-400/10 transition-all"
+                      className="p-2 md:p-1.5 rounded-lg text-cream/15 hover:text-amber-400 hover:bg-amber-400/10 transition-all"
                       aria-label={`Editar ${cat.name}`}
                     >
                       <Pencil className="h-3.5 w-3.5" />
                     </button>
                     <button
                       onClick={() => setDeleteTarget(cat)}
-                      className="p-1.5 rounded-lg text-cream/15 hover:text-red-400 hover:bg-red-400/10 transition-all"
+                      className="p-2 md:p-1.5 rounded-lg text-cream/15 hover:text-red-400 hover:bg-red-400/10 transition-all"
                       aria-label={`Remover ${cat.name}`}
                     >
                       <X className="h-4 w-4" />
@@ -464,7 +464,7 @@ export default function CategoriasPage() {
                 </div>
               </div>
             )}
-            <div className="flex justify-end gap-3">
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <Button variant="ghost" onClick={() => setDeleteTarget(null)}>Cancelar</Button>
               <Button variant="danger" onClick={handleRemove}>
                 Remover{(coursesByCategory[deleteTarget.name] || []).length > 0 ? " e desassociar" : ""}

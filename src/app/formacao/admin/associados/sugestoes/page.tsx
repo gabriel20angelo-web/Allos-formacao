@@ -377,16 +377,16 @@ export default function SugestoesAdminPage() {
         </p>
       </div>
 
-      {/* Tabela */}
+      {/* Tabela — desktop */}
       <div
-        className="rounded-xl overflow-hidden"
+        className="hidden md:block rounded-xl overflow-hidden"
         style={{
           background: "rgba(255,255,255,0.02)",
           border: "1px solid rgba(255,255,255,0.07)",
         }}
       >
         <div
-          className="hidden md:grid grid-cols-[1fr_180px_120px_160px_200px] gap-3 px-4 py-2.5 font-dm text-[10px] font-bold tracking-widest uppercase text-cream/45"
+          className="grid grid-cols-[1fr_180px_120px_160px_200px] gap-3 px-4 py-2.5 font-dm text-[10px] font-bold tracking-widest uppercase text-cream/45"
           style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}
         >
           <button
@@ -440,6 +440,193 @@ export default function SugestoesAdminPage() {
               onDelete={() => setDeleteTarget(row)}
             />
           ))
+        )}
+      </div>
+
+      {/* Cards — mobile */}
+      <div className="md:hidden space-y-3">
+        {loading ? (
+          <div className="p-8 text-center text-cream/40 font-dm text-sm">
+            <Loader2 className="animate-spin inline mr-2" width={14} height={14} />
+            Carregando sugestões…
+          </div>
+        ) : sorted.length === 0 ? (
+          <div className="p-12 text-center font-dm text-sm text-cream/40">
+            {rows.length === 0
+              ? "Nenhuma sugestão recebida ainda."
+              : "Nenhuma sugestão corresponde aos filtros."}
+          </div>
+        ) : (
+          sorted.map((row) => {
+            const statusMeta = STATUS_META[row.status];
+            const catMeta = row.categoriaSugerida ? CATEGORIES[row.categoriaSugerida] : null;
+            const isPending = row.status === "pendente";
+            const busy = busyId === row.id;
+            return (
+              <div
+                key={row.id}
+                className="rounded-[14px] p-3.5"
+                style={{
+                  background: "rgba(255,255,255,0.03)",
+                  border: "1px solid rgba(255,255,255,0.06)",
+                }}
+              >
+                {/* Header: título + badge status */}
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <p className="font-fraunces text-sm text-cream leading-snug flex-1 min-w-0">
+                    {row.titulo}
+                  </p>
+                  <span
+                    className="font-dm text-[10px] font-semibold tracking-wider uppercase px-2 py-0.5 rounded-md flex-shrink-0"
+                    style={{
+                      color: statusMeta.color,
+                      background: statusMeta.tint,
+                      border: `1px solid ${statusMeta.border}`,
+                    }}
+                  >
+                    {statusMeta.label}
+                  </span>
+                </div>
+
+                {/* Descrição */}
+                {row.descricao && (
+                  <p className="font-dm text-[12px] text-cream/45 line-clamp-2 leading-relaxed mb-2">
+                    {row.descricao}
+                  </p>
+                )}
+
+                {/* Categoria + link exercício + nota descarte */}
+                <div className="flex flex-wrap items-center gap-2 mb-2.5">
+                  {catMeta && (
+                    <span
+                      className="font-dm text-[9.5px] font-semibold tracking-wider uppercase px-1.5 py-0.5 rounded"
+                      style={{
+                        color: catMeta.color,
+                        background: catMeta.tint,
+                        border: `1px solid ${catMeta.border}`,
+                      }}
+                    >
+                      {catMeta.label}
+                    </span>
+                  )}
+                  {row.status === "desenvolvido" && row.exercicioSlug && (
+                    <Link
+                      href={`/formacao/aprimoramento-dinamicas/${row.exercicioSlug}`}
+                      target="_blank"
+                      className="font-dm text-[10px] inline-flex items-center gap-1 text-accent/80 hover:text-accent transition-colors"
+                    >
+                      <Sparkles width={10} height={10} aria-hidden="true" />
+                      {row.exercicioTitulo}
+                      <ExternalLink width={9} height={9} aria-hidden="true" />
+                    </Link>
+                  )}
+                  {row.status === "descartado" && row.notaAdmin && (
+                    <span className="font-dm text-[10px] text-cream/40 italic">
+                      &quot;{row.notaAdmin.slice(0, 60)}{row.notaAdmin.length > 60 ? "…" : ""}&quot;
+                    </span>
+                  )}
+                </div>
+
+                {/* Autor + data */}
+                <div className="flex items-center justify-between gap-2 mb-3">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <div
+                      className="w-6 h-6 rounded-full flex items-center justify-center flex-shrink-0"
+                      style={{
+                        background: "rgba(200,75,49,0.10)",
+                        border: "1px solid rgba(200,75,49,0.18)",
+                      }}
+                    >
+                      <UserIcon width={10} height={10} className="text-accent/70" aria-hidden="true" />
+                    </div>
+                    <div className="min-w-0">
+                      <p className="font-dm text-[12px] text-cream/75 truncate">
+                        {row.criadoPorNome ?? "—"}
+                      </p>
+                      {row.criadoPorEmail && (
+                        <p className="font-dm text-[10px] text-cream/35 truncate">
+                          {row.criadoPorEmail}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                  <span className="font-dm text-[10px] text-cream/40 flex-shrink-0">
+                    {formatDistanceToNow(new Date(row.createdAt), { addSuffix: true, locale: ptBR })}
+                  </span>
+                </div>
+
+                {/* Ações */}
+                <div className="flex flex-wrap gap-2">
+                  {isPending && (
+                    <button
+                      type="button"
+                      onClick={() => handleTransform(row)}
+                      disabled={busy}
+                      className="font-dm text-xs font-medium inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        color: "#C84B31",
+                        background: "rgba(200,75,49,0.10)",
+                        border: "1px solid rgba(200,75,49,0.28)",
+                      }}
+                    >
+                      {busy ? (
+                        <Loader2 width={11} height={11} className="animate-spin" aria-hidden="true" />
+                      ) : (
+                        <Sparkles width={11} height={11} aria-hidden="true" />
+                      )}
+                      Transformar
+                    </button>
+                  )}
+                  {isPending && (
+                    <button
+                      type="button"
+                      onClick={() => { setDiscardTarget(row); setDiscardNote(row.notaAdmin); }}
+                      disabled={busy}
+                      className="font-dm text-xs font-medium inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        color: "rgba(253,251,247,0.6)",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      <XCircle width={11} height={11} aria-hidden="true" />
+                      Descartar
+                    </button>
+                  )}
+                  {!isPending && (
+                    <button
+                      type="button"
+                      onClick={() => handleReopen(row)}
+                      disabled={busy}
+                      className="font-dm text-xs font-medium inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                      style={{
+                        color: "rgba(253,251,247,0.6)",
+                        background: "rgba(255,255,255,0.04)",
+                        border: "1px solid rgba(255,255,255,0.10)",
+                      }}
+                    >
+                      <RotateCcw width={11} height={11} aria-hidden="true" />
+                      Reabrir
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTarget(row)}
+                    disabled={busy}
+                    className="font-dm text-xs font-medium inline-flex items-center gap-1.5 px-3 py-2 rounded-lg transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                    style={{
+                      color: "rgba(248,113,113,0.75)",
+                      background: "rgba(248,113,113,0.06)",
+                      border: "1px solid rgba(248,113,113,0.18)",
+                    }}
+                  >
+                    <Trash2 width={11} height={11} aria-hidden="true" />
+                    Excluir
+                  </button>
+                </div>
+              </div>
+            );
+          })
         )}
       </div>
 

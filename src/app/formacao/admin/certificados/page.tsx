@@ -125,7 +125,7 @@ export default function AdminCertificadosPage() {
           Certificados emitidos na plataforma.
         </p>
 
-        <div className="flex items-center gap-2 mt-4">
+        <div className="flex flex-wrap items-center gap-2 mt-4">
           <button
             onClick={() => setView("cursos")}
             className="font-dm text-xs px-4 py-2 rounded-full transition-all"
@@ -203,9 +203,9 @@ export default function AdminCertificadosPage() {
         initial={{ opacity: 0, y: -5 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ delay: 0.1 }}
-        className="flex flex-wrap items-end gap-3 mb-6"
+        className="flex flex-col sm:flex-row sm:flex-wrap sm:items-end gap-3 mb-6"
       >
-        <div className="relative flex-1 min-w-[200px] max-w-lg">
+        <div className="relative w-full sm:flex-1 sm:min-w-[200px] sm:max-w-lg">
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
           <input
             type="text"
@@ -217,11 +217,11 @@ export default function AdminCertificadosPage() {
           />
         </div>
 
-        <div className="relative">
+        <div className="relative w-full sm:w-auto">
           <select
             value={selectedCourseId}
             onChange={(e) => setSelectedCourseId(e.target.value)}
-            className="appearance-none pl-4 pr-9 py-2.5 rounded-[10px] text-sm text-cream bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/40"
+            className="appearance-none w-full sm:w-auto pl-4 pr-9 py-2.5 rounded-[10px] text-sm text-cream bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/40"
             style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
           >
             <option value="all" className="bg-[#1a1a1a] text-cream">Todos os cursos</option>
@@ -234,32 +234,33 @@ export default function AdminCertificadosPage() {
           <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-cream/30 pointer-events-none" />
         </div>
 
-        <div className="flex items-center gap-2">
-          <div className="flex flex-col">
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <div className="flex flex-col flex-1 sm:flex-none">
             <label className="text-[10px] text-cream/30 mb-1 uppercase tracking-wider">De</label>
             <input
               type="date"
               value={dateFrom}
               onChange={(e) => setDateFrom(e.target.value)}
-              className="px-3 py-2 rounded-[10px] text-sm text-cream bg-transparent focus:outline-none focus:ring-1 focus:ring-accent/40"
+              className="w-full sm:w-auto px-3 py-2 rounded-[10px] text-sm text-cream bg-transparent focus:outline-none focus:ring-1 focus:ring-accent/40"
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", colorScheme: "dark" }}
             />
           </div>
-          <div className="flex flex-col">
+          <div className="flex flex-col flex-1 sm:flex-none">
             <label className="text-[10px] text-cream/30 mb-1 uppercase tracking-wider">Até</label>
             <input
               type="date"
               value={dateTo}
               onChange={(e) => setDateTo(e.target.value)}
-              className="px-3 py-2 rounded-[10px] text-sm text-cream bg-transparent focus:outline-none focus:ring-1 focus:ring-accent/40"
+              className="w-full sm:w-auto px-3 py-2 rounded-[10px] text-sm text-cream bg-transparent focus:outline-none focus:ring-1 focus:ring-accent/40"
               style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", colorScheme: "dark" }}
             />
           </div>
         </div>
       </motion.div>
 
+      {/* Tabela — visível só no desktop */}
       <div
-        className="rounded-[16px] overflow-hidden"
+        className="hidden md:block rounded-[16px] overflow-hidden"
         style={{
           background: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",
@@ -270,8 +271,8 @@ export default function AdminCertificadosPage() {
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Aluno</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50 hidden md:table-cell">Email</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50 hidden md:table-cell">Curso</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Email</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Curso</th>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Emissão</th>
               </tr>
             </thead>
@@ -283,8 +284,8 @@ export default function AdminCertificadosPage() {
                   style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
                 >
                   <td className="px-4 py-3 text-cream">{cert.user?.full_name}</td>
-                  <td className="px-4 py-3 text-cream/40 hidden md:table-cell">{cert.user?.email}</td>
-                  <td className="px-4 py-3 text-cream/40 hidden md:table-cell">{cert.course?.title}</td>
+                  <td className="px-4 py-3 text-cream/40">{cert.user?.email}</td>
+                  <td className="px-4 py-3 text-cream/40">{cert.course?.title}</td>
                   <td className="px-4 py-3 text-cream/30 text-xs">{formatDate(cert.issued_at)}</td>
                 </tr>
               ))}
@@ -298,6 +299,29 @@ export default function AdminCertificadosPage() {
             </tbody>
           </table>
         </div>
+      </div>
+
+      {/* Cards — visíveis só no mobile */}
+      <div className="md:hidden space-y-3">
+        {filtered.map((cert) => (
+          <div
+            key={cert.id}
+            className="rounded-[14px] p-3.5"
+            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            <div className="flex items-start justify-between gap-2 mb-1">
+              <span className="text-sm text-cream font-medium leading-snug">{cert.user?.full_name}</span>
+              <span className="text-xs text-cream/30 whitespace-nowrap shrink-0">{formatDate(cert.issued_at)}</span>
+            </div>
+            <p className="text-xs text-cream/40 mb-1 truncate">{cert.user?.email}</p>
+            <p className="text-xs text-cream/50">{cert.course?.title}</p>
+          </div>
+        ))}
+        {filtered.length === 0 && (
+          <p className="text-center text-cream/35 py-8 text-sm">
+            Nenhum certificado encontrado.
+          </p>
+        )}
       </div>
       </>)}
     </div>
