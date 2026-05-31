@@ -16,12 +16,12 @@ import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   Award,
-  Edit,
   ArrowLeft,
   ChevronRight,
   SkipForward,
   PartyPopper,
   Star,
+  CheckCircle2,
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment } from "@/types";
 
@@ -31,7 +31,7 @@ function CoursePageContent() {
   const searchParams = useSearchParams();
   const slug = params.slug as string;
   const requestedLessonId = searchParams?.get("lesson") || null;
-  const { user, profile } = useAuth();
+  const { user } = useAuth();
 
   const [course, setCourse] = useState<Course | null>(null);
   const [sections, setSections] = useState<Section[]>([]);
@@ -550,10 +550,6 @@ function CoursePageContent() {
     );
   }
 
-  const isInstructorOfCourse =
-    profile?.id === course.instructor_id ||
-    profile?.role === "admin";
-
   return (
     <div className="relative flex" style={{ minHeight: "100vh" }}>
       {/* Animated starfield + grain + orbs */}
@@ -588,25 +584,6 @@ function CoursePageContent() {
                 {currentLesson.title}
               </span>
             </nav>
-
-            {isInstructorOfCourse && (
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-lg text-xs font-medium backdrop-blur-md"
-                style={{
-                  background: "rgba(139,92,246,0.08)",
-                  border: "1px solid rgba(139,92,246,0.2)",
-                  color: "rgba(167,139,250,0.8)",
-                }}
-              >
-                <Edit className="h-3 w-3" />
-                <button
-                  onClick={() => router.push(`/formacao/admin/cursos/${course.id}/editar`)}
-                  className="hover:underline"
-                >
-                  Modo professor
-                </button>
-              </div>
-            )}
           </motion.div>
 
           {/* Video with glow backdrop */}
@@ -661,6 +638,31 @@ function CoursePageContent() {
               </div>
 
               <div className="flex items-center gap-2 flex-shrink-0">
+                {(() => {
+                  const isDone = !!progressMap[currentLesson.id]?.completed;
+                  return (
+                    <motion.button
+                      onClick={() => toggleComplete(currentLesson.id)}
+                      whileHover={{ scale: 1.03 }}
+                      whileTap={{ scale: 0.95 }}
+                      className="flex items-center gap-2 px-4 py-2 rounded-[10px] text-sm font-medium transition-all backdrop-blur-sm"
+                      style={{
+                        border: `1px solid ${isDone ? "rgba(46,158,143,0.4)" : "rgba(200,75,49,0.3)"}`,
+                        background: isDone ? "rgba(46,158,143,0.12)" : "rgba(200,75,49,0.08)",
+                        color: isDone ? "#2E9E8F" : "#E8A28A",
+                      }}
+                      title={isDone ? "Marcar como não concluída" : "Marcar aula como concluída"}
+                      aria-pressed={isDone}
+                    >
+                      <CheckCircle2
+                        className="h-4 w-4"
+                        style={{ fill: isDone ? "rgba(46,158,143,0.18)" : "transparent" }}
+                      />
+                      <span>{isDone ? "Concluída" : "Concluir"}</span>
+                    </motion.button>
+                  );
+                })()}
+
                 {(() => {
                   const isFav = favoritesSet.has(currentLesson.id);
                   return (

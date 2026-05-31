@@ -13,6 +13,12 @@ interface VideoPlayerProps {
 }
 
 const LOAD_TIMEOUT_MS = 6000;
+// Mobile e embeds cross-origin do Drive às vezes NÃO disparam o onLoad do
+// iframe mesmo com o vídeo carregando. Sem um reveal de segurança o player
+// ficava preso em opacity-0 (vídeo invisível no celular) e o overlay de
+// fallback acabava cobrindo um vídeo que estava tocando. Revelamos antes do
+// timeout pra resolver os dois casos.
+const REVEAL_FALLBACK_MS = 2500;
 // Drive embeds fail silently on a few common scenarios:
 //   1. Third-party cookies blocked (Brave default, Safari ITP, Firefox strict,
 //      incognito Chrome) — iframe.onLoad fires but the player stays blank.
@@ -51,9 +57,13 @@ export default function VideoPlayer({ url, source, title }: VideoPlayerProps) {
     setTimedOut(false);
     setShowHelp(false);
     const helpTimer = window.setTimeout(() => setShowHelp(true), SHOW_HELP_AFTER_MS);
+    // Garante que o player apareça mesmo se o onLoad não disparar (mobile/Drive),
+    // evitando vídeo invisível e o overlay de fallback cobrir um vídeo que funciona.
+    const revealTimer = window.setTimeout(() => setLoaded(true), REVEAL_FALLBACK_MS);
     const timer = window.setTimeout(() => setTimedOut(true), LOAD_TIMEOUT_MS);
     return () => {
       window.clearTimeout(helpTimer);
+      window.clearTimeout(revealTimer);
       window.clearTimeout(timer);
     };
   }, [embedUrl]);
