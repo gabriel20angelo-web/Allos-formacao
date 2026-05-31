@@ -681,9 +681,98 @@ export default function AdminCursosPage() {
         <div className="fixed inset-0 z-40" onClick={() => setSortOpen(false)} />
       )}
 
-      {/* Table */}
+      {/* Mobile cards (table is hidden < md) */}
+      <div className="md:hidden space-y-3">
+        {sorted.map((course) => {
+          const warnings = getCompletenessWarnings(course);
+          const isPub = course.status === "published";
+          return (
+            <div
+              key={course.id}
+              className="rounded-[14px] p-3.5"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <div className="flex items-start gap-3">
+                {course.thumbnail_url ? (
+                  <div className="relative w-16 h-10 rounded-[8px] overflow-hidden flex-shrink-0">
+                    <Image src={course.thumbnail_url} alt="" fill sizes="64px" className="object-cover" />
+                  </div>
+                ) : (
+                  <div className="w-16 h-10 rounded-[8px] flex items-center justify-center flex-shrink-0" style={{ background: "rgba(200,75,49,0.08)" }}>
+                    <span className="text-xs text-accent/40 font-bold">A</span>
+                  </div>
+                )}
+                <div className="min-w-0 flex-1">
+                  <p className="font-medium text-cream text-sm leading-tight">{course.title}</p>
+                  <div className="flex items-center flex-wrap gap-1.5 mt-1">
+                    <Badge variant={course.status}>{statusLabels[course.status] || course.status}</Badge>
+                    {course.course_type === "sync" && (
+                      <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full" style={{ background: "rgba(46,158,143,0.15)", color: "#2E9E8F", border: "1px solid rgba(46,158,143,0.25)" }}>Síncrono</span>
+                    )}
+                    {warnings.length > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[10px] text-amber-400" title={warnings.join(", ")}>
+                        <AlertTriangle className="h-3 w-3" /> {warnings.length}
+                      </span>
+                    )}
+                  </div>
+                  <p className="text-xs text-cream/30 mt-1">
+                    {course.is_free ? "Gratuito" : `R$ ${((course.price_cents || 0) / 100).toFixed(2)}`} · {course._enrollCount || 0} aluno{(course._enrollCount || 0) !== 1 ? "s" : ""}
+                  </p>
+                </div>
+              </div>
+
+              {/* Actions — touch-friendly, wrap */}
+              <div className="flex flex-wrap gap-2 mt-3 pt-3" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                <Link href={`/formacao/admin/cursos/${course.id}/editar`} className="flex-1 min-w-[44%]">
+                  <button className="w-full flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium text-accent" style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.2)" }}>
+                    <Edit className="h-3.5 w-3.5" /> Editar
+                  </button>
+                </Link>
+                {course.status !== "archived" && (
+                  <button onClick={() => togglePublishStatus(course)} disabled={togglingStatus === course.id} className="flex-1 min-w-[44%] flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium disabled:opacity-40" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: isPub ? "rgba(16,185,129,0.9)" : "rgba(253,251,247,0.6)" }}>
+                    {isPub ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
+                    {isPub ? "Despublicar" : "Publicar"}
+                  </button>
+                )}
+                {isPub && (
+                  <button onClick={() => toggleFeatured(course)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: course.featured ? "#f59e0b" : "rgba(253,251,247,0.5)" }}>
+                    <Sparkles className="h-3.5 w-3.5" /> {course.featured ? "Destaque ✓" : "Destaque"}
+                  </button>
+                )}
+                {isPub && (
+                  <button onClick={() => toggleStructured(course)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: course.is_structured ? "#C84B31" : "rgba(253,251,247,0.5)" }}>
+                    <GraduationCap className="h-3.5 w-3.5" /> {course.is_structured ? "Curso ✓" : "Curso"}
+                  </button>
+                )}
+                <button onClick={() => duplicateCourse(course)} disabled={duplicating === course.id} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium text-cream/60 disabled:opacity-40" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                  <Copy className="h-3.5 w-3.5" /> Duplicar
+                </button>
+                {course.status === "archived" ? (
+                  <button onClick={() => restoreCourse(course.id)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium text-cream/60" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <RotateCcw className="h-3.5 w-3.5" /> Restaurar
+                  </button>
+                ) : (
+                  <button onClick={() => setArchiveTarget(course)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium text-cream/60" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}>
+                    <Archive className="h-3.5 w-3.5" /> Arquivar
+                  </button>
+                )}
+                <button onClick={() => setDeleteTarget(course)} className="flex items-center justify-center gap-1.5 px-3 py-2 rounded-[8px] text-xs font-medium text-red-400/80" style={{ background: "rgba(239,68,68,0.06)", border: "1px solid rgba(239,68,68,0.15)" }}>
+                  <Trash2 className="h-3.5 w-3.5" /> Apagar
+                </button>
+              </div>
+            </div>
+          );
+        })}
+        {sorted.length === 0 && (
+          <div className="rounded-[14px] px-4 py-8 text-center text-cream/35 text-sm" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            Nenhum curso encontrado.
+          </div>
+        )}
+      </div>
+
+      {/* Table (desktop) */}
       <div
-        className="rounded-[16px] overflow-hidden"
+        className="rounded-[16px] overflow-hidden hidden md:block"
         style={{
           background: "rgba(255,255,255,0.03)",
           border: "1px solid rgba(255,255,255,0.06)",

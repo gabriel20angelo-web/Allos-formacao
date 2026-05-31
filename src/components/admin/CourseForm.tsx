@@ -1015,13 +1015,13 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       </h1>
 
       {/* Stepper */}
-      <div className="flex gap-1 mb-8 rounded-[12px] p-1" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
+      <div className="flex gap-1 mb-6 sm:mb-8 rounded-[12px] p-1 overflow-x-auto" style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
         {STEPS.map((s) => (
           <button
             key={s.id}
             onClick={() => setStep(s.id)}
             className={`
-              flex-1 py-2.5 text-sm font-medium rounded-[10px] transition-all duration-200
+              flex-shrink-0 sm:flex-1 px-4 sm:px-2 py-2.5 text-xs sm:text-sm font-medium rounded-[10px] transition-all duration-200 whitespace-nowrap
               ${
                 step === s.id
                   ? "text-white font-semibold"
@@ -1345,13 +1345,13 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                 <SortableItem key={section.id} id={section.id}>
                   {({ dragHandleProps }) => (
                   <div
-                    className="rounded-card p-6"
+                    className="rounded-card p-4 sm:p-6"
                     style={{
                       background: section.is_extra ? "rgba(139,92,246,0.04)" : "rgba(255,255,255,0.04)",
                       border: section.is_extra ? "1px solid rgba(139,92,246,0.15)" : "1px solid rgba(255,255,255,0.08)",
                     }}
                   >
-                    <div className="flex items-center gap-2 mb-4">
+                    <div className="flex flex-wrap items-center gap-2 mb-4">
                       <span className="cursor-grab active:cursor-grabbing touch-none" {...dragHandleProps}>
                         <GripVertical className="h-5 w-5 text-cream/20 hover:text-cream/50 transition-colors" />
                       </span>
@@ -1388,7 +1388,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                       <input
                         value={section.title}
                         onChange={(e) => updateSection(si, e.target.value)}
-                        className="flex-1 font-semibold text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1"
+                        className="flex-1 min-w-[150px] font-semibold text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1"
                         placeholder="Nome da seção"
                       />
                       {/* Toggle extra */}
@@ -1452,17 +1452,17 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                     </div>
 
                     {/* Lessons */}
-                    <div className="space-y-3 ml-8">
+                    <div className="space-y-3 ml-0 sm:ml-8">
                       <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleLessonDragEnd(si)}>
                         <SortableContext items={section.lessons.map((l) => l.id)} strategy={verticalListSortingStrategy}>
                           {section.lessons.map((lesson, li) => (
                             <SortableItem key={lesson.id} id={lesson.id}>
                               {({ dragHandleProps: lessonDragProps }) => (
                               <div
-                                className="rounded-button p-4 space-y-3"
+                                className="rounded-button p-3 sm:p-4 space-y-3"
                                 style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
                               >
-                                <div className="flex items-center gap-2">
+                                <div className="flex flex-wrap items-center gap-2">
                                   <span className="cursor-grab active:cursor-grabbing touch-none" {...lessonDragProps}>
                                     <GripVertical className="h-4 w-4 text-cream/20 hover:text-cream/50 transition-colors" />
                                   </span>
@@ -1493,7 +1493,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                       updateLesson(si, li, "title", e.target.value)
                                     }
                                     placeholder="Título da aula"
-                                    className="flex-1 text-sm text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1 placeholder:text-cream/25"
+                                    className="flex-1 min-w-[140px] text-sm text-cream bg-transparent border-b border-transparent hover:border-white/10 focus:border-teal focus:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 py-1 placeholder:text-cream/25"
                                   />
                                   {/* Delete lesson with confirmation */}
                                   {deleteConfirmId === `lesson-${lesson.id}` ? (
@@ -1850,7 +1850,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                 {questions.map((q, qi) => (
                   <div
                     key={q.id}
-                    className="rounded-card p-6"
+                    className="rounded-card p-4 sm:p-6"
                     style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
                   >
                     <div className="flex items-start gap-3 mb-4">
@@ -1876,7 +1876,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                       </button>
                     </div>
 
-                    <div className="space-y-2 ml-6">
+                    <div className="space-y-2 ml-0 sm:ml-6">
                       {q.options.map((opt: ExamOption, oi: number) => (
                         <div key={opt.id} className="flex items-center gap-2">
                           <input
@@ -1953,7 +1953,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       )}
 
       {/* Actions */}
-      <div className="flex items-center justify-between mt-10 pt-6 border-t border-border">
+      <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-between gap-4 mt-8 sm:mt-10 pt-6 border-t border-border">
         <div className="flex items-center gap-3">
           <Button
             variant="ghost"
@@ -1984,7 +1984,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             </span>
           )}
         </div>
-        <div className="flex gap-3">
+        <div className="flex gap-3 justify-end">
           {step !== "info" && (
             <Button
               variant="ghost"
