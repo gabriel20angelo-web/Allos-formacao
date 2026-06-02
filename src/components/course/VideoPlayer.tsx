@@ -48,6 +48,7 @@ const SOURCE_FALLBACK_HINT: Record<VideoSource, string> = {
 export default function VideoPlayer({ url, source, title }: VideoPlayerProps) {
   const embedUrl = useMemo(() => getEmbedUrl(url, source), [url, source]);
   const externalUrl = useMemo(() => getExternalUrl(url, source), [url, source]);
+  const isDrive = source === "google_drive";
   const [loaded, setLoaded] = useState(false);
   const [timedOut, setTimedOut] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
@@ -72,8 +73,15 @@ export default function VideoPlayer({ url, source, title }: VideoPlayerProps) {
 
   return (
     <div className="space-y-2">
+      {/* O player /preview do Drive tem uma barra de cromo (título + pop-out) de
+          altura ~fixa. Em telas estreitas o aspect-video (16:9) fica baixo e o
+          cromo come quase todo o espaço, espremendo o vídeo. Pro Drive damos um
+          aspect mais alto no mobile (4:3) e só voltamos pra 16:9 no sm+. YouTube
+          preenche 16:9 perfeito, então mantém aspect-video sempre. */}
       <div
-        className="relative aspect-video w-full rounded-[16px] overflow-hidden"
+        className={`relative w-full rounded-[16px] overflow-hidden ${
+          isDrive ? "aspect-[4/3] sm:aspect-video" : "aspect-video"
+        }`}
         style={{
           background: "#0D0D0D",
           border: "1px solid rgba(255,255,255,0.06)",
