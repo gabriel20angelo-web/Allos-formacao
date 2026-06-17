@@ -1,7 +1,7 @@
 "use client";
 import { motion, useReducedMotion } from "framer-motion";
 import { useEffect, useRef, useState } from "react";
-import { Award, ArrowRight, Trophy, Crown, Medal } from "lucide-react";
+import { Award, Trophy, Crown, Medal } from "lucide-react";
 
 const MEDAL_COLORS = ["#FFD700", "#C0C0C0", "#CD7F32"]; // ouro, prata, bronze
 const MEDAL_BGS = [
@@ -209,19 +209,6 @@ export default function HeroFormacao() {
               Do manejo clínico à presença terapêutica. Cursos gravados, encontros síncronos e formação contínua para quem quer ir além do protocolo.
             </motion.p>
 
-            {/* CTAs */}
-            <motion.div {...up(0.5)} className="flex flex-wrap gap-4">
-              <motion.a
-                href="#cursos"
-                whileHover={{ scale: 1.04, boxShadow: "0 10px 36px rgba(200,75,49,.35)" }}
-                whileTap={{ scale: 0.97 }}
-                className="inline-flex items-center gap-2.5 font-dm font-semibold text-white bg-[#C84B31] rounded-full hover:bg-[#A33D27] transition-colors"
-                style={{ padding: "14px 32px", fontSize: "15px", boxShadow: "0 4px 20px rgba(200,75,49,.25)" }}
-              >
-                Ver cursos
-                <ArrowRight size={16} />
-              </motion.a>
-            </motion.div>
           </div>
 
           {/* Right — certificate highlight (2 cols) */}

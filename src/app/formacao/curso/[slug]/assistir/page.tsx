@@ -73,6 +73,14 @@ function CoursePageContent() {
   const userIdRef = useRef(user?.id);
   userIdRef.current = user?.id;
 
+  // Espelha o id da aula atual num ref pra que o effect de deep-link leia
+  // sempre o valor mais recente SEM precisar de currentLesson nas suas deps.
+  // Sem isso, o effect re-rodava a cada troca local de aula e brigava com o
+  // sync de URL (router.replace é assíncrono), criando um loop aula↔aula
+  // (a tela "piscava" e não dava pra marcar como concluída).
+  const currentLessonIdRef = useRef<string | null>(null);
+  currentLessonIdRef.current = currentLesson?.id ?? null;
+
   // True enquanto toggleComplete está aguardando o servidor — usado pra
   // evitar que checkCompletion (effect) rode em paralelo e marque o
   // enrollment como completed antes do toggle confirmar.
@@ -248,15 +256,19 @@ function CoursePageContent() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug, user?.id, router]);
 
-  // Deep-link: ao mudar ?lesson=X na URL (sem recarregar), troca pra essa
-  // aula sem refazer o fetch.
+  // Deep-link: ao mudar ?lesson=X na URL por uma fonte EXTERNA (back/forward,
+  // link colado), troca pra essa aula sem refazer o fetch. Lê a aula atual via
+  // ref e depende só de [requestedLessonId, sections] — NÃO de currentLesson —
+  // pra não reagir a trocas locais de aula (que o effect abaixo já reflete na
+  // URL). Reagir a currentLesson aqui criava um loop infinito com o sync de URL.
   useEffect(() => {
     if (!requestedLessonId || sections.length === 0) return;
-    if (currentLesson?.id === requestedLessonId) return;
+    if (currentLessonIdRef.current === requestedLessonId) return;
     const allLoaded = sections.flatMap((s) => s.lessons || []);
     const target = allLoaded.find((l) => l.id === requestedLessonId);
     if (target) setCurrentLesson(target);
-  }, [requestedLessonId, sections, currentLesson?.id]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [requestedLessonId, sections]);
 
   // Persist last viewed lesson to localStorage
   useEffect(() => {
