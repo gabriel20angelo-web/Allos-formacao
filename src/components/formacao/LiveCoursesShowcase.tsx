@@ -201,11 +201,35 @@ function ScheduledCarousel({ courses }: { courses: SyncCourse[] }) {
             Cursos com encontros e acervo
           </h2>
           <p
-            className="font-dm text-sm max-w-xl mx-auto"
+            className="font-dm text-sm max-w-2xl mx-auto"
             style={{ color: "rgba(253,251,247,0.45)" }}
           >
-            Acompanhe ao vivo pelo Meet ou assista as gravações no seu tempo.
+            Cada um desses cursos tem encontros ao vivo no Google Meet, com dia e hora marcados, e
+            todas as gravações ficam guardadas no acervo. Dá pra acompanhar ao vivo, assistir depois,
+            ou os dois.
           </p>
+
+          {/* Legenda dos atalhos que aparecem nos cards */}
+          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-4">
+            <span className="inline-flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.35)" }}>
+              <span
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
+                style={{ background: "rgba(37,211,102,0.9)", color: "#FFFFFF" }}
+              >
+                <MessageCircle size={10} />
+              </span>
+              Grupo do WhatsApp: link dos encontros, materiais e avisos
+            </span>
+            <span className="inline-flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.35)" }}>
+              <span
+                className="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
+                style={{ background: "rgba(139,92,246,0.92)", color: "#FFFFFF" }}
+              >
+                <Video size={10} />
+              </span>
+              Sala do Meet onde acontecem os encontros
+            </span>
+          </div>
         </motion.div>
 
         {/* Setas (desktop) */}
@@ -390,6 +414,7 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
                     target="_blank"
                     rel="noopener noreferrer"
                     onClick={(e) => e.stopPropagation()}
+                    title="Grupo do WhatsApp: link dos encontros, materiais e avisos"
                     className="inline-flex items-center gap-2 px-3 sm:px-4 py-2.5 rounded-xl font-dm text-xs sm:text-sm font-semibold transition-all hover:-translate-y-0.5"
                     style={{
                       background: "rgba(37,211,102,0.18)",
@@ -398,7 +423,7 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
                       backdropFilter: "blur(8px)",
                     }}
                   >
-                    <MessageCircle size={14} /> Grupo
+                    <MessageCircle size={14} /> Grupo do WhatsApp
                   </a>
                 )}
               </div>
@@ -487,8 +512,8 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
                   backdropFilter: "blur(10px)",
                   boxShadow: "0 4px 14px rgba(37,211,102,0.4)",
                 }}
-                title="Grupo do WhatsApp"
-                aria-label="Entrar no grupo do WhatsApp"
+                title="Grupo do WhatsApp: link dos encontros, materiais e avisos"
+                aria-label="Entrar no grupo do WhatsApp, onde chega o link dos encontros e os materiais"
               >
                 <MessageCircle size={13} />
               </a>
@@ -506,8 +531,8 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
                   backdropFilter: "blur(10px)",
                   boxShadow: "0 4px 14px rgba(139,92,246,0.45)",
                 }}
-                title="Link do Meet"
-                aria-label="Abrir link do Meet"
+                title="Sala do Meet onde acontecem os encontros ao vivo"
+                aria-label="Abrir a sala do Meet onde acontecem os encontros"
               >
                 <Video size={13} />
               </a>
@@ -532,26 +557,34 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
             )}
 
             <div className="flex flex-col gap-1">
-              {course.next_meeting && (
+              {course.next_meeting ? (
                 <div
                   className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
                   style={{ color: "#A78BFA" }}
                 >
                   <Calendar size={11} />
-                  <span>{formatNextMeeting(course.next_meeting.starts_at)}</span>
+                  <span>Ao vivo {formatNextMeeting(course.next_meeting.starts_at)}</span>
                 </div>
-              )}
-              {course.total_recordings > 0 && (
+              ) : (
                 <div
-                  className="flex items-center gap-1.5 font-dm text-[10px]"
-                  style={{ color: "rgba(253,251,247,0.5)" }}
+                  className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
+                  style={{ color: "#A78BFA" }}
                 >
-                  <Play size={9} />
-                  <span>
-                    {course.total_recordings} {course.total_recordings === 1 ? "gravação" : "gravações"}
-                  </span>
+                  <Radio size={11} />
+                  <span>Encontros ao vivo toda semana</span>
                 </div>
               )}
+              <div
+                className="flex items-center gap-1.5 font-dm text-[10px]"
+                style={{ color: "rgba(253,251,247,0.5)" }}
+              >
+                <Play size={9} />
+                <span>
+                  {course.total_recordings > 0
+                    ? `${course.total_recordings} ${course.total_recordings === 1 ? "gravação no acervo" : "gravações no acervo"}`
+                    : "Gravações liberadas depois"}
+                </span>
+              </div>
             </div>
           </div>
         </div>

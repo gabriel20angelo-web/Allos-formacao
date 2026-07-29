@@ -7,6 +7,8 @@ import { Radio, Clock, Video, ChevronRight, MessageCircle, X, Trophy, ExternalLi
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
 
+const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ";
+
 interface Slot {
   id: string;
   dia_semana: number;
@@ -77,7 +79,7 @@ export default function SyncGroupsSection() {
   const [visivel, setVisivel] = useState(true);
   const [nowMinutes, setNowMinutes] = useState(getNowMinutes);
   const [todayIndex, setTodayIndex] = useState(getTodayIndex);
-  const [descModal, setDescModal] = useState<{ atividade: string; descricao: string } | null>(null);
+  const [descModal, setDescModal] = useState<ScheduleItem | null>(null);
 
   // Ranking
   type RankingPeriod = "week" | "month" | "quarter" | "semester" | "year";
@@ -240,7 +242,7 @@ export default function SyncGroupsSection() {
             transition={{ duration: 0.5 }}
             className="font-dm font-semibold text-xs tracking-[.22em] text-[#2E9E8F] uppercase mb-3"
           >
-            Grupos Sincronos
+            Grupos Síncronos
           </motion.p>
           <motion.h2
             initial={{ opacity: 0, y: 16 }}
@@ -255,10 +257,12 @@ export default function SyncGroupsSection() {
             initial={{ opacity: 0, y: 12 }}
             animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ delay: 0.15, duration: 0.6 }}
-            className="font-dm text-sm max-w-xl mx-auto"
+            className="font-dm text-sm max-w-2xl mx-auto"
             style={{ color: "rgba(253,251,247,0.45)" }}
           >
-            Participe dos nossos grupos de formacao ao vivo. Cada sessao e conduzida por facilitadores experientes.
+            Este é o cronograma fixo da semana. Cada encontro acontece ao vivo no Google Meet, no dia
+            e hora marcados, e é conduzido por um facilitador. Clique em um grupo pra ver do que ele
+            trata e como entrar.
           </motion.p>
         </div>
         )}
@@ -304,8 +308,8 @@ export default function SyncGroupsSection() {
                         )}
                       </div>
                       <p className="font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.4)" }}>
-                        {diaStr} as {horaStr}
-                        {evento.descricao && ` — ${evento.descricao}`}
+                        {diaStr} às {horaStr}
+                        {evento.descricao && `. ${evento.descricao}`}
                       </p>
                     </div>
                   </div>
@@ -356,7 +360,7 @@ export default function SyncGroupsSection() {
                   {!live && <Clock size={14} style={{ color: "rgba(253,251,247,0.25)" }} className="flex-shrink-0" />}
                   <div className="flex-1 min-w-0">
                     <p className="font-dm text-sm font-semibold" style={{ color: live ? "#22c55e" : "rgba(253,251,247,0.6)" }}>
-                      {live ? "Ao vivo agora" : `Em breve — ${item.hora}`}
+                      {live ? "Ao vivo agora" : `Começa às ${item.hora}`}
                     </p>
                     <p className="font-dm text-xs truncate" style={{ color: "rgba(253,251,247,0.35)" }}>
                       {item.atividade}
@@ -413,19 +417,18 @@ export default function SyncGroupsSection() {
                         return (
                           <div key={item.id}>
                             <button
-                              onClick={() => item.descricao && setDescModal({ atividade: item.atividade, descricao: item.descricao })}
-                              className="w-full text-left rounded-lg p-2.5 transition-all"
+                              onClick={() => setDescModal(item)}
+                              title={`${item.atividade}: ver do que trata e como participar`}
+                              className="w-full text-left rounded-lg p-2.5 transition-all hover:bg-white/[0.03]"
                               style={{
                                 background: live ? "rgba(34,197,94,0.06)" : "rgba(253,251,247,0.02)",
                                 border: `1px solid ${live ? "rgba(34,197,94,0.12)" : "rgba(253,251,247,0.05)"}`,
-                                cursor: item.descricao ? "pointer" : "default",
+                                cursor: "pointer",
                               }}>
                               <div className="flex items-center gap-1.5 mb-1">
                                 <span className="font-dm text-[11px] font-bold" style={{ color: "#C84B31" }}>{item.hora}</span>
                                 {live && <Radio size={10} style={{ color: "#22c55e" }} className="animate-pulse" />}
-                                {item.descricao && (
-                                  <span className="ml-auto" style={{ color: "rgba(253,251,247,0.2)" }}><InfoIcon size={11} /></span>
-                                )}
+                                <span className="ml-auto" style={{ color: "rgba(253,251,247,0.2)" }}><InfoIcon size={11} /></span>
                               </div>
                               <p className="font-dm text-xs font-medium" style={{ color: "rgba(253,251,247,0.65)" }}>{item.atividade}</p>
                               {item.meetLink && live && (
@@ -447,13 +450,23 @@ export default function SyncGroupsSection() {
             })}
           </div>
 
-          {/* Bottom bar: WhatsApp + Google inline */}
-          <div className="flex flex-col sm:flex-row items-center gap-3 px-5 py-4" style={{ borderTop: "1px solid rgba(253,251,247,0.06)" }}>
-            <a href="https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ" target="_blank" rel="noopener noreferrer"
+          {/* Bottom bar: explica o grupo do WhatsApp e leva pra ele */}
+          <div className="flex flex-col sm:flex-row sm:items-center gap-4 px-5 py-4" style={{ borderTop: "1px solid rgba(253,251,247,0.06)" }}>
+            <div className="flex-1 min-w-0">
+              <p className="font-dm text-xs font-semibold text-[#FDFBF7] mb-0.5">
+                Para participar, entre no grupo do WhatsApp
+              </p>
+              <p className="font-dm text-[11px] leading-relaxed" style={{ color: "rgba(253,251,247,0.4)" }}>
+                É por lá que chega o link do Meet de cada encontro, os materiais de leitura e os avisos
+                quando algum horário muda.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
+            <a href={WHATSAPP_GROUP_URL} target="_blank" rel="noopener noreferrer"
               className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
               style={{ backgroundColor: "rgba(37,211,102,0.1)", color: "#25D366", border: "1px solid rgba(37,211,102,0.15)" }}>
               <MessageCircle size={14} />
-              Grupo WhatsApp
+              Entrar no grupo
             </a>
             <a href="https://search.google.com/local/writereview?placeid=ChIJRU1omzaXpgARA4UFQLEIq4g" target="_blank" rel="noopener noreferrer"
               className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
@@ -466,6 +479,7 @@ export default function SyncGroupsSection() {
               </svg>
               Avaliar no Google
             </a>
+            </div>
           </div>
         </motion.div>}
 
@@ -492,11 +506,15 @@ export default function SyncGroupsSection() {
                 <div className="flex items-start justify-between mb-4">
                   <div className="min-w-0 flex-1 mr-3">
                     <p className="font-dm text-[10px] font-semibold uppercase tracking-wider mb-1" style={{ color: "#C84B31" }}>
-                      Sobre o grupo
+                      Grupo síncrono
                     </p>
                     <h3 className="font-fraunces font-bold text-lg text-[#FDFBF7]">
                       {descModal.atividade}
                     </h3>
+                    <p className="font-dm text-xs mt-1.5 flex items-center gap-1.5" style={{ color: "rgba(253,251,247,0.4)" }}>
+                      <Clock size={11} />
+                      Toda {descModal.dia.toLowerCase()}, às {descModal.hora}, por {duracao} minutos
+                    </p>
                   </div>
                   <button
                     onClick={() => setDescModal(null)}
@@ -506,10 +524,51 @@ export default function SyncGroupsSection() {
                     <X size={16} />
                   </button>
                 </div>
-                <div className="overflow-y-auto" style={{ maxHeight: "60vh" }}>
+                <div className="overflow-y-auto" style={{ maxHeight: "50vh" }}>
                   <p className="font-dm text-sm leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
-                    {descModal.descricao}
+                    {descModal.descricao ||
+                      "Encontro ao vivo no Google Meet, conduzido por um facilitador. A participação é aberta: você entra, acompanha a discussão e pode trazer suas próprias questões."}
                   </p>
+
+                  {/* Como participar */}
+                  <div
+                    className="mt-5 rounded-xl p-4"
+                    style={{ background: "rgba(37,211,102,0.05)", border: "1px solid rgba(37,211,102,0.12)" }}
+                  >
+                    <p className="font-dm text-xs font-semibold mb-2" style={{ color: "#25D366" }}>
+                      Como participar
+                    </p>
+                    <ol className="space-y-1.5 font-dm text-xs leading-relaxed" style={{ color: "rgba(253,251,247,0.5)" }}>
+                      <li>1. Entre no grupo do WhatsApp da formação.</li>
+                      <li>2. O link do Meet de cada encontro é enviado por lá, junto com os materiais de leitura e os avisos de mudança de horário.</li>
+                      <li>3. No dia e hora do grupo, é só abrir o link e entrar.</li>
+                    </ol>
+                  </div>
+                </div>
+
+                <div className="flex flex-col sm:flex-row gap-2 mt-5">
+                  <a
+                    href={WHATSAPP_GROUP_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 flex-1"
+                    style={{ backgroundColor: "rgba(37,211,102,0.12)", color: "#25D366", border: "1px solid rgba(37,211,102,0.2)" }}
+                  >
+                    <MessageCircle size={14} />
+                    Entrar no grupo do WhatsApp
+                  </a>
+                  {descModal.meetLink && (
+                    <a
+                      href={descModal.meetLink}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5"
+                      style={{ backgroundColor: "rgba(253,251,247,0.03)", color: "rgba(253,251,247,0.5)", border: "1px solid rgba(253,251,247,0.08)" }}
+                    >
+                      <Video size={14} />
+                      Sala do Meet
+                    </a>
+                  )}
                 </div>
               </motion.div>
             </motion.div>

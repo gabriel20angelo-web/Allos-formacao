@@ -28,6 +28,9 @@ import {
   Video,
   MessageCircle,
   Calendar,
+  Layers,
+  Users,
+  ArrowRight,
 } from "lucide-react";
 import type { Course, Section, Lesson, LessonProgress, Enrollment, CourseMeeting } from "@/types";
 import { formatDuration } from "@/lib/utils/format";
@@ -46,7 +49,7 @@ export default function CourseOverviewPage() {
   const [showFullDescription, setShowFullDescription] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedSections, setExpandedSections] = useState<Record<string, boolean>>({});
-  const [activeTab, setActiveTab] = useState<"conteudos" | "sobre">("conteudos");
+  const [activeTab, setActiveTab] = useState<"apresentacao" | "conteudos">("apresentacao");
   const [meetings, setMeetings] = useState<CourseMeeting[]>([]);
   const [nowMs, setNowMs] = useState<number>(() => Date.now());
 
@@ -261,6 +264,104 @@ export default function CourseOverviewPage() {
   // Sync tem precedência sobre premium gold — identidade roxa exclusiva.
   const isPremium = !isSync && (course.featured || course.is_structured);
   const meetHrefForLive = liveMeeting?.meet_url_override || course.meet_url || null;
+  const accent = isSync ? "#8B5CF6" : isPremium ? "#d4af37" : "#2E9E8F";
+  const accentSoft = isSync
+    ? "rgba(139,92,246,0.10)"
+    : isPremium
+    ? "rgba(212,175,55,0.10)"
+    : "rgba(46,158,143,0.10)";
+  const accentBorder = isSync
+    ? "rgba(139,92,246,0.22)"
+    : isPremium
+    ? "rgba(212,175,55,0.22)"
+    : "rgba(46,158,143,0.22)";
+  const lessonWord = isSync ? "gravação" : "aula";
+  const lessonWordPlural = isSync ? "gravações" : "aulas";
+
+  // Faixa de números: o que a pessoa recebe, em concreto.
+  const stats: { icon: React.ReactNode; label: string; value: string }[] = [];
+  if (totalLessons > 0) {
+    stats.push({
+      icon: <Layers className="h-4 w-4" />,
+      label: isSync ? "No acervo" : "Conteúdos",
+      value: `${totalLessons} ${totalLessons === 1 ? lessonWord : lessonWordPlural}`,
+    });
+  }
+  if (course.total_duration_minutes && course.total_duration_minutes > 0) {
+    stats.push({
+      icon: <Clock className="h-4 w-4" />,
+      label: "Duração total",
+      value: formatDuration(course.total_duration_minutes),
+    });
+  }
+  if (isSync) {
+    stats.push({
+      icon: <Radio className="h-4 w-4" />,
+      label: "Encontros ao vivo",
+      value: futureMeetings.length > 0 ? `${futureMeetings.length} agendados` : "Toda semana",
+    });
+  }
+  if (course.certificate_enabled) {
+    stats.push({
+      icon: <Award className="h-4 w-4" />,
+      label: "Certificado",
+      value: course.certificate_hours ? `${course.certificate_hours}h` : "Incluso",
+    });
+  }
+  if (course.is_free) {
+    stats.push({
+      icon: <CheckCircle2 className="h-4 w-4" />,
+      label: "Investimento",
+      value: "Gratuito",
+    });
+  }
+
+  // Como funciona: explica o modelo antes de despejar a lista de aulas.
+  const howItWorks: { icon: React.ReactNode; title: string; text: string }[] = isSync
+    ? [
+        {
+          icon: <Radio className="h-4 w-4" />,
+          title: "Encontros ao vivo",
+          text: "Toda semana no Google Meet, no horário do cronograma. Você entra, participa, tira dúvidas e conversa com o grupo.",
+        },
+        {
+          icon: <Play className="h-4 w-4" />,
+          title: "Gravações no acervo",
+          text: totalLessons > 0
+            ? `Não conseguiu ir ao encontro? Todas as ${totalLessons} ${totalLessons === 1 ? "gravação fica" : "gravações ficam"} aqui pra você assistir no seu tempo.`
+            : "Cada encontro é gravado e sobe aqui depois, pra você assistir no seu tempo.",
+        },
+        {
+          icon: <Users className="h-4 w-4" />,
+          title: "Grupo no WhatsApp",
+          text: "É por lá que chega o link de cada encontro, os materiais de leitura, os avisos de horário e as conversas entre os participantes.",
+        },
+      ]
+    : [
+        {
+          icon: <Play className="h-4 w-4" />,
+          title: "No seu ritmo",
+          text: totalLessons > 0
+            ? `São ${totalLessons} ${totalLessons === 1 ? "aula" : "aulas"} liberadas de uma vez. Você assiste quando quiser, na ordem que quiser, quantas vezes precisar.`
+            : "As aulas ficam liberadas pra você assistir quando quiser, quantas vezes precisar.",
+        },
+        {
+          icon: <CheckCircle2 className="h-4 w-4" />,
+          title: "Progresso salvo",
+          text: "A plataforma guarda onde você parou em cada aula, então dá pra retomar de qualquer aparelho sem se perder.",
+        },
+        ...(course.certificate_enabled
+          ? [
+              {
+                icon: <Award className="h-4 w-4" />,
+                title: "Certificado ao final",
+                text: course.certificate_hours
+                  ? `Ao concluir as aulas obrigatórias você emite o certificado de ${course.certificate_hours}h direto na plataforma.`
+                  : "Ao concluir as aulas obrigatórias você emite o certificado direto na plataforma.",
+              },
+            ]
+          : []),
+      ];
 
   return (
     <div className="relative min-h-screen">
@@ -606,6 +707,19 @@ export default function CourseOverviewPage() {
                 </Link>
               )}
             </motion.div>
+
+            {/* O que a pessoa encontra no grupo do WhatsApp */}
+            {isSync && course.whatsapp_group_url && (
+              <motion.p
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                transition={{ duration: 0.5, delay: 0.5 }}
+                className="font-dm text-xs mt-4 max-w-md"
+                style={{ color: "rgba(253,251,247,0.45)" }}
+              >
+                No grupo do WhatsApp chega o link de cada encontro, os materiais de leitura e os avisos de horário.
+              </motion.p>
+            )}
           </div>
         </div>
 
@@ -614,25 +728,28 @@ export default function CourseOverviewPage() {
           {/* Tabs */}
           <div className="flex gap-6 border-b mb-8" style={{ borderColor: isPremium ? "rgba(212,175,55,0.1)" : "rgba(255,255,255,0.08)" }}>
             <button
+              onClick={() => setActiveTab("apresentacao")}
+              className={`pb-3 font-dm font-semibold text-sm transition-colors relative ${
+                activeTab === "apresentacao" ? "text-cream" : "text-cream/40 hover:text-cream/60"
+              }`}
+            >
+              {isSync ? "Sobre o grupo" : "Sobre o curso"}
+              {activeTab === "apresentacao" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: accent }} />
+              )}
+            </button>
+            <button
               onClick={() => setActiveTab("conteudos")}
               className={`pb-3 font-dm font-semibold text-sm transition-colors relative ${
                 activeTab === "conteudos" ? "text-cream" : "text-cream/40 hover:text-cream/60"
               }`}
             >
-              Conteúdos
-              {activeTab === "conteudos" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: isPremium ? "#d4af37" : "#2E9E8F" }} />
+              {isSync ? "Gravações" : "Conteúdos"}
+              {totalLessons > 0 && (
+                <span className="ml-1.5 font-normal text-cream/30">{totalLessons}</span>
               )}
-            </button>
-            <button
-              onClick={() => setActiveTab("sobre")}
-              className={`pb-3 font-dm font-semibold text-sm transition-colors relative ${
-                activeTab === "sobre" ? "text-cream" : "text-cream/40 hover:text-cream/60"
-              }`}
-            >
-              Sobre
-              {activeTab === "sobre" && (
-                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: isPremium ? "#d4af37" : "#2E9E8F" }} />
+              {activeTab === "conteudos" && (
+                <div className="absolute bottom-0 left-0 right-0 h-0.5 rounded-full" style={{ background: accent }} />
               )}
             </button>
           </div>
@@ -643,80 +760,6 @@ export default function CourseOverviewPage() {
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
             >
-              {/* Próximos encontros — só pra cursos sync */}
-              {isSync && futureMeetings.length > 0 && (
-                <div
-                  className="mb-8 rounded-2xl overflow-hidden"
-                  style={{
-                    background: "rgba(139,92,246,0.04)",
-                    border: "1px solid rgba(139,92,246,0.18)",
-                  }}
-                >
-                  <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(139,92,246,0.12)" }}>
-                    <Calendar size={14} style={{ color: "#A78BFA" }} />
-                    <h3 className="font-dm font-semibold text-sm text-cream">Próximos encontros</h3>
-                    <span className="ml-auto font-dm text-[11px]" style={{ color: "rgba(167,139,250,0.6)" }}>
-                      {course.live_session_duration_minutes ?? 120}min cada
-                    </span>
-                  </div>
-                  <div className="divide-y" style={{ borderColor: "rgba(139,92,246,0.1)" }}>
-                    {futureMeetings.slice(0, 6).map((m) => {
-                      const date = new Date(m.starts_at);
-                      const dia = date.toLocaleDateString("pt-BR", {
-                        weekday: "short", day: "2-digit", month: "short",
-                        timeZone: "America/Sao_Paulo",
-                      });
-                      const hora = date.toLocaleTimeString("pt-BR", {
-                        hour: "2-digit", minute: "2-digit",
-                        timeZone: "America/Sao_Paulo",
-                      });
-                      return (
-                        <div key={m.id} className="px-5 py-3 flex items-center gap-4">
-                          <div className="min-w-[80px]">
-                            <p className="font-dm text-[10px] uppercase tracking-wider" style={{ color: "rgba(167,139,250,0.6)" }}>
-                              {dia.replace(".", "")}
-                            </p>
-                            <p className="font-fraunces font-bold text-base text-cream">{hora}</p>
-                          </div>
-                          <div className="flex-1">
-                            <p className="font-dm text-sm text-cream/80">
-                              {m.title || "Encontro ao vivo"}
-                            </p>
-                          </div>
-                          {(m.meet_url_override || course.meet_url) && (
-                            <a
-                              href={m.meet_url_override || course.meet_url || "#"}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-dm text-xs font-semibold transition-all hover:-translate-y-0.5"
-                              style={{ background: "rgba(139,92,246,0.12)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.3)" }}
-                            >
-                              <Video size={11} /> Link
-                            </a>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-              )}
-
-              {/* Modelo do curso sync — explicação rápida */}
-              {isSync && (
-                <div
-                  className="mb-8 px-5 py-4 rounded-2xl flex items-start gap-3"
-                  style={{
-                    background: "rgba(139,92,246,0.025)",
-                    border: "1px solid rgba(139,92,246,0.1)",
-                  }}
-                >
-                  <Radio size={14} className="mt-0.5 flex-shrink-0" style={{ color: "#A78BFA" }} />
-                  <div className="font-dm text-xs leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
-                    <span className="font-semibold" style={{ color: "#A78BFA" }}>Como funciona:</span> os encontros acontecem ao vivo no Google Meet. As gravações sobem aqui após cada encontro pra você assistir no seu tempo.
-                  </div>
-                </div>
-              )}
-
               {/* Header + search */}
               <div className="flex items-center justify-between mb-6">
                 <h2 className="font-fraunces font-bold text-lg text-cream">
@@ -893,13 +936,128 @@ export default function CourseOverviewPage() {
             </motion.div>
           )}
 
-          {activeTab === "sobre" && (
+          {activeTab === "apresentacao" && (
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.3 }}
               className="space-y-8"
             >
+              {/* Resumo em números: o que a pessoa recebe, em concreto */}
+              {stats.length > 0 && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  {stats.map((s) => (
+                    <div
+                      key={s.label}
+                      className="rounded-2xl px-4 py-3.5"
+                      style={{
+                        background: "rgba(255,255,255,0.02)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <div className="flex items-center gap-1.5 mb-1.5" style={{ color: accent }}>
+                        {s.icon}
+                        <span className="font-dm text-[10px] font-semibold uppercase tracking-wider">
+                          {s.label}
+                        </span>
+                      </div>
+                      <p className="font-fraunces font-bold text-base text-cream leading-tight">
+                        {s.value}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Como funciona */}
+              <div>
+                <h3 className="font-fraunces font-bold text-lg text-cream mb-4">
+                  {isSync ? "Como funciona o grupo" : "Como funciona o curso"}
+                </h3>
+                <div className={`grid gap-3 ${howItWorks.length === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3"}`}>
+                  {howItWorks.map((item) => (
+                    <div
+                      key={item.title}
+                      className="rounded-2xl p-4"
+                      style={{ background: accentSoft, border: `1px solid ${accentBorder}` }}
+                    >
+                      <div className="flex items-center gap-2 mb-2">
+                        <span style={{ color: accent }}>{item.icon}</span>
+                        <p className="font-dm font-semibold text-sm text-cream">{item.title}</p>
+                      </div>
+                      <p className="font-dm text-xs leading-relaxed" style={{ color: "rgba(253,251,247,0.55)" }}>
+                        {item.text}
+                      </p>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Próximos encontros, só pra cursos sync */}
+              {isSync && futureMeetings.length > 0 && (
+                <div>
+                  <h3 className="font-fraunces font-bold text-lg text-cream mb-4">
+                    Próximos encontros
+                  </h3>
+                  <div
+                    className="rounded-2xl overflow-hidden"
+                    style={{
+                      background: "rgba(139,92,246,0.04)",
+                      border: "1px solid rgba(139,92,246,0.18)",
+                    }}
+                  >
+                    <div className="px-5 py-3 flex items-center gap-2" style={{ borderBottom: "1px solid rgba(139,92,246,0.12)" }}>
+                      <Calendar size={14} style={{ color: "#A78BFA" }} />
+                      <p className="font-dm text-xs" style={{ color: "rgba(253,251,247,0.5)" }}>
+                        Ao vivo no Google Meet
+                      </p>
+                      <span className="ml-auto font-dm text-[11px]" style={{ color: "rgba(167,139,250,0.6)" }}>
+                        {course.live_session_duration_minutes ?? 120}min cada
+                      </span>
+                    </div>
+                    <div className="divide-y" style={{ borderColor: "rgba(139,92,246,0.1)" }}>
+                      {futureMeetings.slice(0, 6).map((m) => {
+                        const date = new Date(m.starts_at);
+                        const dia = date.toLocaleDateString("pt-BR", {
+                          weekday: "short", day: "2-digit", month: "short",
+                          timeZone: "America/Sao_Paulo",
+                        });
+                        const hora = date.toLocaleTimeString("pt-BR", {
+                          hour: "2-digit", minute: "2-digit",
+                          timeZone: "America/Sao_Paulo",
+                        });
+                        return (
+                          <div key={m.id} className="px-5 py-3 flex items-center gap-4">
+                            <div className="min-w-[80px]">
+                              <p className="font-dm text-[10px] uppercase tracking-wider" style={{ color: "rgba(167,139,250,0.6)" }}>
+                                {dia.replace(".", "")}
+                              </p>
+                              <p className="font-fraunces font-bold text-base text-cream">{hora}</p>
+                            </div>
+                            <div className="flex-1">
+                              <p className="font-dm text-sm text-cream/80">
+                                {m.title || "Encontro ao vivo"}
+                              </p>
+                            </div>
+                            {(m.meet_url_override || course.meet_url) && (
+                              <a
+                                href={m.meet_url_override || course.meet_url || "#"}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg font-dm text-xs font-semibold transition-all hover:-translate-y-0.5"
+                                style={{ background: "rgba(139,92,246,0.12)", color: "#A78BFA", border: "1px solid rgba(139,92,246,0.3)" }}
+                              >
+                                <Video size={11} /> Link
+                              </a>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* Long description */}
               {longDescription && (
                 <div>
@@ -969,34 +1127,46 @@ export default function CourseOverviewPage() {
                 </div>
               )}
 
-              {/* Course meta */}
+              {/* CTA de fechamento */}
               <div
-                className="rounded-xl p-5"
-                style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
+                className="rounded-2xl p-6 sm:p-7 text-center"
+                style={{ background: accentSoft, border: `1px solid ${accentBorder}` }}
               >
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
-                  <div>
-                    <p className="font-dm text-xs text-cream/30 mb-1">Conteúdos</p>
-                    <p className="font-dm text-sm font-medium text-cream">{totalLessons} aulas</p>
-                  </div>
-                  {course.total_duration_minutes && course.total_duration_minutes > 0 && (
-                    <div>
-                      <p className="font-dm text-xs text-cream/30 mb-1">Duração total</p>
-                      <p className="font-dm text-sm font-medium text-cream">
-                        {formatDuration(course.total_duration_minutes)}
-                      </p>
-                    </div>
+                <h3 className="font-fraunces font-bold text-lg text-cream mb-2">
+                  {isSync ? "Quer participar?" : "Pronto pra começar?"}
+                </h3>
+                <p className="font-dm text-sm max-w-md mx-auto mb-5" style={{ color: "rgba(253,251,247,0.55)" }}>
+                  {isSync
+                    ? "Entre no grupo do WhatsApp pra receber o link dos encontros e os materiais, e assista as gravações aqui sempre que quiser."
+                    : totalLessons > 0
+                    ? `São ${totalLessons} ${totalLessons === 1 ? "aula" : "aulas"} esperando por você, no seu ritmo.`
+                    : "As aulas ficam liberadas pra você assistir no seu ritmo."}
+                </p>
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  {totalLessons > 0 && (
+                    <button
+                      onClick={() => setActiveTab("conteudos")}
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:-translate-y-0.5"
+                      style={{ background: accent, color: isPremium ? "#1a1508" : "#FFFFFF" }}
+                    >
+                      Ver {isSync ? "as gravações" : "as aulas"} <ArrowRight className="h-4 w-4" />
+                    </button>
                   )}
-                  {course.certificate_enabled && (
-                    <div>
-                      <p className="font-dm text-xs text-cream/30 mb-1">Certificado</p>
-                      <p className="font-dm text-sm font-medium text-cream">
-                        {course.certificate_hours ? `${course.certificate_hours}h` : "Incluso"}
-                      </p>
-                    </div>
+                  {course.whatsapp_group_url && (
+                    <a
+                      href={course.whatsapp_group_url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-2 px-5 py-3 rounded-xl font-dm font-semibold text-sm transition-all hover:-translate-y-0.5"
+                      style={{
+                        background: "rgba(37,211,102,0.12)",
+                        color: "#25D366",
+                        border: "1px solid rgba(37,211,102,0.25)",
+                      }}
+                    >
+                      <MessageCircle className="h-4 w-4" />
+                      Entrar no grupo do WhatsApp
+                    </a>
                   )}
                 </div>
               </div>
