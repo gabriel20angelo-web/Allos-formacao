@@ -1,13 +1,13 @@
-"use client";
+﻿"use client";
 
 import { useState, useEffect, useMemo, useCallback } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { Radio, Clock, Video, ChevronRight, MessageCircle, X, Trophy, ExternalLink, CalendarDays } from "lucide-react";
 
-const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
+import { WHATSAPP_FORMACAO_URL } from "@/lib/allos-links";
 
-const WHATSAPP_GROUP_URL = "https://chat.whatsapp.com/JpZtYWJovU03VlrZJ5oUxQ";
+const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"] as const;
 
 interface Slot {
   id: string;
@@ -462,7 +462,7 @@ export default function SyncGroupsSection() {
               </p>
             </div>
             <div className="flex flex-wrap items-center gap-2 flex-shrink-0">
-            <a href={WHATSAPP_GROUP_URL} target="_blank" rel="noopener noreferrer"
+            <a href={WHATSAPP_FORMACAO_URL} target="_blank" rel="noopener noreferrer"
               className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center gap-2 transition-all hover:-translate-y-0.5"
               style={{ backgroundColor: "rgba(37,211,102,0.1)", color: "#25D366", border: "1px solid rgba(37,211,102,0.15)" }}>
               <MessageCircle size={14} />
@@ -548,7 +548,7 @@ export default function SyncGroupsSection() {
 
                 <div className="flex flex-col sm:flex-row gap-2 mt-5">
                   <a
-                    href={WHATSAPP_GROUP_URL}
+                    href={WHATSAPP_FORMACAO_URL}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="font-dm text-xs font-semibold px-4 py-2.5 rounded-xl flex items-center justify-center gap-2 transition-all hover:-translate-y-0.5 flex-1"

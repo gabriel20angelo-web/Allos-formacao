@@ -7,6 +7,7 @@ import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import CourseBackground from "@/components/course/CourseBackground";
+import SobreAllosBlock from "@/components/formacao/SobreAllosBlock";
 import Button from "@/components/ui/Button";
 import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
@@ -1181,6 +1182,9 @@ export default function CourseOverviewPage() {
                   )}
                 </div>
               </div>
+
+              {/* Onde este curso se encaixa na Allos */}
+              <SobreAllosBlock />
             </motion.div>
           )}
         </div>
