@@ -169,6 +169,14 @@ export default function FormacaoPage() {
         {/* Live courses (sync) — Zona 1 (AGORA) + Zona 2 (próximos) */}
         <LiveCoursesShowcase />
 
+        {/* Synchronous groups - live schedule */}
+        <SyncGroupsSection />
+
+        {/* Divider */}
+        <div className="max-w-[1200px] mx-auto px-6">
+          <div className="divider-gradient" />
+        </div>
+
         {/* Featured courses - premium gold section */}
         {!loading && featuredCourses.length > 0 && (
           <section className="pt-10 sm:pt-14 pb-6">
@@ -661,13 +669,6 @@ export default function FormacaoPage() {
           </Link>
         </div>
 
-        {/* Divider */}
-        <div className="max-w-[1200px] mx-auto px-6">
-          <div className="divider-gradient" />
-        </div>
-
-        {/* Synchronous groups - live schedule */}
-        <SyncGroupsSection />
       </div>
     </div>
   );
