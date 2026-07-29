@@ -298,7 +298,12 @@ export default function CourseOverviewPage() {
     stats.push({
       icon: <Radio className="h-4 w-4" />,
       label: "Encontros ao vivo",
-      value: futureMeetings.length > 0 ? `${futureMeetings.length} agendados` : "Toda semana",
+      value:
+        futureMeetings.length === 1
+          ? "1 agendado"
+          : futureMeetings.length > 1
+          ? `${futureMeetings.length} agendados`
+          : "Toda semana",
     });
   }
   if (course.certificate_enabled) {
@@ -327,8 +332,10 @@ export default function CourseOverviewPage() {
         {
           icon: <Play className="h-4 w-4" />,
           title: "Gravações no acervo",
-          text: totalLessons > 0
-            ? `Não conseguiu ir ao encontro? Todas as ${totalLessons} ${totalLessons === 1 ? "gravação fica" : "gravações ficam"} aqui pra você assistir no seu tempo.`
+          text: totalLessons === 1
+            ? "Não conseguiu ir ao encontro? A gravação fica aqui pra você assistir no seu tempo."
+            : totalLessons > 1
+            ? `Não conseguiu ir ao encontro? Todas as ${totalLessons} gravações ficam aqui pra você assistir no seu tempo.`
             : "Cada encontro é gravado e sobe aqui depois, pra você assistir no seu tempo.",
         },
         {
@@ -341,8 +348,10 @@ export default function CourseOverviewPage() {
         {
           icon: <Play className="h-4 w-4" />,
           title: "No seu ritmo",
-          text: totalLessons > 0
-            ? `São ${totalLessons} ${totalLessons === 1 ? "aula" : "aulas"} liberadas de uma vez. Você assiste quando quiser, na ordem que quiser, quantas vezes precisar.`
+          text: totalLessons === 1
+            ? "A aula fica liberada pra você assistir quando quiser, quantas vezes precisar."
+            : totalLessons > 1
+            ? `São ${totalLessons} aulas liberadas de uma vez. Você assiste quando quiser, na ordem que quiser, quantas vezes precisar.`
             : "As aulas ficam liberadas pra você assistir quando quiser, quantas vezes precisar.",
         },
         {
@@ -1138,8 +1147,10 @@ export default function CourseOverviewPage() {
                 <p className="font-dm text-sm max-w-md mx-auto mb-5" style={{ color: "rgba(253,251,247,0.55)" }}>
                   {isSync
                     ? "Entre no grupo do WhatsApp pra receber o link dos encontros e os materiais, e assista as gravações aqui sempre que quiser."
-                    : totalLessons > 0
-                    ? `São ${totalLessons} ${totalLessons === 1 ? "aula" : "aulas"} esperando por você, no seu ritmo.`
+                    : totalLessons === 1
+                    ? "É uma aula esperando por você, no seu ritmo."
+                    : totalLessons > 1
+                    ? `São ${totalLessons} aulas esperando por você, no seu ritmo.`
                     : "As aulas ficam liberadas pra você assistir no seu ritmo."}
                 </p>
                 <div className="flex flex-wrap items-center justify-center gap-3">
