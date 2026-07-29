@@ -162,27 +162,27 @@ export default function SobreAllosBlock() {
             border: "1px solid rgba(37,211,102,0.16)",
           }}
         >
-          <div
-            className="w-11 h-11 rounded-2xl flex items-center justify-center flex-shrink-0"
-            style={{
-              background: "rgba(37,211,102,0.12)",
-              border: "1px solid rgba(37,211,102,0.22)",
-            }}
-          >
-            <MessageCircle className="h-5 w-5" style={{ color: WHATSAPP }} />
-          </div>
-
           <div className="flex-1 min-w-0">
-            <p className="font-fraunces font-bold text-base text-[#FDFBF7] mb-1">
-              Grupo geral da formação no WhatsApp
-            </p>
+            <div className="flex items-center gap-2.5 mb-2">
+              <div
+                className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                style={{
+                  background: "rgba(37,211,102,0.12)",
+                  border: "1px solid rgba(37,211,102,0.22)",
+                }}
+              >
+                <MessageCircle className="h-4 w-4" style={{ color: WHATSAPP }} />
+              </div>
+              <p className="font-fraunces font-bold text-base text-[#FDFBF7]">
+                Grupo geral da formação no WhatsApp
+              </p>
+            </div>
             <p
               className="font-dm text-[13px] leading-relaxed"
               style={{ color: "rgba(253,251,247,0.5)" }}
             >
-              É por lá que mandamos todos os grupos de estudo síncronos da semana, o link do Meet de
-              cada encontro, os materiais de leitura, os avisos de horário e os cursos novos que
-              entram no ar. Se você quer acompanhar a formação de perto, esse é o lugar.
+              É por lá que mandamos todos os grupos de estudo síncronos da semana, com o link do Meet
+              de cada encontro, os materiais de leitura e os avisos quando algum horário muda.
             </p>
           </div>
 
