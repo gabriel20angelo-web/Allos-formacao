@@ -117,11 +117,15 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     // A numeração segue o que já existe no curso, contando as aulas que vieram
     // de encontros. Assim "Encontro 8" vem depois do 7 mesmo que alguém tenha
     // criado aulas à mão no meio.
+    // Conta aprovadas E pendentes. Contar só aprovadas fazia todas as sugestões
+    // criadas na mesma rodada nascerem "Encontro 1", porque nenhuma delas tinha
+    // sido aprovada ainda. Vincular um curso a uma sala com histórico produzia
+    // dez aulas com o mesmo número.
     const { count } = await sb
       .from("formacao_meet_aulas_sugeridas")
       .select("id", { count: "exact", head: true })
       .eq("curso_id", space.curso_id)
-      .eq("status", "aprovada");
+      .in("status", ["aprovada", "pendente"]);
 
     const url = montarUrl(e.gravacao_uri, e.youtube_video_id, e.inicio_efetivo_seg);
 

@@ -18,7 +18,7 @@
 //    é sobrescrita.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { dataLocal } from "./nomes";
+import { dataLocal, diaSemanaLocal } from "./nomes";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Sb = SupabaseClient<any, "public", any>;
@@ -32,14 +32,19 @@ export interface ResultadoStatus {
   motivo_pulo?: string;
 }
 
-/** Segunda-feira da semana de uma data, no fuso local. */
+/**
+ * Segunda-feira da semana de uma data, no fuso de quem participa.
+ *
+ * Usar `getDay()` cru mede no fuso do servidor, que é UTC: às 21h de domingo em
+ * São Paulo o servidor já acha que é segunda, e o fechamento da semana
+ * dispararia três horas antes, arquivando um retrato incompleto.
+ */
 function segundaDaSemana(d: Date): Date {
-  const dia = d.getDay(); // 0 = domingo
-  const diff = dia === 0 ? -6 : 1 - dia;
-  const segunda = new Date(d);
-  segunda.setDate(d.getDate() + diff);
-  segunda.setHours(0, 0, 0, 0);
-  return segunda;
+  const diaLocal = diaSemanaLocal(d); // 0 = segunda, no fuso certo
+  const segunda = new Date(d.getTime() - diaLocal * 24 * 3_600_000);
+  // Meia-noite de Brasília, e não do servidor.
+  const [ano, mes, dia] = dataLocal(segunda).split("-").map(Number);
+  return new Date(Date.UTC(ano, mes - 1, dia, 3, 0, 0)); // 00h BRT = 03h UTC
 }
 
 /**
@@ -256,7 +261,8 @@ export async function fecharSemanaSePreciso(
   sb: Sb
 ): Promise<{ fechou: boolean; motivo?: string; slots?: number }> {
   const agora = new Date();
-  if (agora.getDay() !== 1) return { fechou: false, motivo: "Hoje não é segunda." };
+  // Segunda no fuso de Brasília, não no do servidor.
+  if (diaSemanaLocal(agora) !== 0) return { fechou: false, motivo: "Hoje não é segunda." };
 
   const segundaAtual = segundaDaSemana(agora);
   const segundaAnterior = new Date(segundaAtual);

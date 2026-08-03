@@ -201,7 +201,10 @@ export async function ingerir(opts?: {
     condutoresPorSlot.set(a.slot_id, [...atual, ...nomes]);
   }
 
-  const { data: perfis } = await sb.from("profiles").select("id, full_name");
+  // Com limite explícito: sem ele o PostgREST corta em mil linhas em silêncio,
+  // e a partir do aluno de número mil o casamento de nomes passaria a comparar
+  // contra um subconjunto arbitrário, sem erro nenhum.
+  const { data: perfis } = await sb.from("profiles").select("id, full_name").limit(5000);
   const candidatos: CandidatoAluno[] = (perfis || []).map(
     (p: { id: string; full_name: string }) => ({
       id: p.id,
@@ -238,7 +241,10 @@ export async function ingerir(opts?: {
         ? new Date(new Date(ultimo.inicio).getTime() - 2 * 60 * MS_MIN)
         : new Date(Date.now() - diasAtras * 24 * 60 * MS_MIN);
 
-      const conferencias = await listarConferencias(space.space_name, desde);
+      // Teto por rodada: uma sala que ficou semanas sem captura devolve todas as
+      // conferências pendentes de uma vez, e processar todas na mesma requisição
+      // pode passar de vários minutos. O que sobrar entra na rodada seguinte.
+      const conferencias = (await listarConferencias(space.space_name, desde)).slice(0, 8);
 
       for (const conf of conferencias) {
         if (!conf.endTime) continue; // ainda em curso
@@ -348,7 +354,10 @@ export async function ingerir(opts?: {
             transcricaoPronta = horasDesdeOFim >= 48;
           } else {
             // Existe transcrição, mas ainda sem arquivo: está sendo processada.
-            transcricaoPronta = false;
+            // Também desiste em dois dias, senão um export que falhou do lado do
+            // Google faz este encontro ser reprocessado inteiro a cada rodada,
+            // para sempre, sem nunca fechar nem dar erro.
+            transcricaoPronta = horasDesdeOFim >= 48;
           }
         } catch (e) {
           res.erros.push(
@@ -445,24 +454,32 @@ export async function ingerir(opts?: {
           });
         }
 
+        // O Google às vezes devolve o mesmo participante mais de uma vez. A
+        // deduplicação precisa vir ANTES dos agregados, senão o quórum, os
+        // minutos somados, o pico e a lista de presença saem inflados enquanto
+        // as linhas por pessoa saem certas: número errado sem nenhum erro.
+        const unicas = Array.from(
+          new Map(calculadas.map((c) => [c.participant_api_id, c])).values()
+        );
+
         // ── agregados do encontro ──
-        const total = calculadas.length;
-        const minutosSomados = calculadas.reduce((a, c) => a + c.minutos_presentes, 0);
-        const identificados = calculadas.filter((c) => c.aluno_id).length;
+        const total = unicas.length;
+        const minutosSomados = unicas.reduce((a, c) => a + c.minutos_presentes, 0);
+        const identificados = unicas.filter((c) => c.aluno_id).length;
         const mediaPermanencia = total
           ? Math.round(
-              (calculadas.reduce((a, c) => a + (c.permanencia_pct || 0), 0) / total) * 10
+              (unicas.reduce((a, c) => a + (c.permanencia_pct || 0), 0) / total) * 10
             ) / 10
           : null;
 
-        const houveFala = calculadas.some((c) => (c.minutos_fala || 0) > 0);
+        const houveFala = unicas.some((c) => (c.minutos_fala || 0) > 0);
         const vozesAtivas = houveFala && total
           ? Math.round(
-              (calculadas.filter((c) => (c.minutos_fala || 0) > 0).length / total) * 1000
+              (unicas.filter((c) => (c.minutos_fala || 0) > 0).length / total) * 1000
             ) / 10
           : null;
-        const falaTotal = calculadas.reduce((a, c) => a + (c.minutos_fala || 0), 0);
-        const falaCondutor = calculadas
+        const falaTotal = unicas.reduce((a, c) => a + (c.minutos_fala || 0), 0);
+        const falaCondutor = unicas
           .filter((c) => c.eh_condutor)
           .reduce((a, c) => a + (c.minutos_fala || 0), 0);
         const falaCondutorPct =
@@ -514,7 +531,12 @@ export async function ingerir(opts?: {
           gravacao_file_id: gravacaoFileId,
           transcricao_uri: transcricaoUri,
           transcricao_file_id: transcricaoFileId,
-          transcricao_ingerida: transcricaoPronta,
+          // Falso agora, de propósito. Este é o carimbo de "não precisa voltar
+          // aqui", e ele só pode ser dado depois que participações e falas
+          // estiverem gravadas. Marcá-lo neste primeiro write fazia uma falha de
+          // rede no passo seguinte deixar o encontro concluído e vazio para
+          // sempre, sem erro e sem nova tentativa.
+          transcricao_ingerida: false,
           ingerido_em: new Date().toISOString(),
         };
 
@@ -536,15 +558,6 @@ export async function ingerir(opts?: {
           .delete()
           .eq("encontro_id", encontroSalvo.id);
 
-        // O Google às vezes devolve o mesmo participante mais de uma vez na
-        // listagem, e o banco recusa a segunda linha por chave duplicada,
-        // derrubando a gravação do encontro inteiro. Ficar com a primeira
-        // ocorrência é seguro: os minutos vêm das sessões, que já foram
-        // somadas por participante antes daqui.
-        const unicas = Array.from(
-          new Map(calculadas.map((c) => [c.participant_api_id, c])).values()
-        );
-
         if (unicas.length) {
           const { error: errPart } = await sb
             .from("formacao_meet_participacoes")
@@ -562,7 +575,7 @@ export async function ingerir(opts?: {
         // participações: reconciliar linha a linha não vale o risco.
         if (falasParaGravar.length) {
           const nomePorParticipante = new Map(
-            calculadas.map((c) => [c.participant_api_id, c])
+            unicas.map((c) => [c.participant_api_id, c])
           );
 
           await sb.from("formacao_meet_falas").delete().eq("encontro_id", encontroSalvo.id);
@@ -636,7 +649,7 @@ export async function ingerir(opts?: {
             // primeira_entrada, ultima_saida e snapshots_presente. Mantemos os
             // quatro e acrescentamos os campos novos, senão /admin/quorum
             // renderiza undefined onde havia horário.
-            participantes: calculadas.map((c) => ({
+            participantes: unicas.map((c) => ({
               nome: c.display_name,
               primeira_entrada: c.primeira_entrada,
               ultima_saida: c.ultima_saida,
@@ -652,6 +665,17 @@ export async function ingerir(opts?: {
           },
           { onConflict: "conference_record_id" }
         );
+
+        // Só agora o encontro pode ser dado como concluído: tudo o que precisava
+        // ser gravado já está gravado. Se qualquer passo acima tivesse falhado,
+        // o carimbo não viria e a próxima rodada tentaria de novo, em vez de
+        // deixar um encontro vazio marcado como pronto.
+        if (transcricaoPronta) {
+          await sb
+            .from("formacao_meet_encontros")
+            .update({ transcricao_ingerida: true })
+            .eq("id", encontroSalvo.id);
+        }
 
         if (existente) res.encontros_atualizados++;
         else res.encontros_novos++;
