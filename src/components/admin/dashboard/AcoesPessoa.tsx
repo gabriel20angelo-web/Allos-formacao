@@ -19,6 +19,7 @@ export default function AcoesPessoa({
   bloqueado,
   temSinais,
   onMudou,
+  onEmailEnviado,
 }: {
   userId: string | null;
   nome: string;
@@ -26,6 +27,8 @@ export default function AcoesPessoa({
   bloqueado: boolean;
   temSinais: boolean;
   onMudou: () => void;
+  /** Depois do envio, o caso sai da lista aberta e vai para "E-mail enviado". */
+  onEmailEnviado?: () => void;
 }) {
   const [previaAberta, setPreviaAberta] = useState(false);
   const [previa, setPrevia] = useState<{ assunto: string; texto: string } | null>(null);
@@ -89,6 +92,7 @@ export default function AcoesPessoa({
       }
       toast.success(`E-mail enviado para ${email}.`);
       setPreviaAberta(false);
+      onEmailEnviado?.();
     } catch {
       toast.error("Erro de rede.");
     } finally {

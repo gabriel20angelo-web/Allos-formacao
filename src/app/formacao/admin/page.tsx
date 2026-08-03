@@ -1298,7 +1298,7 @@ export default function AdminDashboard() {
 
               <div className="h-5" />
 
-              <SinaisAtencao abertos={sinaisSync.abertos} arquivados={sinaisSync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
+              <SinaisAtencao abertos={sinaisSync.abertos} avisados={sinaisSync.avisados} arquivados={sinaisSync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 
               {/* ── Atividade recente (feedbacks do /certificado) ── */}
               <motion.div
@@ -2025,7 +2025,7 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
 
-              <SinaisAtencao abertos={sinaisAsync.abertos} arquivados={sinaisAsync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
+              <SinaisAtencao abertos={sinaisAsync.abertos} avisados={sinaisAsync.avisados} arquivados={sinaisAsync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 
               {/* ── Atividade recente (movimento nos cursos) ── */}
               <motion.div
@@ -2154,7 +2154,11 @@ export default function AdminDashboard() {
 
       {profile && <AdminNotesSection userId={profile.id} />}
 
-      <PessoaModal pessoa={pessoaAberta} onClose={() => setPessoaAberta(null)} />
+      <PessoaModal
+        pessoa={pessoaAberta}
+        onClose={() => setPessoaAberta(null)}
+        onEmailEnviado={(sinais) => sinaisApi.marcarEmailEnviado(sinais)}
+      />
     </div>
   );
 }

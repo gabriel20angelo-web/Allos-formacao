@@ -53,9 +53,12 @@ interface Dossie {
 export default function PessoaModal({
   pessoa,
   onClose,
+  onEmailEnviado,
 }: {
   pessoa: PessoaRef | null;
   onClose: () => void;
+  /** Recebe os sinais que entraram no e-mail, para saírem da lista aberta. */
+  onEmailEnviado?: (sinais: Sinal[]) => void;
 }) {
   const [dossie, setDossie] = useState<Dossie | null>(null);
   const [loading, setLoading] = useState(false);
@@ -465,6 +468,7 @@ export default function PessoaModal({
               bloqueado={dossie.bloqueado}
               temSinais={dossie.sinais.length > 0}
               onMudou={() => pessoa && carregar(pessoa)}
+              onEmailEnviado={() => onEmailEnviado?.(dossie.sinais)}
             />
             <button
               onClick={baixarDossie}
