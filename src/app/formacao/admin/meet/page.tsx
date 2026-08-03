@@ -12,7 +12,7 @@ import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, DoorClosed, DoorOpen, Link2,
+  AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
   Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
 } from "lucide-react";
 
@@ -40,6 +40,7 @@ interface SpaceRow {
   notas: boolean;
   access_type: "OPEN" | "TRUSTED" | "RESTRICTED";
   janela_automatica: boolean;
+  duracao_min: number | null;
   ativo: boolean;
 }
 interface Excecao {
@@ -181,6 +182,7 @@ export default function MeetAdminPage() {
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
+  const [duracaoAberta, setDuracaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
   const [limiteEncerramento, setLimiteEncerramento] = useState(120);
   const [novaAvulsa, setNovaAvulsa] = useState("");
@@ -459,6 +461,33 @@ export default function MeetAdminPage() {
       toast.success("Reunião encerrada.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao encerrar");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function salvarDuracao(space: SpaceRow, minutos: number | null) {
+    setTrabalhando(space.space_name + "duracao");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name, duracao_min: minutos }),
+      });
+      await lerResposta(r);
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name ? { ...s, duracao_min: minutos } : s
+        )
+      );
+      toast.success(
+        minutos
+          ? `Esta sala passa a durar ${minutos} minutos.`
+          : `Esta sala volta ao padrão de ${limiteEncerramento} minutos.`
+      );
+      setDuracaoAberta(null);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setTrabalhando(null);
     }
@@ -910,6 +939,29 @@ export default function MeetAdminPage() {
                         <PhoneOff className="h-3 w-3" /> Encerrar
                       </button>
                       <button
+                        onClick={() =>
+                          setDuracaoAberta(duracaoAberta === slot.id ? null : slot.id)
+                        }
+                        title="Quanto tempo esta sala fica de pé antes de fechar e encerrar sozinha."
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all"
+                        style={{
+                          background: space.duracao_min
+                            ? "rgba(108,92,231,0.12)"
+                            : "rgba(255,255,255,0.03)",
+                          color: space.duracao_min ? ROXO : "rgba(253,251,247,0.35)",
+                          border: `1px solid ${space.duracao_min ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
+                        }}
+                      >
+                        <Clock3 className="h-3 w-3" />
+                        {(() => {
+                          const min = space.duracao_min ?? limiteEncerramento;
+                          const h = min / 60;
+                          return h >= 1
+                            ? `${h.toFixed(1).replace(".0", "")}h`
+                            : `${min} min`;
+                        })()}
+                      </button>
+                      <button
                         onClick={() => setExcecaoAberta(excecaoAberta === slot.id ? null : slot.id)}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-cream/40 hover:text-cream/70"
                         style={{ border: "1px solid rgba(255,255,255,0.06)" }}
@@ -933,6 +985,16 @@ export default function MeetAdminPage() {
                     </button>
                   )}
                 </div>
+
+                {duracaoAberta === slot.id && space && (
+                  <FormDuracao
+                    atual={space.duracao_min}
+                    padrao={limiteEncerramento}
+                    salvando={trabalhando === space.space_name + "duracao"}
+                    onSalvar={(min) => salvarDuracao(space, min)}
+                    onFechar={() => setDuracaoAberta(null)}
+                  />
+                )}
 
                 {excecaoAberta === slot.id && (
                   <FormExcecao
@@ -1414,6 +1476,82 @@ function Linha({ ok, texto }: { ok: boolean; texto: string }) {
         <AlertTriangle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
       )}
       <span className={ok ? "text-cream/60" : "text-cream/40"}>{texto}</span>
+    </div>
+  );
+}
+
+function FormDuracao({
+  atual,
+  padrao,
+  salvando,
+  onSalvar,
+  onFechar,
+}: {
+  atual: number | null;
+  padrao: number;
+  salvando: boolean;
+  onSalvar: (minutos: number | null) => void;
+  onFechar: () => void;
+}) {
+  const [valor, setValor] = useState(atual ?? padrao);
+
+  // Atalhos cobrem o que se pede na prática; o campo cobre o resto.
+  const opcoes = [60, 90, 120, 180, 240];
+
+  return (
+    <div className="mt-3 pt-3 border-t border-white/5">
+      <p className="text-xs text-cream/50 mb-2">
+        Depois deste tempo, a reunião é encerrada para todos e a sala fecha. Vale para este
+        grupo; os outros seguem o padrão de {padrao} minutos.
+      </p>
+      <div className="flex items-end gap-2 flex-wrap">
+        <div className="flex gap-1">
+          {opcoes.map((o) => (
+            <button
+              key={o}
+              onClick={() => setValor(o)}
+              className="px-2 py-1.5 rounded-lg text-xs"
+              style={{
+                background: valor === o ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
+                color: valor === o ? ROXO : "rgba(253,251,247,0.35)",
+                border: `1px solid ${valor === o ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
+              }}
+            >
+              {o >= 60 ? `${(o / 60).toFixed(1).replace(".0", "")}h` : `${o}min`}
+            </button>
+          ))}
+        </div>
+        <input
+          type="number"
+          min={30}
+          max={600}
+          step={15}
+          value={valor}
+          onChange={(e) => setValor(Number(e.target.value))}
+          className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+        />
+        <button
+          onClick={() => onSalvar(valor)}
+          disabled={salvando || valor < 30 || valor > 600}
+          className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-30"
+          style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+        >
+          Salvar
+        </button>
+        {atual !== null && (
+          <button
+            onClick={() => onSalvar(null)}
+            disabled={salvando}
+            className="px-2.5 py-1.5 rounded-lg text-xs text-cream/40 hover:text-cream/70 disabled:opacity-40"
+            style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+          >
+            usar o padrão
+          </button>
+        )}
+        <button onClick={onFechar} className="px-2 py-1.5 text-cream/30 hover:text-cream/60">
+          <X className="h-3.5 w-3.5" />
+        </button>
+      </div>
     </div>
   );
 }

@@ -39,7 +39,7 @@ export async function encerrarReunioesLongas(sb: Sb): Promise<ResultadoEncerrame
 
   const { data: spaces } = await sb
     .from("formacao_meet_spaces")
-    .select("space_name, rotulo, slot_id")
+    .select("space_name, rotulo, slot_id, duracao_min")
     .eq("ativo", true);
 
   if (!spaces?.length) return res;
@@ -48,8 +48,17 @@ export async function encerrarReunioesLongas(sb: Sb): Promise<ResultadoEncerrame
   // pé sem trazer histórico irrelevante.
   const desde = new Date(Date.now() - 24 * 60 * 60 * 1000);
 
-  for (const space of spaces as { space_name: string; rotulo: string | null }[]) {
+  for (const space of spaces as {
+    space_name: string;
+    rotulo: string | null;
+    duracao_min: number | null;
+  }[]) {
     res.salas_verificadas++;
+
+    // Teto desta sala, ou o padrão da Formação para quem não pediu exceção.
+    const tetoDaSala = space.duracao_min ?? limiteMin;
+    if (tetoDaSala <= 0) continue;
+
     try {
       const conferencias = await listarConferencias(space.space_name, desde);
 
@@ -58,7 +67,7 @@ export async function encerrarReunioesLongas(sb: Sb): Promise<ResultadoEncerrame
       if (!ativa) continue;
 
       const minutos = (Date.now() - new Date(ativa.startTime).getTime()) / 60_000;
-      if (minutos < limiteMin) continue;
+      if (minutos < tetoDaSala) continue;
 
       await encerrarConferencia(space.space_name);
       res.encerradas++;

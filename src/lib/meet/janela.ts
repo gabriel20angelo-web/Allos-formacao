@@ -33,6 +33,7 @@ interface SpaceRow {
   rotulo: string | null;
   access_type: string;
   janela_automatica: boolean;
+  duracao_min: number | null;
 }
 
 export async function aplicarJanelaDeAcesso(sb: Sb): Promise<ResultadoJanela> {
@@ -40,7 +41,7 @@ export async function aplicarJanelaDeAcesso(sb: Sb): Promise<ResultadoJanela> {
 
   const { data: spaces } = await sb
     .from("formacao_meet_spaces")
-    .select("space_name, slot_id, rotulo, access_type, janela_automatica")
+    .select("space_name, slot_id, rotulo, access_type, janela_automatica, duracao_min")
     .eq("ativo", true);
 
   if (!spaces?.length) return res;
@@ -106,7 +107,9 @@ export async function aplicarJanelaDeAcesso(sb: Sb): Promise<ResultadoJanela> {
 
     const inicioMin = hh * 60 + (Number.isFinite(mm) ? mm : 0);
     const abreMin = inicioMin - ABRE_ANTES_MIN;
-    const fechaMin = inicioMin + duracaoJanela;
+    // A sala fica de pé enquanto ela puder ter encontro: o teto próprio dela,
+    // ou o da Formação para quem não pediu exceção.
+    const fechaMin = inicioMin + (space.duracao_min ?? duracaoJanela);
 
     const dentro =
       slot.dia_semana === diaHoje && minutosAgora >= abreMin && minutosAgora <= fechaMin;

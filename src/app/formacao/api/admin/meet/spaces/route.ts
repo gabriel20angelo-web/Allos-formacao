@@ -133,6 +133,7 @@ export async function PATCH(req: NextRequest) {
     ativo?: boolean;
     access_type?: AccessType;
     janela_automatica?: boolean;
+    duracao_min?: number | null;
   };
   try {
     body = await req.json();
@@ -152,6 +153,25 @@ export async function PATCH(req: NextRequest) {
 
   if (!atual) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
+  }
+
+  // Duração própria desta sala. null volta ao padrão da Formação.
+  if (body.duracao_min !== undefined) {
+    const v = body.duracao_min;
+    if (v !== null && (!Number.isFinite(Number(v)) || Number(v) < 30 || Number(v) > 600)) {
+      return NextResponse.json(
+        { error: "Use um valor entre 30 e 600 minutos, ou deixe vazio para usar o padrão." },
+        { status: 400 }
+      );
+    }
+    const { error } = await sb
+      .from("formacao_meet_spaces")
+      .update({ duracao_min: v === null ? null : Math.round(Number(v)) })
+      .eq("space_name", body.space_name);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (body.access_type === undefined && body.janela_automatica === undefined) {
+      return NextResponse.json({ ok: true, duracao_min: v });
+    }
   }
 
   // Religar a janela sozinha, sem trocar acesso: devolve a sala ao horário do

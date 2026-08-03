@@ -24,7 +24,14 @@ interface MeetPresenca {
   hora_inicio: string;
   hora_fim: string;
   duracao_minutos: number;
-  participantes: { nome: string; primeira_entrada: string; ultima_saida: string; snapshots_presente: number }[];
+  participantes: {
+    nome: string;
+    primeira_entrada?: string;
+    ultima_saida?: string;
+    snapshots_presente?: number;
+    /** Só nos registros vindos da captura automática. */
+    minutos?: number;
+  }[];
   total_participantes: number;
   media_participantes: number;
   pico_participantes: number;
@@ -460,12 +467,26 @@ export default function QuorumPage() {
                             </div>
                             {reg.participantes && reg.participantes.length > 0 && (
                               <div className="flex flex-wrap gap-1.5">
+                                {/* Nos registros medidos vem o tempo de cada um.
+                                    Mostrar isso aqui é o que diferencia presença
+                                    contada de presença medida: doze pessoas com
+                                    dez minutos cada não é o mesmo grupo que doze
+                                    pessoas com noventa. */}
                                 {reg.participantes.map((p, i) => (
                                   <span key={i} className="text-xs px-2 py-1 rounded-md" style={{ background: "rgba(108,92,231,0.12)", color: "rgba(108,92,231,0.8)" }}>
                                     {p.nome}
+                                    {typeof p.minutos === "number" && (
+                                      <span className="opacity-60"> · {p.minutos} min</span>
+                                    )}
                                   </span>
                                 ))}
                               </div>
+                            )}
+                            {reg.conference_record_id && (
+                              <p className="text-xs text-cream/30 mt-2">
+                                Presença medida no Google Meet. Tempo de fala e permanência ficam
+                                na aba Meet.
+                              </p>
                             )}
                           </motion.div>
                         )}
