@@ -11,6 +11,7 @@ import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { ingerir } from "@/lib/meet/ingest";
+import { atualizarStatusSlots, fecharSemanaSePreciso } from "@/lib/meet/status-slots";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -38,10 +39,18 @@ export async function GET(req: NextRequest) {
     const excecoes = await sincronizarExcecoes(sb);
     const ingestao = await ingerir({ origem: "cron", diasAtras: 15 });
 
+    // Nesta ordem, de propósito: capturar, marcar o que a captura revelou, e só
+    // então fechar a semana. Fechar antes de marcar arquivaria um retrato com
+    // status desatualizado, e o snapshot é o que vira histórico.
+    const status = await atualizarStatusSlots(sb);
+    const semana = await fecharSemanaSePreciso(sb);
+
     return NextResponse.json({
       ok: true,
       excecoes,
       ingestao,
+      status,
+      semana,
     });
   } catch (e) {
     console.error("[meet/cron]", e);

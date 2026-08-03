@@ -286,6 +286,8 @@ export interface FormacaoSlot {
   status: string;
   atividade_nome: string | null;
   meet_link: string | null;
+  /** Preenchido quando foi o sistema que marcou o status; null = decisão humana. */
+  status_automatico_em?: string | null;
   created_at: string;
   formacao_horarios?: { hora: string; ordem: number } | null;
 }

@@ -82,9 +82,12 @@ const SUB_TABS: { key: SubTab; label: string; icon: typeof Calendar }[] = [
 function StatusDropdown({
   current,
   onChange,
+  automatico,
 }: {
   current: string;
   onChange: (status: string) => void;
+  /** Marcado pelo sistema a partir da captura do Meet, não por uma pessoa. */
+  automatico?: boolean;
 }) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
@@ -107,6 +110,14 @@ function StatusDropdown({
       >
         <span className="w-2 h-2 rounded-full" style={{ background: cfg.color }} />
         {cfg.label}
+        {automatico && (
+          <span
+            title="Marcado pelo sistema a partir da captura do Meet. Trocar na mão desliga o automático deste grupo."
+            className="opacity-50"
+          >
+            auto
+          </span>
+        )}
         <ChevronDown className="h-3 w-3" />
       </button>
       {open && (
@@ -767,9 +778,12 @@ export default function CalendarioPage() {
   async function updateSlot(id: string, fields: Partial<FormacaoSlot>) {
     const currentSlot = slots.find((s) => s.id === id);
     const supabase = createClient();
+    // Trocar o status na mão torna aquele slot intocável pelo preenchimento
+    // automático: quem marcou "cancelado" sabe de algo que o sistema não sabe.
+    const patch = fields.status ? { ...fields, status_automatico_em: null } : fields;
     const { data, error } = await supabase
       .from("formacao_slots")
-      .update(fields)
+      .update(patch)
       .eq("id", id)
       .select("*, formacao_horarios(hora, ordem)")
       .single();
@@ -789,6 +803,7 @@ export default function CalendarioPage() {
           status_novo: fields.status,
           atividade_nome: data.atividade_nome,
           condutor_ids: condutorIds,
+          origem: "manual",
         })
         .then(({ error }) => {
           if (error) console.warn("[calendario] log_status_change:", error);
@@ -991,7 +1006,7 @@ export default function CalendarioPage() {
     // 3. Reset statuses
     const { error } = await supabase
       .from("formacao_slots")
-      .update({ status: "pendente" })
+      .update({ status: "pendente", status_automatico_em: null })
       .in("id", activeSlots.map((s) => s.id));
     if (error) { toast.error("Erro ao resetar semana."); return; }
     setSlots((prev) => prev.map((s) => (s.ativo ? { ...s, status: "pendente" } : s)));
@@ -1462,6 +1477,7 @@ export default function CalendarioPage() {
                               </span>
                               <StatusDropdown
                                 current={slot.status}
+                                automatico={!!slot.status_automatico_em}
                                 onChange={(status) => updateSlot(slot.id, { status } as Partial<FormacaoSlot>)}
                               />
                             </div>
