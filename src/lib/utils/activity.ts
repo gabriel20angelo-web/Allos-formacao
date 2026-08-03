@@ -110,6 +110,12 @@ export interface TimelineEvent {
   timestamp: string;
   /** Quem fez. */
   person: string;
+  /**
+   * E-mail de quem fez — é a chave real da pessoa. O nome digitado no
+   * formulário varia ("Sabrina Sales" e "Sabrina Sales Bezerra" são a mesma
+   * conta), então qualquer agrupamento por pessoa usa isto quando existe.
+   */
+  personEmail?: string;
   /** Onde: curso, aula ou atividade. */
   title: string;
   /** Contexto curto (curso, condutores) mostrado em segunda linha. */

@@ -12,10 +12,11 @@
 
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDayNotes } from "@/hooks/useDayNotes";
+import { detectarSinais } from "@/lib/utils/suspeita";
 import { formatPrice } from "@/lib/utils/format";
 import {
   getGreeting,
@@ -32,6 +33,8 @@ import StatStrip from "@/components/admin/dashboard/StatStrip";
 import HintButton from "@/components/admin/dashboard/HintButton";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
+import SinaisAtencao from "@/components/admin/dashboard/SinaisAtencao";
+import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import AdminNotesSection from "@/components/admin/dashboard/AdminNotesSection";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
@@ -68,6 +71,7 @@ type SubmissionRow = {
   id: string;
   created_at: string;
   nome_completo: string | null;
+  email: string | null;
   atividade_nome: string | null;
   nota_grupo: number | null;
   nota_condutor: number | null;
@@ -81,7 +85,7 @@ type ReviewJoinRow = {
   id: string;
   rating: number;
   created_at: string;
-  user?: { full_name: string | null } | null;
+  user?: NamedUser;
   course?: { title: string | null } | null;
 };
 
@@ -90,9 +94,9 @@ type PaidEnrollmentRow = { courses?: { price_cents: number | null } | null };
 type AtividadeRow = { nome: string; carga_horaria: number };
 
 // ─── Fontes da timeline assíncrona ──────────────────────────────────────
-type NamedUser = { full_name: string | null } | null;
+type NamedUser = { full_name: string | null; email?: string | null } | null;
 
-type SignupRow = { id: string; full_name: string | null; created_at: string };
+type SignupRow = { id: string; full_name: string | null; email: string | null; created_at: string };
 
 type EnrollmentEventRow = {
   id: string;
@@ -198,6 +202,7 @@ export default function AdminDashboard() {
   const [asyncEventsLoading, setAsyncEventsLoading] = useState(true);
   const [asyncRange, setAsyncRange] = useState<ActivityRange>("30d");
   const [truncatedSources, setTruncatedSources] = useState<string[]>([]);
+  const [pessoaAberta, setPessoaAberta] = useState<PessoaRef | null>(null);
 
   // ═══════════════════════════════════════════════════════════
   // Data fetching: Async dashboard stats
@@ -334,14 +339,14 @@ export default function AdminDashboard() {
           isAdmin
             ? supabase
                 .from("profiles")
-                .select("id, full_name, created_at", opts)
+                .select("id, full_name, email, created_at", opts)
                 .order("created_at", { ascending: false })
                 .limit(ROW_CAP)
             : Promise.resolve({ data: [], count: 0 }),
           supabase
             .from("enrollments")
             .select(
-              "id, enrolled_at, completed_at, status, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              "id, enrolled_at, completed_at, status, user:profiles!user_id(full_name, email), course:courses!course_id(title)",
               opts
             )
             .order("enrolled_at", { ascending: false })
@@ -349,7 +354,7 @@ export default function AdminDashboard() {
           supabase
             .from("lesson_progress")
             .select(
-              "id, completed_at, user:profiles!user_id(full_name), lesson:lessons!lesson_id(title, section:sections!section_id(course:courses!course_id(title)))",
+              "id, completed_at, user:profiles!user_id(full_name, email), lesson:lessons!lesson_id(title, section:sections!section_id(course:courses!course_id(title)))",
               opts
             )
             .eq("completed", true)
@@ -359,7 +364,7 @@ export default function AdminDashboard() {
           supabase
             .from("reviews")
             .select(
-              "id, rating, comment, created_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              "id, rating, comment, created_at, user:profiles!user_id(full_name, email), course:courses!course_id(title)",
               opts
             )
             .order("created_at", { ascending: false })
@@ -367,7 +372,7 @@ export default function AdminDashboard() {
           supabase
             .from("certificates")
             .select(
-              "id, issued_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              "id, issued_at, user:profiles!user_id(full_name, email), course:courses!course_id(title)",
               opts
             )
             .order("issued_at", { ascending: false })
@@ -375,7 +380,7 @@ export default function AdminDashboard() {
           supabase
             .from("lesson_comments")
             .select(
-              "id, content, created_at, user:profiles!user_id(full_name), lesson:lessons!lesson_id(title)",
+              "id, content, created_at, user:profiles!user_id(full_name, email), lesson:lessons!lesson_id(title)",
               opts
             )
             .order("created_at", { ascending: false })
@@ -383,7 +388,7 @@ export default function AdminDashboard() {
           supabase
             .from("exam_attempts")
             .select(
-              "id, score, passed, attempted_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              "id, score, passed, attempted_at, user:profiles!user_id(full_name, email), course:courses!course_id(title)",
               opts
             )
             .order("attempted_at", { ascending: false })
@@ -402,6 +407,7 @@ export default function AdminDashboard() {
           type: "signup",
           timestamp: p.created_at,
           person: p.full_name || "Sem nome",
+          personEmail: p.email || undefined,
           title: "",
         });
       });
@@ -409,12 +415,14 @@ export default function AdminDashboard() {
 
       ((enrolls.data ?? []) as unknown as EnrollmentEventRow[]).forEach((e) => {
         const person = e.user?.full_name || "Aluno";
+        const personEmail = e.user?.email || undefined;
         const course = e.course?.title || "Curso";
         events.push({
           id: `enroll-${e.id}`,
           type: "enrollment",
           timestamp: e.enrolled_at,
           person,
+          personEmail,
           title: course,
         });
         if (e.status === "completed" && e.completed_at) {
@@ -423,6 +431,7 @@ export default function AdminDashboard() {
             type: "completion",
             timestamp: e.completed_at,
             person,
+            personEmail,
             title: course,
           });
         }
@@ -435,6 +444,7 @@ export default function AdminDashboard() {
           type: "lesson",
           timestamp: p.completed_at,
           person: p.user?.full_name || "Aluno",
+          personEmail: p.user?.email || undefined,
           title: p.lesson?.title?.trim() || "aula",
           detail: p.lesson?.section?.course?.title || undefined,
         });
@@ -448,6 +458,7 @@ export default function AdminDashboard() {
             type: "review",
             timestamp: r.created_at,
             person: r.user?.full_name || "Aluno",
+            personEmail: r.user?.email || undefined,
             title: r.course?.title || "Curso",
             body: r.comment?.trim() || undefined,
             score: r.rating,
@@ -463,6 +474,7 @@ export default function AdminDashboard() {
           type: "certificate",
           timestamp: c.issued_at,
           person: c.user?.full_name || "Aluno",
+          personEmail: c.user?.email || undefined,
           title: c.course?.title || "Curso",
         });
       });
@@ -474,6 +486,7 @@ export default function AdminDashboard() {
           type: "comment",
           timestamp: c.created_at,
           person: c.user?.full_name || "Aluno",
+          personEmail: c.user?.email || undefined,
           title: c.lesson?.title?.trim() || "uma aula",
           body: c.content?.trim() || undefined,
         });
@@ -486,6 +499,7 @@ export default function AdminDashboard() {
           type: "exam",
           timestamp: e.attempted_at,
           person: e.user?.full_name || "Aluno",
+          personEmail: e.user?.email || undefined,
           title: e.course?.title || "Curso",
           detail: e.passed ? "Aprovado" : "Não atingiu a nota",
           score: e.score,
@@ -663,7 +677,7 @@ export default function AdminDashboard() {
           supabase
             .from("certificado_submissions")
             .select(
-              "id, nome_completo, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at"
+              "id, nome_completo, email, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at"
             ),
           supabase
             .from("certificado_atividades")
@@ -687,6 +701,7 @@ export default function AdminDashboard() {
                 type: "feedback" as const,
                 timestamp: s.created_at,
                 person: (s.nome_completo || "Sem nome").trim(),
+                personEmail: s.email || undefined,
                 title: s.atividade_nome || "atividade",
                 detail: partes.join(" · ") || undefined,
                 body: s.relato?.trim() || undefined,
@@ -1042,6 +1057,9 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
+  const sinaisSync = useMemo(() => detectarSinais(syncEvents), [syncEvents]);
+  const sinaisAsync = useMemo(() => detectarSinais(asyncEvents), [asyncEvents]);
+
   // ═══════════════════════════════════════════════════════════
   // Derived values
   // ═══════════════════════════════════════════════════════════
@@ -1272,6 +1290,8 @@ export default function AdminDashboard() {
 
               <div className="h-5" />
 
+              <SinaisAtencao sinais={sinaisSync} onPersonClick={setPessoaAberta} />
+
               {/* ── Atividade recente (feedbacks do /certificado) ── */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -1287,6 +1307,7 @@ export default function AdminDashboard() {
                   accent="#C84B31"
                   csvName="atividade_certificado"
                   notes={dayNotes}
+                  onPersonClick={setPessoaAberta}
                   subtitle="Cada feedback enviado no formulário de certificação, do mais recente para o mais antigo. A janela é a mesma escolhida no topo da aba."
                 />
               </motion.div>
@@ -1996,6 +2017,8 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
 
+              <SinaisAtencao sinais={sinaisAsync} onPersonClick={setPessoaAberta} />
+
               {/* ── Atividade recente (movimento nos cursos) ── */}
               <motion.div
                 initial={{ opacity: 0, y: 16 }}
@@ -2011,6 +2034,7 @@ export default function AdminDashboard() {
                   accent="#2E9E8F"
                   csvName="atividade_cursos"
                   notes={dayNotes}
+                  onPersonClick={setPessoaAberta}
                   truncated={truncatedSources}
                   subtitle="Quem chegou, quem assistiu e o que concluiu. Troque a janela para virar relatório do dia, da semana ou do histórico inteiro."
                 />
@@ -2121,6 +2145,8 @@ export default function AdminDashboard() {
       )}
 
       {profile && <AdminNotesSection userId={profile.id} />}
+
+      <PessoaModal pessoa={pessoaAberta} onClose={() => setPessoaAberta(null)} />
     </div>
   );
 }

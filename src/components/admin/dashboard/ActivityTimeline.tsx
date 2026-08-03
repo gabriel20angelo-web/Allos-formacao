@@ -163,6 +163,8 @@ interface Props {
   hideRangeSelector?: boolean;
   /** Anotações de dia; ausente ou indisponível, a UI de anotação não aparece. */
   notes?: DayNotesApi;
+  /** Sem isso o nome não vira link — evita abrir dossiê dentro do dossiê. */
+  onPersonClick?: (pessoa: { nome: string; email?: string }) => void;
 }
 
 export default function ActivityTimeline({
@@ -176,6 +178,7 @@ export default function ActivityTimeline({
   truncated = [],
   hideRangeSelector = false,
   notes,
+  onPersonClick,
 }: Props) {
   const [activeTypes, setActiveTypes] = useState<Set<TimelineEventType>>(new Set());
   const [query, setQuery] = useState("");
@@ -690,7 +693,23 @@ export default function ActivityTimeline({
                           />
                           <div className="min-w-0 flex-1">
                             <p className="font-dm text-xs text-cream/75 leading-snug">
-                              <span className="font-semibold text-cream">{e.person}</span>
+                              {onPersonClick ? (
+                                <button
+                                  onClick={(ev) => {
+                                    ev.stopPropagation();
+                                    onPersonClick({
+                                      nome: e.person,
+                                      email: e.personEmail,
+                                    });
+                                  }}
+                                  className="font-semibold text-cream hover:underline decoration-dotted underline-offset-2"
+                                  title="Ver tudo o que essa pessoa fez"
+                                >
+                                  {e.person}
+                                </button>
+                              ) : (
+                                <span className="font-semibold text-cream">{e.person}</span>
+                              )}
                               {many ? (
                                 <>
                                   <span className="text-cream/40"> concluiu </span>

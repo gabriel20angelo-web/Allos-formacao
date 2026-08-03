@@ -6,7 +6,8 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
-import { Search, ChevronDown, Award } from "lucide-react";
+import { Search, ChevronDown, Award, Clock } from "lucide-react";
+import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import { formatDate } from "@/lib/utils/format";
 import type { Certificate } from "@/types";
 
@@ -19,12 +20,26 @@ interface CourseOption {
   title: string;
 }
 
+interface Pendente {
+  id: string;
+  completed_at: string;
+  nome: string;
+  email: string;
+  curso: string;
+}
+
 export default function AdminCertificadosPage() {
   const { profile, isAdmin } = useAuth();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [view, setView] = useState<"cursos" | "formacao" | "envios" | "avulso">("cursos");
+
+  // Concluiu o curso mas não gerou o PDF: a emissão depende de um clique do
+  // aluno, então "sem certificado" não quer dizer "não terminou".
+  const [pendentes, setPendentes] = useState<Pendente[]>([]);
+  const [subView, setSubView] = useState<"emitidos" | "pendentes">("emitidos");
+  const [pessoaAberta, setPessoaAberta] = useState<PessoaRef | null>(null);
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
@@ -39,7 +54,7 @@ export default function AdminCertificadosPage() {
       }
       const supabase = createClient();
 
-      const [certRes, coursesRes] = await Promise.all([
+      const [certRes, coursesRes, concluidasRes] = await Promise.all([
         supabase
           .from("certificates")
           .select(`
@@ -52,6 +67,14 @@ export default function AdminCertificadosPage() {
           .from("courses")
           .select("id, title")
           .order("title"),
+        supabase
+          .from("enrollments")
+          .select(
+            "id, user_id, course_id, completed_at, user:profiles!user_id(full_name, email), course:courses!course_id(title, instructor_id)"
+          )
+          .eq("status", "completed")
+          .not("completed_at", "is", null)
+          .order("completed_at", { ascending: false }),
       ]);
 
       if (certRes.data) {
@@ -61,6 +84,37 @@ export default function AdminCertificadosPage() {
         setCertificates(filtered);
       }
       if (coursesRes.data) setCourses(coursesRes.data as CourseOption[]);
+
+      // Pendente = concluiu o curso e não existe certificado dessa pessoa nele.
+      type ConcluidaRow = {
+        id: string;
+        user_id: string;
+        course_id: string;
+        completed_at: string;
+        user?: { full_name: string | null; email: string | null } | null;
+        course?: { title: string | null; instructor_id: string | null } | null;
+      };
+      const emitidos = new Set(
+        (certRes.data ?? []).map(
+          (c: { user_id: string; course_id: string }) =>
+            `${c.user_id}|${c.course_id}`
+        )
+      );
+      const concluidas = (
+        (concluidasRes.data ?? []) as unknown as ConcluidaRow[]
+      ).filter((e) => (isAdmin ? true : e.course?.instructor_id === profile.id));
+      setPendentes(
+        concluidas
+          .filter((e) => !emitidos.has(`${e.user_id}|${e.course_id}`))
+          .map((e) => ({
+            id: e.id,
+            completed_at: e.completed_at,
+            nome: e.user?.full_name || "Aluno",
+            email: e.user?.email || "",
+            curso: e.course?.title || "Curso",
+          }))
+      );
+
       setLoading(false);
     }
     load().catch(() => setLoading(false));
@@ -97,6 +151,24 @@ export default function AdminCertificadosPage() {
     const ids = new Set(certificates.map((c) => c.course_id));
     return ids.size;
   }, [certificates]);
+
+  // os mesmos filtros de cima valem para quem concluiu sem emitir
+  const pendentesFiltrados = useMemo(() => {
+    let result = pendentes;
+    if (search) {
+      const s = search.toLowerCase();
+      result = result.filter(
+        (p) =>
+          p.nome.toLowerCase().includes(s) ||
+          p.email.toLowerCase().includes(s) ||
+          p.curso.toLowerCase().includes(s)
+      );
+    }
+    if (dateFrom) result = result.filter((p) => p.completed_at >= dateFrom);
+    if (dateTo)
+      result = result.filter((p) => p.completed_at <= dateTo + "T23:59:59.999Z");
+    return result;
+  }, [pendentes, search, dateFrom, dateTo]);
 
   if (loading) {
     return (
@@ -186,12 +258,28 @@ export default function AdminCertificadosPage() {
         className="flex flex-wrap items-center gap-3 mb-6 px-4 py-3 rounded-[12px]"
         style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
-        <div className="flex items-center gap-2">
+        <button
+          onClick={() => setSubView("emitidos")}
+          className="flex items-center gap-2 transition-opacity"
+          style={{ opacity: subView === "emitidos" ? 1 : 0.45 }}
+        >
           <Award className="h-4 w-4 text-accent" />
           <span className="text-sm text-cream/60">
             <span className="text-cream font-semibold">{certificates.length}</span> certificado{certificates.length !== 1 ? "s" : ""} emitido{certificates.length !== 1 ? "s" : ""}
           </span>
-        </div>
+        </button>
+        <span className="text-cream/15">·</span>
+        <button
+          onClick={() => setSubView("pendentes")}
+          className="flex items-center gap-2 transition-opacity"
+          style={{ opacity: subView === "pendentes" ? 1 : 0.45 }}
+          title="Terminaram o curso mas ainda não geraram o PDF do certificado"
+        >
+          <Clock className="h-4 w-4" style={{ color: "#F59E0B" }} />
+          <span className="text-sm text-cream/60">
+            <span className="text-cream font-semibold">{pendentes.length}</span> concluíram sem emitir
+          </span>
+        </button>
         <span className="text-cream/15">·</span>
         <span className="text-sm text-cream/60">
           <span className="text-cream font-semibold">{uniqueCourses}</span> curso{uniqueCourses !== 1 ? "s" : ""}
@@ -258,7 +346,52 @@ export default function AdminCertificadosPage() {
         </div>
       </motion.div>
 
+      {/* Concluíram sem emitir */}
+      {subView === "pendentes" && (
+        <div
+          className="rounded-[16px] overflow-hidden"
+          style={{
+            background: "rgba(255,255,255,0.03)",
+            border: "1px solid rgba(255,255,255,0.06)",
+          }}
+        >
+          <p className="px-4 py-3 text-xs text-cream/35 leading-snug" style={{ borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+            Terminaram o curso mas não geraram o PDF — a emissão depende de um
+            clique do aluno, então isto não é pendência sua, é quem ainda pode
+            receber o certificado.
+          </p>
+          {pendentesFiltrados.length === 0 ? (
+            <p className="px-4 py-8 text-center text-cream/35 text-sm">
+              Ninguém concluiu curso sem emitir certificado.
+            </p>
+          ) : (
+            <div className="divide-y" style={{ borderColor: "rgba(255,255,255,0.04)" }}>
+              {pendentesFiltrados.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex flex-wrap items-center gap-x-4 gap-y-1 px-4 py-3 hover:bg-white/[0.02] transition-colors"
+                >
+                  <button
+                    onClick={() => setPessoaAberta({ nome: p.nome, email: p.email })}
+                    className="text-sm text-cream hover:underline decoration-dotted underline-offset-2"
+                  >
+                    {p.nome}
+                  </button>
+                  <span className="text-xs text-cream/35">{p.email}</span>
+                  <span className="text-xs text-cream/50">{p.curso}</span>
+                  <div className="flex-1" />
+                  <span className="text-xs text-cream/30">
+                    concluiu em {formatDate(p.completed_at)}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
       {/* Tabela — visível só no desktop */}
+      {subView === "emitidos" && (
       <div
         className="hidden md:block rounded-[16px] overflow-hidden"
         style={{
@@ -283,7 +416,20 @@ export default function AdminCertificadosPage() {
                   className="hover:bg-white/[0.02] transition-colors"
                   style={{ borderBottom: "1px solid rgba(255,255,255,0.04)" }}
                 >
-                  <td className="px-4 py-3 text-cream">{cert.user?.full_name}</td>
+                  <td className="px-4 py-3 text-cream">
+                    <button
+                      onClick={() =>
+                        setPessoaAberta({
+                          nome: cert.user?.full_name || "Aluno",
+                          email: cert.user?.email || undefined,
+                        })
+                      }
+                      className="hover:underline decoration-dotted underline-offset-2"
+                      title="Ver tudo o que essa pessoa fez"
+                    >
+                      {cert.user?.full_name}
+                    </button>
+                  </td>
                   <td className="px-4 py-3 text-cream/40">{cert.user?.email}</td>
                   <td className="px-4 py-3 text-cream/40">{cert.course?.title}</td>
                   <td className="px-4 py-3 text-cream/30 text-xs">{formatDate(cert.issued_at)}</td>
@@ -300,8 +446,10 @@ export default function AdminCertificadosPage() {
           </table>
         </div>
       </div>
+      )}
 
       {/* Cards — visíveis só no mobile */}
+      {subView === "emitidos" && (
       <div className="md:hidden space-y-3">
         {filtered.map((cert) => (
           <div
@@ -323,7 +471,10 @@ export default function AdminCertificadosPage() {
           </p>
         )}
       </div>
+      )}
       </>)}
+
+      <PessoaModal pessoa={pessoaAberta} onClose={() => setPessoaAberta(null)} />
     </div>
   );
 }
