@@ -26,6 +26,68 @@ interface ParticipacaoRow {
   eh_condutor: boolean;
 }
 
+/**
+ * Apaga um encontro capturado e tudo que veio com ele.
+ *
+ * Existe porque o Google abre um registro novo a cada vez que a sala fica
+ * vazia e alguém entra de novo: testar o link três vezes produz três
+ * "encontros" de um minuto com uma pessoa. São reais, mas são lixo, e lixo
+ * dentro da média de quórum distorce todo indicador do grupo.
+ *
+ * Participações e falas somem por cascata; a linha derivada na tabela antiga
+ * precisa ser apagada à mão, senão o quórum continua aparecendo nas telas
+ * velhas depois de excluído aqui.
+ */
+export async function DELETE(req: NextRequest) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const id = req.nextUrl.searchParams.get("id");
+  const restaurar = req.nextUrl.searchParams.get("restaurar") === "1";
+  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+
+  const sb = await createServiceRoleClient();
+
+  const { data: encontro } = await sb
+    .from("formacao_meet_encontros")
+    .select("conference_record_id, descartado")
+    .eq("id", id)
+    .maybeSingle();
+
+  if (!encontro) {
+    return NextResponse.json({ error: "Encontro não encontrado" }, { status: 404 });
+  }
+
+  const { error } = await sb
+    .from("formacao_meet_encontros")
+    .update({
+      descartado: !restaurar,
+      descartado_motivo: restaurar ? null : "Descartado pelo administrador.",
+    })
+    .eq("id", id);
+
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  // A ponte com as telas antigas some junto: elas não têm como saber que este
+  // encontro foi descartado, e o quórum delas ficaria errado.
+  if (encontro.conference_record_id && !restaurar) {
+    await sb
+      .from("formacao_meet_presencas")
+      .delete()
+      .eq("conference_record_id", encontro.conference_record_id);
+  }
+
+  return NextResponse.json({
+    ok: true,
+    descartado: !restaurar,
+    aviso: restaurar
+      ? "Restaurado. A próxima captura recalcula o quórum deste encontro."
+      : "Fora de todas as estatísticas. O registro continua guardado e dá para restaurar.",
+  });
+}
+
 export async function GET(req: NextRequest) {
   const auth = await exigirAdmin();
   if (!auth.ok) {
@@ -41,11 +103,18 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
   const tolerancia = cronograma?.tolerancia_atraso_min ?? 7;
 
-  const { data: encontros, error } = await sb
+  // Descartados só aparecem quando pedidos: eles existem para sumir da vista,
+  // mas precisam de um lugar onde dê para conferir e restaurar.
+  const incluirDescartados = req.nextUrl.searchParams.get("descartados") === "1";
+
+  let q = sb
     .from("formacao_meet_encontros")
     .select("*")
     .order("inicio", { ascending: false })
     .limit(limite);
+  if (!incluirDescartados) q = q.eq("descartado", false);
+
+  const { data: encontros, error } = await q;
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });

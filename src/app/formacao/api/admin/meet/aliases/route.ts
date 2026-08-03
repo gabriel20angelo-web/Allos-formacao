@@ -70,6 +70,118 @@ export async function GET() {
   return NextResponse.json({ fila, total: fila.length });
 }
 
+/**
+ * Desfaz um vínculo entre nome do Meet e pessoa.
+ *
+ * Existe porque um clique errado aqui é silencioso e contamina duas histórias
+ * ao mesmo tempo: a pessoa passa a ter encontros que não foram dela, e o dono
+ * verdadeiro do nome fica sem os dele. Desfazer devolve o nome para a fila,
+ * inclusive os que foram marcados como "não é aluno".
+ */
+export async function DELETE(req: NextRequest) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const norm = req.nextUrl.searchParams.get("norm");
+  if (!norm) {
+    return NextResponse.json({ error: "norm obrigatório" }, { status: 400 });
+  }
+
+  const sb = await createServiceRoleClient();
+
+  await sb.from("formacao_meet_aliases").delete().eq("display_name_norm", norm);
+
+  const { count } = await sb
+    .from("formacao_meet_participacoes")
+    .update({ aluno_id: null }, { count: "exact" })
+    .eq("display_name_norm", norm);
+
+  // "Não é aluno" renomeia a chave para tirar da fila; desfazer precisa
+  // devolver o nome original, senão ele nunca mais reaparece para conciliar.
+  const semSufixo = norm.replace(/ \[ignorado\]$/, "");
+  let restaurados = 0;
+  if (semSufixo !== norm) {
+    const { count: c2 } = await sb
+      .from("formacao_meet_participacoes")
+      .update({ display_name_norm: semSufixo }, { count: "exact" })
+      .eq("display_name_norm", norm);
+    restaurados = c2 ?? 0;
+  }
+
+  // As falas guardam o vínculo por conta própria, para busca por pessoa.
+  await sb.from("formacao_meet_falas").update({ aluno_id: null }).eq("display_name", norm);
+
+  return NextResponse.json({
+    ok: true,
+    participacoes_desvinculadas: count ?? 0,
+    voltaram_para_a_fila: restaurados,
+  });
+}
+
+/** Vínculos já confirmados, para poder conferir e desfazer. */
+export async function PUT() {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const sb = await createServiceRoleClient();
+
+  const { data: aliases } = await sb
+    .from("formacao_meet_aliases")
+    .select("display_name, display_name_norm, aluno_id, created_at")
+    .order("created_at", { ascending: false })
+    .limit(200);
+
+  const ids = Array.from(
+    new Set((aliases || []).map((a: { aluno_id: string }) => a.aluno_id).filter(Boolean))
+  );
+  const { data: perfis } = ids.length
+    ? await sb.from("profiles").select("id, full_name").in("id", ids)
+    : { data: [] };
+
+  const nomePorId = new Map(
+    (perfis || []).map((p: { id: string; full_name: string }) => [p.id, p.full_name])
+  );
+
+  // Nomes tirados da fila como "não é aluno" também precisam poder voltar.
+  const { data: ignorados } = await sb
+    .from("formacao_meet_participacoes")
+    .select("display_name, display_name_norm")
+    .like("display_name_norm", "%[ignorado]")
+    .limit(200);
+
+  const vistos = new Set<string>();
+  const listaIgnorados = ((ignorados || []) as { display_name: string; display_name_norm: string }[])
+    .filter((i) => {
+      if (vistos.has(i.display_name_norm)) return false;
+      vistos.add(i.display_name_norm);
+      return true;
+    })
+    .map((i) => ({
+      display_name: i.display_name,
+      display_name_norm: i.display_name_norm,
+      aluno_nome: null as string | null,
+      ignorado: true,
+    }));
+
+  return NextResponse.json({
+    vinculos: [
+      ...(aliases || []).map(
+        (a: { display_name: string; display_name_norm: string; aluno_id: string }) => ({
+          display_name: a.display_name,
+          display_name_norm: a.display_name_norm,
+          aluno_nome: nomePorId.get(a.aluno_id) || "pessoa removida",
+          ignorado: false,
+        })
+      ),
+      ...listaIgnorados,
+    ],
+  });
+}
+
 export async function POST(req: NextRequest) {
   const auth = await exigirAdmin();
   if (!auth.ok) {

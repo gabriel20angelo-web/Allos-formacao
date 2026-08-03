@@ -75,6 +75,7 @@ export async function GET(req: NextRequest) {
       "id, slot_id, atividade_nome, condutor_nome, data_reuniao, dia_semana, duracao_min, total_participantes, identificados, media_permanencia_pct, vozes_ativas_pct, fala_condutor_pct"
     )
     .gte("data_reuniao", desde)
+    .eq("descartado", false) // teste de link não é encontro e não entra em média
     .order("data_reuniao", { ascending: true });
 
   if (errEnc) {

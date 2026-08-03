@@ -100,7 +100,15 @@ interface Encontro {
   fala_condutor_pct: number | null;
   gravacao_uri: string | null;
   transcricao_uri: string | null;
+  descartado: boolean;
+  descartado_motivo: string | null;
   participacoes: Participacao[];
+}
+interface Vinculo {
+  display_name: string;
+  display_name_norm: string;
+  aluno_nome: string | null;
+  ignorado: boolean;
 }
 
 interface ResultadoBusca {
@@ -168,6 +176,8 @@ export default function MeetAdminPage() {
   const [fila, setFila] = useState<ItemFila[]>([]);
   const [encontros, setEncontros] = useState<Encontro[]>([]);
   const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
+  const [verDescartados, setVerDescartados] = useState(false);
+  const [vinculos, setVinculos] = useState<Vinculo[]>([]);
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
@@ -258,10 +268,59 @@ export default function MeetAdminPage() {
 
   const carregarEncontros = useCallback(async () => {
     const j = await pegarJson<{ encontros?: Encontro[]; error?: string }>(
-      "/formacao/api/admin/meet/encontros?limite=30"
+      `/formacao/api/admin/meet/encontros?limite=40${verDescartados ? "&descartados=1" : ""}`
     );
     if (j && !j.error) setEncontros(j.encontros || []);
+  }, [verDescartados]);
+
+  const carregarVinculos = useCallback(async () => {
+    try {
+      const r = await fetch("/formacao/api/admin/meet/aliases", { method: "PUT" });
+      const tipo = r.headers.get("content-type") || "";
+      if (!tipo.includes("application/json")) return;
+      const j = await r.json();
+      if (!j.error) setVinculos(j.vinculos || []);
+    } catch {
+      // aba continua utilizável sem a lista
+    }
   }, []);
+
+  async function descartarEncontro(e: Encontro) {
+    const restaurar = e.descartado;
+    setTrabalhando(e.id);
+    try {
+      const r = await fetch(
+        `/formacao/api/admin/meet/encontros?id=${e.id}${restaurar ? "&restaurar=1" : ""}`,
+        { method: "DELETE" }
+      );
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Feito.");
+      await carregarEncontros();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function desfazerVinculo(v: Vinculo) {
+    setTrabalhando(v.display_name_norm);
+    try {
+      const r = await fetch(
+        `/formacao/api/admin/meet/aliases?norm=${encodeURIComponent(v.display_name_norm)}`,
+        { method: "DELETE" }
+      );
+      const j = await lerResposta(r);
+      toast.success(
+        `Desfeito. ${j.participacoes_desvinculadas ?? 0} participações voltaram a ficar sem dono.`
+      );
+      await Promise.all([carregarVinculos(), carregarFila(), carregar()]);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
 
   const carregarFila = useCallback(async () => {
     const j = await pegarJson<{ fila?: ItemFila[]; error?: string }>(
@@ -309,9 +368,12 @@ export default function MeetAdminPage() {
   }, [status?.autorizado]);
 
   useEffect(() => {
-    if (aba === "nomes") carregarFila();
+    if (aba === "nomes") {
+      carregarFila();
+      carregarVinculos();
+    }
     if (aba === "encontros") carregarEncontros();
-  }, [aba, carregarFila, carregarEncontros]);
+  }, [aba, carregarFila, carregarVinculos, carregarEncontros]);
 
   const horarioPorId = useMemo(
     () => new Map(horarios.map((h) => [h.id, h])),
@@ -894,6 +956,18 @@ export default function MeetAdminPage() {
                 ))}
               </select>
               <button
+                onClick={() => setVerDescartados(!verDescartados)}
+                title="Encontros de um minuto com uma pessoa costumam ser alguém testando o link."
+                className="px-2.5 py-1.5 rounded-lg text-xs"
+                style={{
+                  background: verDescartados ? "rgba(245,158,11,0.12)" : "rgba(255,255,255,0.03)",
+                  color: verDescartados ? "#F59E0B" : "rgba(253,251,247,0.35)",
+                  border: `1px solid ${verDescartados ? "rgba(245,158,11,0.3)" : "rgba(255,255,255,0.06)"}`,
+                }}
+              >
+                {verDescartados ? "Ocultar descartados" : "Ver descartados"}
+              </button>
+              <button
                 onClick={buscarNasFalas}
                 disabled={trabalhando === "busca"}
                 className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
@@ -984,6 +1058,12 @@ export default function MeetAdminPage() {
                         {e.atividade_nome || "Sem atividade"}
                         {e.condutor_nome ? ` · ${e.condutor_nome}` : ""}
                       </p>
+                      {e.descartado && (
+                        <p className="text-xs text-amber-400/70 mt-1">
+                          Fora das estatísticas
+                          {e.descartado_motivo ? `: ${e.descartado_motivo}` : ""}
+                        </p>
+                      )}
                     </button>
 
                     <div className="flex items-center gap-3 flex-wrap text-xs">
@@ -1018,6 +1098,19 @@ export default function MeetAdminPage() {
                           <Video className="h-3 w-3" /> Gravação
                         </a>
                       )}
+                      <button
+                        onClick={() => descartarEncontro(e)}
+                        disabled={trabalhando === e.id}
+                        title={
+                          e.descartado
+                            ? "Trazer de volta para as estatísticas."
+                            : "Tirar de todas as estatísticas. O registro continua guardado."
+                        }
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-cream/40 hover:text-cream/70 disabled:opacity-40"
+                        style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                      >
+                        {e.descartado ? "Restaurar" : "Descartar"}
+                      </button>
                     </div>
                   </div>
 
@@ -1079,9 +1172,41 @@ export default function MeetAdminPage() {
       {aba === "nomes" && (
         <div className="space-y-3">
           <p className="text-xs text-cream/40">
-            O Google entrega o nome exibido, nunca o e-mail. Resolver aqui uma vez vale para
-            todos os encontros passados e futuros daquele nome.
+            O Google entrega o nome exibido, nunca o e-mail. Ligar um nome a uma pessoa aqui faz
+            todos os encontros daquele nome, passados e futuros, contarem no histórico dela.
+            Errar contamina duas histórias ao mesmo tempo, então tudo aqui é reversível.
           </p>
+
+          {vinculos.length > 0 && (
+            <Card className="p-4">
+              <p className="text-sm text-cream font-semibold mb-2">Vínculos já feitos</p>
+              <div className="space-y-1.5 max-h-[260px] overflow-y-auto">
+                {vinculos.map((v) => (
+                  <div
+                    key={v.display_name_norm}
+                    className="flex items-center justify-between gap-2 text-xs"
+                  >
+                    <span className="text-cream/60">
+                      {v.display_name}
+                      <span className="text-cream/30"> vira </span>
+                      {v.ignorado ? (
+                        <span className="text-amber-400/70">não é aluno</span>
+                      ) : (
+                        <span className="text-cream">{v.aluno_nome}</span>
+                      )}
+                    </span>
+                    <button
+                      onClick={() => desfazerVinculo(v)}
+                      disabled={trabalhando === v.display_name_norm}
+                      className="text-cream/35 hover:text-red-400 shrink-0 disabled:opacity-40"
+                    >
+                      desfazer
+                    </button>
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {fila.length === 0 ? (
             <Card className="p-6 text-center">

@@ -149,6 +149,7 @@ export async function atualizarStatusSlots(
     .select("slot_id, data_reuniao, total_participantes")
     .gte("data_reuniao", inicioSemana)
     .lte("data_reuniao", fimSemana)
+    .eq("descartado", false) // alguém testando o link não prova que houve encontro
     .not("slot_id", "is", null);
 
   const encontroPorSlot = new Map<string, { data_reuniao: string; total_participantes: number }>();

@@ -446,8 +446,17 @@ export async function ingerir(opts?: {
         const condutorPrincipal = nomesCondutores[0] || null;
         const condutorTodos = nomesCondutores.join(", ");
 
+        // Um participante sozinho por poucos minutos não é um encontro: é
+        // alguém testando o link. Marcar na entrada evita que a média de
+        // quórum do grupo nasça estragada e que alguém precise limpar depois.
+        const pareceTeste = total <= 1 && duracaoMin <= 5;
+
         const encontroRow = {
           conference_record_id: conf.name,
+          descartado: pareceTeste,
+          descartado_motivo: pareceTeste
+            ? "Descartado automaticamente: no máximo uma pessoa, por até cinco minutos."
+            : null,
           space_name: space.space_name,
           slot_id: space.slot_id,
           atividade_nome: slot?.atividade_nome || space.rotulo || null,
@@ -552,6 +561,18 @@ export async function ingerir(opts?: {
         }
 
         // ── ponte com a tabela antiga ──
+        // Encontro descartado não atravessa a ponte: as telas antigas não têm
+        // como saber que ele é lixo, e o quórum delas ficaria errado.
+        if (pareceTeste) {
+          await sb
+            .from("formacao_meet_presencas")
+            .delete()
+            .eq("conference_record_id", conf.name);
+          if (existente) res.encontros_atualizados++;
+          else res.encontros_novos++;
+          continue;
+        }
+
         const pico = calcularPico(janelas);
         await sb.from("formacao_meet_presencas").upsert(
           {

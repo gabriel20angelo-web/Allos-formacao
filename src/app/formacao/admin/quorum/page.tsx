@@ -14,6 +14,8 @@ import {
 interface MeetPresenca {
   id: string;
   slot_id: string | null;
+  /** Presente quando a linha veio da captura automática, ausente no registro manual. */
+  conference_record_id?: string | null;
   meet_link: string;
   condutor_nome: string;
   atividade_nome: string | null;
@@ -262,7 +264,10 @@ export default function QuorumPage() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-xl font-fraunces font-bold text-cream">Quorum dos Grupos</h1>
-          <p className="text-sm text-cream/40 mt-1">Presenca capturada automaticamente ou registrada manualmente.</p>
+          <p className="text-sm text-cream/40 mt-1">
+            Presença medida no Meet ou registrada à mão. O detalhe pessoa a pessoa, com minutos e
+            tempo de fala, fica na aba <span className="text-cream/60">Meet</span>.
+          </p>
         </div>
         <button
           onClick={() => setShowManualForm(true)}
@@ -415,9 +420,20 @@ export default function QuorumPage() {
                                 {reg.atividade_nome}
                               </span>
                             )}
-                            {reg.meet_link === "manual" && (
+                            {reg.meet_link === "manual" ? (
                               <span className="text-[10px] px-1.5 py-0.5 rounded" style={{ background: "rgba(253,203,110,0.1)", color: "#fdcb6e" }}>manual</span>
-                            )}
+                            ) : reg.conference_record_id ? (
+                              // Distinguir os dois é o que evita confundir número
+                              // digitado com número medido: só o segundo tem
+                              // minutos por pessoa e tempo de fala por trás.
+                              <span
+                                title="Capturado automaticamente pela API do Google Meet. Detalhe pessoa a pessoa na aba Meet."
+                                className="text-[10px] px-1.5 py-0.5 rounded"
+                                style={{ background: "rgba(34,197,94,0.1)", color: "#22C55E" }}
+                              >
+                                medido no Meet
+                              </span>
+                            ) : null}
                           </div>
                           <div className="flex items-center gap-4 sm:gap-4">
                             <div className="text-right">
