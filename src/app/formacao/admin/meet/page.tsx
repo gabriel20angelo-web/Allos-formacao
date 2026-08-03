@@ -157,7 +157,25 @@ interface ResultadoBusca {
   } | null;
 }
 
-type Aba = "salas" | "encontros" | "aulas" | "nomes" | "diagnostico";
+interface Clipe {
+  id: string;
+  titulo: string | null;
+  url: string | null;
+  thumbnail_url: string | null;
+  duracao_seg: number | null;
+  pontuacao: number | null;
+}
+interface ClipJob {
+  id: string;
+  titulo: string;
+  video_url: string;
+  status: "pendente" | "processando" | "pronto" | "erro";
+  erro: string | null;
+  created_at: string;
+  clipes: Clipe[];
+}
+
+type Aba = "salas" | "encontros" | "aulas" | "clipes" | "nomes" | "diagnostico";
 
 /**
  * Fetch que nunca explode a tela.
@@ -213,7 +231,49 @@ export default function MeetAdminPage() {
   const [aulas, setAulas] = useState<AulaSugerida[]>([]);
   const [aulasPublicadas, setAulasPublicadas] = useState<AulaSugerida[]>([]);
   const [aulasBloqueadas, setAulasBloqueadas] = useState<AulaBloqueada[]>([]);
+  const [clipJobs, setClipJobs] = useState<ClipJob[]>([]);
+  const [clipesConfigurado, setClipesConfigurado] = useState(false);
+  const [cursoParaClipes, setCursoParaClipes] = useState("");
   const [falhouEncontros, setFalhouEncontros] = useState(false);
+
+  const carregarClipes = useCallback(async () => {
+    const j = await pegarJson<{ jobs?: ClipJob[]; configurado?: boolean; error?: string }>(
+      "/formacao/api/admin/meet/clipes"
+    );
+    if (j && !j.error) {
+      setClipJobs(j.jobs || []);
+      setClipesConfigurado(!!j.configurado);
+    }
+  }, []);
+
+  async function enviarCursoParaClipes() {
+    if (!cursoParaClipes) return;
+    const curso = cursos.find((c) => c.id === cursoParaClipes);
+    if (
+      !confirm(
+        `Enviar todas as aulas com vídeo de "${curso?.title}" para gerar clipes?\n\n` +
+          `Cada vídeo é cobrado por minuto de duração. Um curso de 8 encontros de 1h30 ` +
+          `custa como 12 horas de processamento.`
+      )
+    )
+      return;
+
+    setTrabalhando("clipes");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/clipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ curso_id: cursoParaClipes }),
+      });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Enviado.");
+      await carregarClipes();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao enviar");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
   const [falhouFila, setFalhouFila] = useState(false);
   const [tituloEditado, setTituloEditado] = useState<Record<string, string>>({});
 
@@ -541,7 +601,8 @@ export default function MeetAdminPage() {
     }
     if (aba === "encontros") carregarEncontros();
     if (aba === "aulas") carregarAulas();
-  }, [aba, carregarFila, carregarVinculos, carregarEncontros, carregarAulas]);
+    if (aba === "clipes") carregarClipes();
+  }, [aba, carregarFila, carregarVinculos, carregarEncontros, carregarAulas, carregarClipes]);
 
   const horarioPorId = useMemo(
     () => new Map(horarios.map((h) => [h.id, h])),
@@ -942,6 +1003,7 @@ export default function MeetAdminPage() {
           ["salas", "Salas dos grupos"],
           ["encontros", `Encontros${status?.total_encontros ? ` (${status.total_encontros})` : ""}`],
           ["aulas", `Aulas a publicar${aulas.length ? ` (${aulas.length})` : ""}`],
+          ["clipes", "Clipes"],
           ["nomes", `Nomes a resolver${status?.nomes_pendentes ? ` (${fila.length || status.nomes_pendentes})` : ""}`],
           ["diagnostico", "Diagnóstico"],
         ] as [Aba, string][]).map(([id, label]) => (
@@ -1703,6 +1765,107 @@ export default function MeetAdminPage() {
                 </div>
               </Card>
             ))
+          )}
+        </div>
+      )}
+
+      {aba === "clipes" && (
+        <div className="space-y-3">
+          {!clipesConfigurado ? (
+            <Card className="p-4 border border-amber-400/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                <p className="text-sm text-cream/70">
+                  A chave do OpusClip não está configurada no servidor.
+                </p>
+              </div>
+            </Card>
+          ) : (
+            <>
+              <Card className="p-4">
+                <p className="text-sm text-cream font-semibold mb-1">
+                  Cortar as aulas de um curso
+                </p>
+                {/* O custo é por minuto do vídeo original, e é a informação que
+                    decide se vale a pena. Fica escrita aqui, não escondida. */}
+                <p className="text-xs text-cream/40 mb-3">
+                  Manda cada aula com vídeo para virar trechos curtos. A cobrança é por minuto de
+                  vídeo original, não por clipe gerado: oito encontros de uma hora e meia custam
+                  como doze horas de processamento. O envio acontece um por vez, a cada rodada.
+                </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <select
+                    value={cursoParaClipes}
+                    onChange={(e) => setCursoParaClipes(e.target.value)}
+                    className="flex-1 min-w-[220px] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
+                    style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                  >
+                    <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                      escolha o curso
+                    </option>
+                    {cursos.map((c) => (
+                      <option
+                        key={c.id}
+                        value={c.id}
+                        style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                      >
+                        {c.title}
+                      </option>
+                    ))}
+                  </select>
+                  <button
+                    onClick={enviarCursoParaClipes}
+                    disabled={!cursoParaClipes || trabalhando === "clipes"}
+                    className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                    style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+                  >
+                    {trabalhando === "clipes" ? "Enviando" : "Gerar clipes"}
+                  </button>
+                </div>
+              </Card>
+
+              {clipJobs.length === 0 ? (
+                <Card className="p-6 text-center text-sm text-cream/40">
+                  Nenhum vídeo enviado para corte ainda.
+                </Card>
+              ) : (
+                clipJobs.map((j) => (
+                  <Card key={j.id} className="p-4">
+                    <div className="flex items-start justify-between gap-3 flex-wrap">
+                      <div className="min-w-[200px]">
+                        <p className="text-sm text-cream">{j.titulo}</p>
+                        <p className="text-xs text-cream/40 mt-0.5">
+                          {j.status === "pendente" && "na fila"}
+                          {j.status === "processando" && "cortando"}
+                          {j.status === "pronto" && `${j.clipes.length} clipes`}
+                          {j.status === "erro" && (
+                            <span className="text-amber-400/80">{j.erro || "falhou"}</span>
+                          )}
+                        </p>
+                      </div>
+                    </div>
+
+                    {j.clipes.length > 0 && (
+                      <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-2">
+                        {j.clipes.map((c) => (
+                          <a
+                            key={c.id}
+                            href={c.url || "#"}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="text-xs px-2 py-1 rounded-lg"
+                            style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+                          >
+                            {c.titulo || "clipe"}
+                            {c.duracao_seg ? ` · ${Math.round(c.duracao_seg)}s` : ""}
+                          </a>
+                        ))}
+                      </div>
+                    )}
+                  </Card>
+                ))
+              )}
+            </>
           )}
         </div>
       )}

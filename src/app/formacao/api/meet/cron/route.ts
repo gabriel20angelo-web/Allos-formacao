@@ -13,6 +13,7 @@ import { arquivarGravacoes } from "@/lib/meet/arquivar";
 import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
 import { publicarProximoVideo } from "@/lib/meet/publicar-video";
 import { conciliarPendentes } from "@/lib/meet/conciliar";
+import { processarClipes } from "@/lib/meet/clipes";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
@@ -79,6 +80,9 @@ export async function GET(req: NextRequest) {
     // Sugere, não publica. A aula só existe quando alguém aprovar.
     const aulas = await sugerirAulasDeGravacoes(sb);
 
+    // Um envio de corte por rodada: cada um é cobrado por minuto de vídeo.
+    const clipes = await processarClipes(sb, "https://allos.org.br");
+
     return NextResponse.json({
       ok: true,
       encerramento,
@@ -91,6 +95,7 @@ export async function GET(req: NextRequest) {
       youtube,
       nomes,
       aulas,
+      clipes,
     });
   } catch (e) {
     console.error("[meet/cron]", e);
