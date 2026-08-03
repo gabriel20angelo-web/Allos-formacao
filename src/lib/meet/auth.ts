@@ -38,14 +38,32 @@ export async function exigirAdmin(): Promise<AdminOk | AdminNegado> {
 }
 
 /**
+ * Endereço público do app, que NÃO é o host que este processo enxerga.
+ *
+ * allos.org.br/formacao é um rewrite do Vercel (repo allos-site) apontando
+ * para o serviço no Railway, então `req.url` chega com o host cru do Railway.
+ * Derivar a URL do request faria o consentimento voltar num domínio onde o
+ * cookie de sessão do admin não existe (cookies são host-only aqui), e o
+ * callback morreria em 401 antes de salvar coisa alguma.
+ *
+ * Mesmo padrão já usado em /formacao/auth/callback para o login do Supabase.
+ * Localhost continua valendo pelo request, senão não dá para testar local.
+ */
+export function baseUrlPublica(req: Request): string {
+  const origin = new URL(req.url).origin;
+  if (origin.includes("localhost") || origin.includes("127.0.0.1")) return origin;
+  return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
+}
+
+/**
  * URI de retorno do consentimento.
  *
- * Deriva do request para funcionar igual em localhost e em produção, com
- * override por env var quando houver proxy que mexa no host.
+ * Precisa ser byte a byte igual nos dois passos do OAuth (pedido e troca do
+ * código), senão o Google devolve redirect_uri_mismatch.
  */
 export function redirectUri(req: Request): string {
   if (process.env.GOOGLE_MEET_REDIRECT_URI) {
     return process.env.GOOGLE_MEET_REDIRECT_URI;
   }
-  return new URL("/formacao/api/admin/meet/oauth/callback", new URL(req.url).origin).toString();
+  return new URL("/formacao/api/admin/meet/oauth/callback", baseUrlPublica(req)).toString();
 }

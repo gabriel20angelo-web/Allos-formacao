@@ -5,14 +5,16 @@
 // sensível do módulo: com ele se cria reunião e se lê gravação da organização.
 
 import { NextRequest, NextResponse } from "next/server";
-import { exigirAdmin, redirectUri } from "@/lib/meet/auth";
+import { baseUrlPublica, exigirAdmin, redirectUri } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { MEET_SCOPES } from "@/lib/meet/client";
 
 export const dynamic = "force-dynamic";
 
 function voltar(req: NextRequest, params: Record<string, string>) {
-  const url = new URL("/formacao/admin/meet", new URL(req.url).origin);
+  // Volta pelo domínio público, não pelo host do Railway: é lá que o admin
+  // está logado.
+  const url = new URL("/formacao/admin/meet", baseUrlPublica(req));
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
   return NextResponse.redirect(url);
 }

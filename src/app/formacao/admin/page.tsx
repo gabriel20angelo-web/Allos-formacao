@@ -201,6 +201,21 @@ export default function AdminDashboard() {
   } | null>(null);
   const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null);
 
+  // Quórum medido pela API do Meet. Fica em state próprio e não dentro de
+  // formacaoStats porque a fonte é outra (encontros reais, não formulários de
+  // feedback) e porque pode simplesmente não existir: enquanto ninguém criar
+  // as salas, a faixa não aparece em vez de mostrar zeros.
+  const [quorumAuto, setQuorumAuto] = useState<{
+    encontros: number;
+    quorum_medio: number | null;
+    minutos_medios_por_pessoa: number | null;
+    permanencia_media_pct: number | null;
+    vozes_ativas_pct: number | null;
+    fala_condutor_pct: number | null;
+    encontros_com_transcricao: number;
+    identificacao_pct: number | null;
+  } | null>(null);
+
   // ── Timelines de atividade ──
   // Os eventos são carregados uma vez e recortados no cliente: trocar de
   // janela é instantâneo e não gera nova ida ao banco.
@@ -1117,6 +1132,28 @@ export default function AdminDashboard() {
   }, [profile, dashPeriod]);
 
   // ═══════════════════════════════════════════════════════════
+  // Quórum automático (Google Meet API)
+  // ═══════════════════════════════════════════════════════════
+  // Vai por rota de API, e não por consulta no cliente, porque a agregação
+  // atravessa todas as participações do período.
+  useEffect(() => {
+    async function fetchQuorumAuto() {
+      if (!profile) return;
+      const dias = dashPeriod === "7d" ? 7 : dashPeriod === "30d" ? 30 : dashPeriod === "90d" ? 90 : 730;
+      try {
+        const r = await fetch(`/formacao/api/admin/meet/metricas?dias=${dias}`);
+        if (!r.ok) return setQuorumAuto(null);
+        const j = await r.json();
+        setQuorumAuto(j.vazio ? null : j.geral);
+      } catch {
+        // Módulo ainda não configurado: a faixa simplesmente não aparece.
+        setQuorumAuto(null);
+      }
+    }
+    fetchQuorumAuto();
+  }, [profile, dashPeriod]);
+
+  // ═══════════════════════════════════════════════════════════
   // CSV Export (sync mode)
   // ═══════════════════════════════════════════════════════════
 
@@ -1433,6 +1470,81 @@ export default function AdminDashboard() {
                   },
                 ]}
               />
+
+              {/* ── Quórum medido no Meet ──
+                  Só aparece quando existe encontro capturado. Presença aqui é
+                  medida, não declarada: sai de quem esteve na sala e por quanto
+                  tempo, não de quem preencheu formulário. */}
+              {quorumAuto && quorumAuto.encontros > 0 && (
+                <>
+                  <div className="h-5" />
+                  <StatStrip
+                    title="Quórum medido no Meet"
+                    accent="#6c5ce7"
+                    delay={0.15}
+                    items={[
+                      {
+                        label: "Encontros capturados",
+                        value: String(quorumAuto.encontros),
+                        hint: "Encontros que de fato aconteceram e foram lidos pela API do Google Meet no período.",
+                      },
+                      {
+                        label: "Quórum médio",
+                        value: quorumAuto.quorum_medio?.toFixed(1) ?? "—",
+                        hint: "Média de participantes por encontro, sem contar o condutor.",
+                      },
+                      {
+                        label: "Minutos por pessoa",
+                        value: quorumAuto.minutos_medios_por_pessoa?.toFixed(0) ?? "—",
+                        hint: "Tempo médio que cada pessoa realmente ficou na sala.",
+                      },
+                      {
+                        label: "Permanência",
+                        value: (quorumAuto.permanencia_media_pct?.toFixed(0) ?? "—") + "%",
+                        hint: "Quanto do encontro a pessoa média acompanhou. Baixo indica gente que entra e sai.",
+                        color:
+                          (quorumAuto.permanencia_media_pct ?? 0) > 80
+                            ? "#22C55E"
+                            : (quorumAuto.permanencia_media_pct ?? 0) > 55
+                              ? "#F59E0B"
+                              : "#EF4444",
+                      },
+                      ...(quorumAuto.encontros_com_transcricao > 0
+                        ? [
+                            {
+                              label: "Vozes ativas",
+                              value: (quorumAuto.vozes_ativas_pct?.toFixed(0) ?? "—") + "%",
+                              hint: "Percentual de presentes que falou ao menos uma vez. Indicador de grupo vivo, mais honesto que quórum.",
+                              sub: `${quorumAuto.encontros_com_transcricao} com transcrição`,
+                              color:
+                                (quorumAuto.vozes_ativas_pct ?? 0) > 60
+                                  ? "#22C55E"
+                                  : (quorumAuto.vozes_ativas_pct ?? 0) > 30
+                                    ? "#F59E0B"
+                                    : "#EF4444",
+                            },
+                            {
+                              label: "Fala do condutor",
+                              value: (quorumAuto.fala_condutor_pct?.toFixed(0) ?? "—") + "%",
+                              hint: "Fatia do tempo falado que é do condutor. Muito alto sugere aula expositiva onde deveria haver grupo.",
+                            },
+                          ]
+                        : []),
+                      {
+                        label: "Identificados",
+                        value: (quorumAuto.identificacao_pct?.toFixed(0) ?? "—") + "%",
+                        hint: "Participações já ligadas a uma pessoa do cadastro. O resto espera conciliação na aba Meet.",
+                        color:
+                          (quorumAuto.identificacao_pct ?? 0) > 85
+                            ? "#22C55E"
+                            : (quorumAuto.identificacao_pct ?? 0) > 60
+                              ? "#F59E0B"
+                              : "#EF4444",
+                      },
+                    ]}
+                  />
+                </>
+              )}
 
               <div className="h-5" />
 

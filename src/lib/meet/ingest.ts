@@ -313,9 +313,10 @@ export async function ingerir(opts?: {
         }
 
         // ── cálculo por pessoa ──
-        const nomesCondutores = (
-          space.slot_id ? condutoresPorSlot.get(space.slot_id) || [] : []
-        ).map(normalizarNome);
+        const nomesCondutores = space.slot_id
+          ? condutoresPorSlot.get(space.slot_id) || []
+          : [];
+        const condutoresNorm = nomesCondutores.map(normalizarNome);
 
         const calculadas: ParticipacaoCalculada[] = [];
         const janelas: { inicio: Date; fim: Date }[] = [];
@@ -363,7 +364,7 @@ export async function ingerir(opts?: {
             tipo,
             google_user_id: userId,
             aluno_id: alunoId,
-            eh_condutor: nomesCondutores.includes(norm),
+            eh_condutor: condutoresNorm.includes(norm),
             primeira_entrada: m.entrada?.toISOString() || null,
             ultima_saida: m.saida?.toISOString() || null,
             minutos_presentes: m.minutos,
@@ -409,16 +410,24 @@ export async function ingerir(opts?: {
             : null;
 
         const slot = space.slot_id ? slotPorId.get(space.slot_id) : null;
-        const condutorNome = space.slot_id
-          ? (condutoresPorSlot.get(space.slot_id) || []).join(", ")
-          : "";
+
+        // Duas formas do mesmo dado, de propósito.
+        //
+        // /admin/condutores e condutores/[id] casam quórum com condutor por
+        // NOME EXATO em texto (`.eq("condutor_nome", nome)`), então a ponte
+        // precisa gravar um nome que exista em certificado_condutores. Um slot
+        // com dois condutores gravado como "Ana, João" não casaria com
+        // ninguém e o card ficaria vazio em silêncio. A convenção de usar o
+        // primeiro alocado vem do registro manual do calendário.
+        const condutorPrincipal = nomesCondutores[0] || null;
+        const condutorTodos = nomesCondutores.join(", ");
 
         const encontroRow = {
           conference_record_id: conf.name,
           space_name: space.space_name,
           slot_id: space.slot_id,
           atividade_nome: slot?.atividade_nome || null,
-          condutor_nome: condutorNome || null,
+          condutor_nome: condutorTodos || null,
           data_reuniao: dataLocal(inicio),
           dia_semana: diaSemanaLocal(inicio),
           inicio: inicio.toISOString(),
@@ -475,15 +484,22 @@ export async function ingerir(opts?: {
             conference_record_id: conf.name,
             slot_id: space.slot_id,
             meet_link: space.meeting_uri || space.space_name,
-            condutor_nome: condutorNome || "Sem condutor",
+            condutor_nome: condutorPrincipal || "Sem condutor",
             atividade_nome: slot?.atividade_nome || null,
             data_reuniao: dataLocal(inicio),
             dia_semana: diaSemanaLocal(inicio),
             hora_inicio: inicio.toISOString(),
             hora_fim: fim.toISOString(),
             duracao_minutos: duracaoMin,
+            // Formato herdado da extensão: as telas antigas leem nome,
+            // primeira_entrada, ultima_saida e snapshots_presente. Mantemos os
+            // quatro e acrescentamos os campos novos, senão /admin/quorum
+            // renderiza undefined onde havia horário.
             participantes: calculadas.map((c) => ({
               nome: c.display_name,
+              primeira_entrada: c.primeira_entrada,
+              ultima_saida: c.ultima_saida,
+              snapshots_presente: c.minutos_presentes,
               minutos: c.minutos_presentes,
               aluno_id: c.aluno_id,
             })),

@@ -274,7 +274,40 @@ padrão em Business Standard e Business Plus para reuniões com três ou mais pa
 admin, os encontros da Formação passam a gerar documentos de notas sozinhos, com conteúdo que pode ser
 clínico. Decidir isso conscientemente antes da data.
 
-## 11. Pré-requisitos operacionais
+## 11. Estado da implementação (03/08/2026)
+
+Construído e publicado. Falta apenas ligar as credenciais e rodar a migration.
+
+**Banco:** `supabase/migrations/051_meet_api.sql`. Sete tabelas mais a coluna
+`conference_record_id` em `formacao_meet_presencas`, que é o que torna a derivação idempotente.
+
+**Código:**
+
+| Arquivo | Papel |
+|---|---|
+| `src/lib/meet/client.ts` | OAuth e chamadas à API, sem dependência nova |
+| `src/lib/meet/ingest.ts` | o miolo: lê conferências, calcula tudo, grava, deriva |
+| `src/lib/meet/nomes.ts` | normalização, similaridade e datas no fuso certo |
+| `src/lib/meet/excecoes.ts` | aplica e reverte "nesta data não grava" |
+| `src/lib/meet/auth.ts` | porteiro admin das rotas |
+| `api/admin/meet/oauth` + `/callback` | consentimento pelo painel, sem terminal |
+| `api/admin/meet/spaces` | cria a sala do slot, liga e desliga artefatos |
+| `api/admin/meet/aliases` | fila de conciliação e amarração retroativa |
+| `api/admin/meet/excecoes` | agenda exceção por data |
+| `api/admin/meet/ingerir` | busca sob demanda pelo botão |
+| `api/admin/meet/status` | estado do módulo sem expor o token |
+| `api/meet/cron` | batida periódica, protegida por segredo |
+| `admin/meet/page.tsx` | painel em três abas, na aba Meet da Formação Base |
+
+**Decisão que mudou no meio:** a sala é permanente por slot, não criada por data, porque
+`formacao_slots` é grade semanal fixa. Cada semana vira um conference record novo dentro da mesma
+sala. Isso eliminou a tabela de agendamentos que estava prevista na seção 6.
+
+**Falta:** `GOOGLE_MEET_CLIENT_ID` e `GOOGLE_MEET_CLIENT_SECRET` na Railway, rodar a migration,
+autorizar a conta pelo painel, criar as salas e apontar o cron para
+`/formacao/api/meet/cron` com o header `Authorization: Bearer <MEET_CRON_SECRET>`.
+
+## 12. Pré-requisitos operacionais
 
 - [ ] Confirmar edição do Workspace e que a gravação está habilitada no admin
 - [ ] Criar a conta robô e dar a licença
