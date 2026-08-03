@@ -328,6 +328,19 @@ export async function atualizarAcesso(
   });
 }
 
+/**
+ * Encerra a reunião que estiver acontecendo na sala, para todo mundo.
+ *
+ * Equivale ao "encerrar a chamada para todos" que o anfitrião tem dentro do
+ * Meet, só que acionável de fora, sem precisar entrar na reunião.
+ */
+export async function encerrarConferencia(spaceName: string): Promise<void> {
+  await meetFetch<Record<string, never>>(`/${spaceName}:endActiveConference`, {
+    method: "POST",
+    body: JSON.stringify({}),
+  });
+}
+
 // ── Conference records ───────────────────────────────────────
 
 /**

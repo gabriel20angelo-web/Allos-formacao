@@ -13,7 +13,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, DoorClosed, DoorOpen, Link2,
-  Loader2, Mic, RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
+  Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -259,6 +259,24 @@ export default function MeetAdminPage() {
       await carregar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar sala");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function encerrarReuniao(space: SpaceRow) {
+    if (!confirm("Encerrar a reunião desta sala para todos os participantes?")) return;
+    setTrabalhando(space.space_name + "encerrar");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/encerrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name }),
+      });
+      await lerResposta(r);
+      toast.success("Reunião encerrada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao encerrar");
     } finally {
       setTrabalhando(null);
     }
@@ -576,6 +594,15 @@ export default function MeetAdminPage() {
                           <DoorClosed className="h-3 w-3" />
                         )}
                         {space.access_type === "OPEN" ? "Entrada livre" : "Porta fechada"}
+                      </button>
+                      <button
+                        onClick={() => encerrarReuniao(space)}
+                        disabled={trabalhando === space.space_name + "encerrar"}
+                        title="Encerra a reunião em andamento para todos, sem precisar entrar nela."
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-cream/40 hover:text-red-400 transition-colors disabled:opacity-40"
+                        style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                      >
+                        <PhoneOff className="h-3 w-3" /> Encerrar
                       </button>
                       <button
                         onClick={() => setExcecaoAberta(excecaoAberta === slot.id ? null : slot.id)}
