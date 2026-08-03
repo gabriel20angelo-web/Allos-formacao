@@ -14,6 +14,8 @@ import {
   Menu,
   ExternalLink,
   Sparkles,
+  Video,
+  CalendarDays,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 
@@ -23,6 +25,11 @@ const mainNav = [
   { label: "Conteúdos", href: "/formacao", icon: Home },
   { label: "Meus cursos", href: "/formacao/meus-cursos", icon: BookOpen, auth: true },
   { label: "Aprimoramento", href: "/formacao/aprimoramento-dinamicas", icon: Sparkles, associadoOnly: true },
+  // Trabalho de quem conduz. Fica junto do Aprimoramento porque é a mesma
+  // pessoa: quem conduz um grupo também usa as dinâmicas, e separar as duas
+  // coisas em menus diferentes obrigaria a lembrar em qual delas está o quê.
+  { label: "Meu grupo", href: "/formacao/admin/meu-grupo", icon: Video, condutorOnly: true },
+  { label: "Eventos", href: "/formacao/admin/eventos", icon: CalendarDays, eventosOnly: true },
   { label: "Certificado", href: "https://allos.org.br/certificado", icon: Award, external: true },
 ];
 
@@ -41,6 +48,19 @@ export default function Sidebar() {
   // eventos nao tinha como chegar na propria area — a porta so existia para
   // admin e instrutor, e ela via um site sem nada dela dentro.
   const temPainel = isAdmin || isInstructor || isEventos || isCondutor;
+
+  // Quem conduz um grupo e quem cuida dos eventos e associado na pratica, e o
+  // Aprimoramento e material de trabalho deles. Esconder por causa do rotulo do
+  // cargo seria escondê-lo justamente de quem usa.
+  const veAprimoramento = isAssociado || isAdmin || isCondutor || isEventos;
+  const veMeuGrupo = isCondutor || isAdmin;
+  const veEventos = isEventos || isAdmin;
+
+  /** Um item do menu vale para esta pessoa? */
+  const cabe = (i: { associadoOnly?: boolean; condutorOnly?: boolean; eventosOnly?: boolean }) =>
+    !(i.associadoOnly && !veAprimoramento) &&
+    !(i.condutorOnly && !veMeuGrupo) &&
+    !(i.eventosOnly && !veEventos);
   const destinoPainel = isEventos
     ? "/formacao/admin/eventos"
     : isCondutor
@@ -140,7 +160,7 @@ export default function Sidebar() {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {mainNav.map((item) => {
             if (item.auth && !user) return null;
-            if (item.associadoOnly && !isAssociado && !isAdmin) return null;
+            if (!cabe(item)) return null;
             const active = isActive(item.href);
             const Icon = item.icon;
             const linkProps = item.external
@@ -337,7 +357,7 @@ export default function Sidebar() {
           paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         }}
       >
-        {mainNav.filter((i) => !(i.auth && !user) && !(i.associadoOnly && !isAssociado && !isAdmin)).map((item) => {
+        {mainNav.filter((i) => !(i.auth && !user) && cabe(i)).map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (

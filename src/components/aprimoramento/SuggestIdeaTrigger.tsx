@@ -32,8 +32,11 @@ const DESC_MAX = 500;
 type Tab = "nova" | "minhas";
 
 export default function SuggestIdeaTrigger() {
-  const { user, isAssociado, isAdmin } = useAuth();
-  const allowed = !!user && (isAssociado || isAdmin);
+  const { user, isAssociado, isAdmin , isCondutor, isEventos } = useAuth();
+  // Quem conduz grupo e quem cuida de eventos também: o papel é uma coluna só,
+  // então marcar alguém como condutor apagava o "associado" dela e tirava
+  // justamente de quem mais usa isto.
+  const allowed = !!user && (isAssociado || isAdmin || isCondutor || isEventos);
 
   const [open, setOpen] = useState(false);
   const [tab, setTab] = useState<Tab>("nova");

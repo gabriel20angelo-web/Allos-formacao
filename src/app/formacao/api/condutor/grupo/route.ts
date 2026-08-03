@@ -13,7 +13,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { atualizarAcesso, atualizarArtefatos, MeetApiError } from "@/lib/meet/client";
+import {
+  atualizarAcesso,
+  atualizarArtefatos,
+  encerrarConferencia,
+  MeetApiError,
+} from "@/lib/meet/client";
 import type { AccessType } from "@/lib/meet/types";
 
 export const dynamic = "force-dynamic";
@@ -226,6 +231,52 @@ export async function GET() {
       };
     }),
   });
+}
+
+/**
+ * Encerrar a reunião em andamento.
+ *
+ * Existe aqui, e não na rota do admin, porque aquela não confere de quem é a
+ * sala: para ela, saber o nome de uma sala qualquer bastaria para derrubar a
+ * reunião de outro grupo. Encerrar tira todo mundo de dentro, então a posse é
+ * verificada antes.
+ */
+export async function POST(req: NextRequest) {
+  const quem = await identificar();
+  if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
+
+  let body: { space_name?: string };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (!body.space_name) {
+    return NextResponse.json({ error: "space_name obrigatório" }, { status: 400 });
+  }
+
+  const sb = await createServiceRoleClient();
+  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
+  if (!nomes.includes(body.space_name)) {
+    return NextResponse.json({ error: "Esta sala não é sua." }, { status: 403 });
+  }
+
+  try {
+    await encerrarConferencia(body.space_name);
+    return NextResponse.json({ ok: true });
+  } catch (e) {
+    const status = e instanceof MeetApiError ? e.status : 500;
+    if (status === 404 || status === 400) {
+      return NextResponse.json(
+        { error: "Não há reunião acontecendo nesta sala agora." },
+        { status: 409 }
+      );
+    }
+    return NextResponse.json(
+      { error: e instanceof MeetApiError ? e.message : "Não consegui encerrar." },
+      { status: 400 }
+    );
+  }
 }
 
 export async function PATCH(req: NextRequest) {

@@ -15,6 +15,8 @@ import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
+import ComoFunciona from "./ComoFunciona";
+import CortesDosCursos from "./CortesDosCursos";
 import { toast } from "sonner";
 import {
   Clock3,
@@ -27,6 +29,8 @@ import {
   ThumbsDown,
   ThumbsUp,
   Video,
+  FileText,
+  PhoneOff,
   Youtube,
   X,
 } from "lucide-react";
@@ -131,6 +135,32 @@ export default function MeuGrupoPage() {
     }
   }
 
+  async function encerrarReuniao(sala: SalaC) {
+    if (
+      !confirm(
+        `Encerrar a reunião de ${sala.atividade_nome || sala.rotulo || "este grupo"} agora?\n\n` +
+          "Todo mundo que estiver dentro sai na hora."
+      )
+    )
+      return;
+
+    setTrabalhando(sala.space_name);
+    try {
+      const r = await fetch("/formacao/api/condutor/grupo", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: sala.space_name }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Não consegui encerrar.");
+      toast.success("Reunião encerrada.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
   async function avaliar(c: ClipeC, valor: "gostei" | "rejeitado") {
     const novo = c.avaliacao === valor ? null : valor;
     setSalas((s) =>
@@ -196,6 +226,8 @@ export default function MeuGrupoPage() {
         </p>
       </div>
 
+      <ComoFunciona />
+
       {erro && (
         <Card className="p-4 border border-amber-400/30">
           <p className="text-sm text-cream/70">{erro}</p>
@@ -242,6 +274,7 @@ export default function MeuGrupoPage() {
                     [
                       ["gravar", "Gravar", Video],
                       ["transcrever", "Transcrever", Mic],
+                      ["notas", "Notas de IA", FileText],
                     ] as const
                   ).map(([campo, rotulo, Icone]) => {
                     const ligado = sala[campo];
@@ -298,6 +331,23 @@ export default function MeuGrupoPage() {
                       voltar ao horário
                     </button>
                   )}
+
+                  {/* Encerrar derruba todo mundo de dentro, então pergunta
+                      antes e fica separado dos interruptores, que são
+                      reversíveis. */}
+                  <button
+                    onClick={() => encerrarReuniao(sala)}
+                    disabled={ocupado}
+                    title="Encerra a reunião em andamento para todos, sem precisar entrar nela."
+                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                    style={{
+                      background: "rgba(255,77,77,0.08)",
+                      color: "#FF6B6B",
+                      border: "1px solid rgba(255,77,77,0.22)",
+                    }}
+                  >
+                    <PhoneOff className="h-3 w-3" /> Encerrar
+                  </button>
 
                   <span className="flex items-center gap-1 text-xs text-cream/30 ml-auto">
                     <Clock3 className="h-3 w-3" />
@@ -470,6 +520,17 @@ export default function MeuGrupoPage() {
           </Card>
         );
       })}
+
+      {/* Os cortes que vieram das aulas gravadas. Ficam depois dos encontros
+          porque o encontro da semana e o que a pessoa vem ver; o acervo e
+          trabalho de quando sobra tempo. */}
+      <CortesDosCursos
+        aoAssistir={(c) => {
+          setAnotacao(c.anotacao || "");
+          setAssistindo(c);
+        }}
+        aoAvaliar={avaliar}
+      />
 
       {assistindo && (
         <div

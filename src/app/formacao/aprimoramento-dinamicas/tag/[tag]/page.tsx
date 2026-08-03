@@ -54,7 +54,7 @@ export default async function TagPage({ params }: PageProps) {
     .eq("id", user.id)
     .single();
 
-  const allowed = profile?.role === "associado" || profile?.role === "admin";
+  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
   if (!allowed) {
     redirect("/formacao");
   }

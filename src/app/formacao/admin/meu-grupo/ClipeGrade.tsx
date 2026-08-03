@@ -1,0 +1,128 @@
+"use client";
+
+// A grade de cortes, com o aviso que a antecede.
+//
+// Extraída porque aparece em dois lugares — nos encontros ao vivo e nos cursos
+// gravados — e duas cópias divergiriam na primeira correção.
+//
+// O aviso fica aqui dentro, colado na grade, e não no topo da página: quem
+// avalia quarenta cortes cansa e passa a julgar pela miniatura, e é aí que
+// escapa um trecho que soa bem e diz o contrário do que foi dito.
+
+import { Download, Play, ThumbsDown, ThumbsUp } from "lucide-react";
+
+export interface ClipeC {
+  id: string;
+  titulo: string | null;
+  descricao: string | null;
+  hashtags: string[] | null;
+  url: string | null;
+  preview_url: string | null;
+  thumbnail_url: string | null;
+  duracao_seg: number | null;
+  pontuacao: number | null;
+  avaliacao: "gostei" | "rejeitado" | null;
+  anotacao: string | null;
+}
+
+export default function ClipeGrade({
+  clipes,
+  aoAssistir,
+  aoAvaliar,
+}: {
+  clipes: ClipeC[];
+  aoAssistir: (c: ClipeC) => void;
+  aoAvaliar: (c: ClipeC, v: "gostei" | "rejeitado") => void;
+}) {
+  return (
+    <>
+      <p className="text-[11px] text-cream/35 mb-2 leading-relaxed">
+        Ouça antes de aprovar: o que decide é o que está sendo dito, não a imagem. Repare se o
+        corte não começa no meio de uma ressalva nem termina antes dela. O mesmo corte serve em pé
+        e deitado, então o formato não é motivo para reprovar.
+      </p>
+
+      <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
+        {clipes.map((c) => (
+          <div
+            key={c.id}
+            className="rounded-lg overflow-hidden"
+            style={{
+              border: `1px solid ${c.avaliacao === "gostei" ? "rgba(74,222,128,0.35)" : "rgba(255,255,255,0.06)"}`,
+              opacity: c.avaliacao === "rejeitado" ? 0.4 : 1,
+            }}
+          >
+            <button
+              onClick={() => aoAssistir(c)}
+              className="relative block w-full group"
+              style={{ aspectRatio: "9/16", background: "rgba(0,0,0,0.3)" }}
+              title="Assistir"
+            >
+              {c.thumbnail_url && (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={c.thumbnail_url}
+                  alt=""
+                  className="w-full h-full object-cover"
+                  loading="lazy"
+                />
+              )}
+              <span
+                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                style={{ background: "rgba(0,0,0,0.45)" }}
+              >
+                <Play className="h-7 w-7 text-white" fill="white" />
+              </span>
+              {c.duracao_seg ? (
+                <span
+                  className="absolute bottom-1 right-1 px-1 rounded text-[10px] text-white"
+                  style={{ background: "rgba(0,0,0,0.65)" }}
+                >
+                  {Math.round(c.duracao_seg)}s
+                </span>
+              ) : null}
+            </button>
+
+            <p className="text-[10px] text-cream/70 px-1.5 pt-1.5 line-clamp-2">{c.titulo}</p>
+
+            <div className="flex items-center gap-1 p-1.5">
+              <button
+                onClick={() => aoAvaliar(c, "gostei")}
+                title="Publicável"
+                className="p-1 rounded"
+                style={{
+                  background: c.avaliacao === "gostei" ? "rgba(74,222,128,0.15)" : "transparent",
+                  color: c.avaliacao === "gostei" ? "#4ADE80" : "rgba(253,251,247,0.3)",
+                }}
+              >
+                <ThumbsUp className="h-3 w-3" />
+              </button>
+              <button
+                onClick={() => aoAvaliar(c, "rejeitado")}
+                title="Não publicar"
+                className="p-1 rounded"
+                style={{
+                  background:
+                    c.avaliacao === "rejeitado" ? "rgba(245,158,11,0.15)" : "transparent",
+                  color: c.avaliacao === "rejeitado" ? "#F59E0B" : "rgba(253,251,247,0.3)",
+                }}
+              >
+                <ThumbsDown className="h-3 w-3" />
+              </button>
+              <a
+                href={c.url || c.preview_url || "#"}
+                download
+                target="_blank"
+                rel="noreferrer"
+                title="Baixar"
+                className="p-1 rounded text-cream/30 ml-auto"
+              >
+                <Download className="h-3 w-3" />
+              </a>
+            </div>
+          </div>
+        ))}
+      </div>
+    </>
+  );
+}
