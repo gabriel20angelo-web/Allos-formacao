@@ -175,7 +175,26 @@ export function groupByDay(
     }));
 }
 
-export type Bucket = { key: string; label: string; count: number; isPeak?: boolean };
+export type BucketGrain = "hour" | "day" | "week" | "month";
+export type Bucket = {
+  key: string;
+  label: string;
+  count: number;
+  /** Granularidade do bucket — quem marca anotação precisa saber. */
+  grain: BucketGrain;
+};
+
+/** Dias cobertos por um bucket, para casar com as anotações. */
+export function bucketCoversDay(bucket: Bucket, day: string): boolean {
+  if (bucket.grain === "hour") return true; // janela "hoje": um dia só
+  if (bucket.grain === "day") return bucket.key === day;
+  const start = new Date(`${bucket.key}T00:00:00`);
+  const end = new Date(start);
+  if (bucket.grain === "week") end.setDate(end.getDate() + 6);
+  else end.setMonth(end.getMonth() + 1), end.setDate(0);
+  const d = new Date(`${day}T00:00:00`);
+  return d >= start && d <= end;
+}
 
 /**
  * Série do gráfico. A granularidade acompanha a janela: hora no dia, dia até
@@ -196,6 +215,7 @@ export function bucketEvents(
       key: String(h),
       label: `${String(h).padStart(2, "0")}h`,
       count,
+      grain: "hour" as const,
     }));
   }
 
@@ -241,7 +261,7 @@ export function bucketEvents(
 
   return Array.from(counts.entries())
     .sort((a, b) => a[0].localeCompare(b[0]))
-    .map(([key, count]) => ({ key, label: bucketLabel(key, grain), count }));
+    .map(([key, count]) => ({ key, label: bucketLabel(key, grain), count, grain }));
 }
 
 function bucketKeyFor(d: Date, grain: "day" | "week" | "month"): string {

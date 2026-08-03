@@ -18,7 +18,9 @@ import {
   ACTIVITY_RANGES,
   RANGE_LABELS,
   RANGE_PREVIOUS_LABELS,
+  bucketCoversDay,
   bucketEvents,
+  dayKey,
   dayLabel,
   getPreviousRangeStart,
   getRangeStart,
@@ -29,6 +31,8 @@ import {
   type TimelineEvent,
   type TimelineEventType,
 } from "@/lib/utils/activity";
+import DayNotesPanel from "./DayNotesPanel";
+import type { DayNotesApi } from "@/hooks/useDayNotes";
 import {
   Activity,
   Award,
@@ -45,6 +49,7 @@ import {
   Users,
   TrendingUp,
   CalendarClock,
+  Megaphone,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -156,6 +161,8 @@ interface Props {
   truncated?: string[];
   /** Quando a aba já tem um seletor de janela governando tudo, não repetimos aqui. */
   hideRangeSelector?: boolean;
+  /** Anotações de dia; ausente ou indisponível, a UI de anotação não aparece. */
+  notes?: DayNotesApi;
 }
 
 export default function ActivityTimeline({
@@ -168,6 +175,7 @@ export default function ActivityTimeline({
   csvName = "atividade",
   truncated = [],
   hideRangeSelector = false,
+  notes,
 }: Props) {
   const [activeTypes, setActiveTypes] = useState<Set<TimelineEventType>>(new Set());
   const [query, setQuery] = useState("");
@@ -245,6 +253,21 @@ export default function ActivityTimeline({
   }, [chart, filtered.length]);
 
   const maxBar = Math.max(...chart.map((b) => b.count), 1);
+
+  // eventos por dia: o painel de anotações usa para dizer o que o dia rendeu
+  const eventCountByDay = useMemo(() => {
+    const m = new Map<string, number>();
+    current.forEach((e) => {
+      const k = dayKey(e.timestamp);
+      m.set(k, (m.get(k) || 0) + 1);
+    });
+    return m;
+  }, [current]);
+
+  const notedDays = useMemo(
+    () => (notes?.available ? Array.from(notes.byDay.keys()) : []),
+    [notes]
+  );
 
   function toggleType(t: TimelineEventType) {
     setActiveTypes((prev) => {
@@ -434,6 +457,10 @@ export default function ActivityTimeline({
               <div className="flex gap-[3px] h-24">
                 {chart.map((b) => {
                   const isPeak = peak !== null && b.count === peak.count && b.count > 0;
+                  const diasAnotados = notedDays.filter((d) => bucketCoversDay(b, d));
+                  const anotacao = diasAnotados
+                    .flatMap((d) => notes?.byDay.get(d) ?? [])
+                    .map((n) => n.texto)[0];
                   return (
                     <div
                       key={b.key}
@@ -441,15 +468,25 @@ export default function ActivityTimeline({
                     >
                       <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
                         <div
-                          className="px-2 py-0.5 rounded text-[9px] font-dm font-medium text-cream whitespace-nowrap"
+                          className="px-2 py-0.5 rounded text-[9px] font-dm font-medium text-cream whitespace-nowrap max-w-[220px] truncate"
                           style={{
                             background: "rgba(30,30,30,0.95)",
-                            border: `1px solid ${accent}33`,
+                            border: `1px solid ${anotacao ? "#D4A85755" : `${accent}33`}`,
                           }}
                         >
                           {b.count} &middot; {b.label}
+                          {anotacao && (
+                            <span style={{ color: "#D4A857" }}> &middot; {anotacao}</span>
+                          )}
                         </div>
                       </div>
+                      {anotacao && (
+                        <span
+                          className="absolute -bottom-[7px] w-[5px] h-[5px] rounded-full"
+                          style={{ background: "#D4A857" }}
+                          title={anotacao}
+                        />
+                      )}
                       <div
                         className="w-full rounded-t-[3px] transition-all duration-200"
                         style={{
@@ -466,7 +503,7 @@ export default function ActivityTimeline({
                   );
                 })}
               </div>
-              <div className="flex justify-between mt-1.5">
+              <div className="flex justify-between mt-2.5">
                 <span className="font-dm text-[9px] text-cream/20">
                   {chart[0]?.label}
                 </span>
@@ -475,6 +512,16 @@ export default function ActivityTimeline({
                 </span>
               </div>
             </div>
+          )}
+
+          {/* ── Anotações do período ── */}
+          {notes && (
+            <DayNotesPanel
+              api={notes}
+              eventCountByDay={eventCountByDay}
+              rangeStart={rangeStart}
+              accent={accent}
+            />
           )}
 
           {/* ── Filtros ── */}
@@ -562,6 +609,26 @@ export default function ActivityTimeline({
                     </span>
                     <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.05)" }} />
                   </div>
+
+                  {/* o que foi feito nesse dia — a causa possível do movimento */}
+                  {notes?.byDay.get(day.key)?.map((n) => (
+                    <div
+                      key={n.id}
+                      className="flex items-start gap-1.5 mb-1.5 px-2 py-1 rounded-[6px]"
+                      style={{
+                        background: "rgba(212,168,87,0.06)",
+                        border: "1px solid rgba(212,168,87,0.14)",
+                      }}
+                    >
+                      <Megaphone
+                        className="h-3 w-3 flex-shrink-0 mt-0.5"
+                        style={{ color: "#D4A857" }}
+                      />
+                      <p className="font-dm text-[11px] leading-snug" style={{ color: "#D4A857" }}>
+                        {n.texto}
+                      </p>
+                    </div>
+                  ))}
 
                   <div className="relative pl-[13px]">
                     <div

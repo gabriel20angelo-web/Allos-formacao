@@ -15,6 +15,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useDayNotes } from "@/hooks/useDayNotes";
 import { formatPrice } from "@/lib/utils/format";
 import {
   getGreeting,
@@ -27,7 +28,7 @@ import {
   type ActivityRange,
   type TimelineEvent,
 } from "@/lib/utils/activity";
-import StatCard from "@/components/admin/dashboard/StatCard";
+import StatStrip from "@/components/admin/dashboard/StatStrip";
 import HintButton from "@/components/admin/dashboard/HintButton";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
@@ -36,22 +37,14 @@ import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
 import {
-  BookOpen,
-  Users,
   Award,
   Star,
-  CheckCircle,
-  DollarSign,
   UserX,
-  GraduationCap,
-  MessageSquare,
-  FileText,
   TrendingUp,
   Trophy,
   Activity,
   BarChart3,
   Flame,
-  Plus,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════
@@ -83,10 +76,6 @@ type SubmissionRow = {
 };
 
 
-type EnrollmentDateRow = {
-  enrolled_at: string;
-  completed_at?: string | null;
-};
 
 type ReviewJoinRow = {
   id: string;
@@ -156,17 +145,14 @@ type ExamRow = {
 export default function AdminDashboard() {
   const { profile, isAdmin } = useAuth();
 
+  // Anotações de dia: uma fonte só para as duas abas.
+  const dayNotes = useDayNotes(!!profile && isAdmin);
+
   // ── Mode toggle ──
   const [mode, setMode] = useState<DashMode>("sync");
 
   // ── Async stats ──
   const [stats, setStats] = useState<DashboardStats | null>(null);
-  const [recentEnrollments, setRecentEnrollments] = useState<
-    { date: string; count: number }[]
-  >([]);
-  const [completionTrend, setCompletionTrend] = useState<
-    { date: string; count: number }[]
-  >([]);
   const [asyncEngagement, setAsyncEngagement] = useState<{
     avgProgress: number;
     topCourses: { title: string; slug: string; watchCount: number; avgProgress: number }[];
@@ -198,7 +184,6 @@ export default function AdminDashboard() {
     retentionRate: number;
     newStudentsThisPeriod: number;
     topGroups: { name: string; avgNota: number; count: number }[];
-    topGroupsByParticipation: { name: string; count: number }[];
     ratingDistribution: { rating: number; count: number }[];
     conductorRatingDist: { rating: number; count: number }[];
     retentionByMonth: { month: string; active: number; churned: number }[];
@@ -319,56 +304,6 @@ export default function AdminDashboard() {
         hasRevenue,
         inactiveStudents,
       });
-
-      // Enrollment chart + completion trend
-      if (ids.length > 0) {
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-        const [enrollmentsRes, completionsRes] = await Promise.all([
-          supabase
-            .from("enrollments")
-            .select("enrolled_at")
-            .in("course_id", ids)
-            .gte("enrolled_at", thirtyDaysAgo.toISOString())
-            .order("enrolled_at"),
-          supabase
-            .from("enrollments")
-            .select("completed_at")
-            .in("course_id", ids)
-            .eq("status", "completed")
-            .not("completed_at", "is", null)
-            .gte("completed_at", thirtyDaysAgo.toISOString())
-            .order("completed_at"),
-        ]);
-
-        // Enrollment chart data
-        if (enrollmentsRes.data) {
-          const byDay: Record<string, number> = {};
-          enrollmentsRes.data.forEach((e) => {
-            const day = e.enrolled_at.split("T")[0];
-            byDay[day] = (byDay[day] || 0) + 1;
-          });
-          setRecentEnrollments(
-            Object.entries(byDay).map(([date, count]) => ({ date, count }))
-          );
-        }
-
-        // Completion trend data
-        if (completionsRes.data) {
-          const byDay: Record<string, number> = {};
-          (completionsRes.data as EnrollmentDateRow[]).forEach((e) => {
-            if (e.completed_at) {
-              const day = e.completed_at.split("T")[0];
-              byDay[day] = (byDay[day] || 0) + 1;
-            }
-          });
-          setCompletionTrend(
-            Object.entries(byDay).map(([date, count]) => ({ date, count }))
-          );
-        }
-
-      }
 
       setLoading(false);
     }
@@ -917,10 +852,6 @@ export default function AdminDashboard() {
           .sort((a, b) => b.avgNota - a.avgNota)
           .slice(0, 5);
 
-        const topGroupsByParticipation = Array.from(groupNotaMap.entries())
-          .map(([name, d]) => ({ name, count: d.count }))
-          .sort((a, b) => b.count - a.count)
-          .slice(0, 5);
 
         // Rating distribution (nota_grupo 1-10)
         const ratingDistribution: { rating: number; count: number }[] = [];
@@ -1022,7 +953,6 @@ export default function AdminDashboard() {
           retentionRate,
           newStudentsThisPeriod,
           topGroups,
-          topGroupsByParticipation,
           ratingDistribution,
           conductorRatingDist,
           retentionByMonth,
@@ -1254,34 +1184,29 @@ export default function AdminDashboard() {
 
           {formacaoStats ? (
             <>
-              {/* ── Stat cards: Feedbacks, Nota grupo, Nota condutor, Taxa de relatos ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {[
+              {/* ── Números do período, em duas faixas densas ── */}
+              <StatStrip
+                title="Avaliações"
+                delay={0.1}
+                items={[
                   {
                     label: "Feedbacks",
                     value: String(formacaoStats.totalFeedbacks),
-                    icon: FileText,
-                    iconColor: "#C84B31",
-                    iconBg: "rgba(200,75,49,0.1)",
+                    hint: "Formulários de certificação enviados na janela escolhida.",
                   },
                   {
-                    label: "Nota Grupo",
+                    label: "Nota do grupo",
                     value: formacaoStats.avgNotaGrupo.toFixed(1),
                     suffix: "/10",
-                    icon: Star,
-                    iconColor: "#C84B31",
-                    iconBg: "rgba(200,75,49,0.1)",
                   },
                   {
-                    label: "Nota Condutores",
+                    label: "Nota dos condutores",
                     value: formacaoStats.avgNotaCondutor.toFixed(1),
                     suffix: "/10",
-                    icon: Users,
-                    iconColor: "#2E9E8F",
-                    iconBg: "rgba(46,158,143,0.1)",
+                    color: "#2E9E8F",
                   },
                   {
-                    label: "Taxa de Relatos",
+                    label: "Com relato escrito",
                     value:
                       formacaoStats.totalFeedbacks > 0
                         ? `${Math.round(
@@ -1290,92 +1215,62 @@ export default function AdminDashboard() {
                               100
                           )}%`
                         : "0%",
-                    subtitle: `${formacaoStats.totalRelatos} de ${formacaoStats.totalFeedbacks}`,
-                    icon: MessageSquare,
-                    iconColor: "#D4854A",
-                    iconBg: "rgba(212,133,74,0.1)",
+                    sub: `${formacaoStats.totalRelatos} de ${formacaoStats.totalFeedbacks}`,
+                    color: "#D4854A",
                   },
-                ].map((card, i) => (
-                  <StatCard key={card.label} card={card} delay={0.15 + i * 0.06} />
-                ))}
-              </div>
+                ]}
+              />
 
-              {/* ── Metrics: Frequência, Participantes únicos ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                {[
-                  {
-                    label: "Vezes que cada pessoa participou",
-                    hint: "Em média, quantas vezes cada pessoa participou de grupos no período (total de presenças / participantes únicos).",
-                    value:
-                      formacaoStats.avgFrequencyPerStudent.toFixed(1) +
-                      "x",
-                    icon: TrendingUp,
-                    iconColor: "#D4854A",
-                    iconBg: "rgba(212,133,74,0.1)",
-                  },
+              <div className="h-3" />
+
+              <StatStrip
+                title="Pessoas"
+                delay={0.16}
+                items={[
                   {
                     label: "Pessoas diferentes",
-                    hint: "Total de pessoas únicas que participaram de pelo menos um grupo no período.",
                     value: String(formacaoStats.uniqueParticipants),
-                    icon: GraduationCap,
-                    iconColor: "#C84B31",
-                    iconBg: "rgba(200,75,49,0.1)",
+                    hint: "Total de pessoas únicas que participaram de pelo menos um grupo no período.",
                   },
-                ].map((card, i) => (
-                  <StatCard key={card.label} card={card} delay={0.35 + i * 0.06} />
-                ))}
-              </div>
-
-              {/* ── Retention cards ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                {[
                   {
-                    label: "Primeira vez no período",
-                    hint: "Pessoas que apareceram pela primeira vez nos grupos síncronos durante este período.",
+                    label: "Vezes por pessoa",
+                    value: formacaoStats.avgFrequencyPerStudent.toFixed(1) + "x",
+                    hint: "Em média, quantas vezes cada pessoa participou de grupos no período (presenças / participantes únicos).",
+                    color: "#D4854A",
+                  },
+                  {
+                    label: "Primeira vez",
                     value: String(formacaoStats.newStudentsThisPeriod),
-                    icon: Plus,
-                    iconColor: "#22C55E",
-                    iconBg: "rgba(34,197,94,0.1)",
+                    hint: "Pessoas que apareceram pela primeira vez nos grupos síncronos durante este período.",
+                    color: "#22C55E",
                   },
                   {
-                    label: "Participaram nos últimos 30 dias",
-                    hint: "Pessoas que enviaram pelo menos 1 feedback/presença nos últimos 30 dias.",
+                    label: "Ativas (30 dias)",
                     value: String(formacaoStats.activeStudents),
-                    icon: CheckCircle,
-                    iconColor: "#22C55E",
-                    iconBg: "rgba(34,197,94,0.1)",
+                    hint: "Pessoas que enviaram pelo menos 1 feedback nos últimos 30 dias.",
+                    color: "#22C55E",
                   },
                   {
                     label: "Sumiram",
-                    hint: "Pessoas que já participaram antes mas não aparecem há mais de 30 dias.",
                     value: String(formacaoStats.inactiveStudents),
-                    icon: UserX,
-                    iconColor: "#EF4444",
-                    iconBg: "rgba(239,68,68,0.1)",
+                    hint: "Pessoas que já participaram antes mas não aparecem há mais de 30 dias.",
+                    color: "#EF4444",
                   },
                   {
-                    label: "Taxa de retenção",
-                    hint: "Porcentagem de participantes que continuam ativos (últimos 30 dias) em relação ao total histórico.",
-                    value:
-                      formacaoStats.retentionRate.toFixed(0) + "%",
-                    icon: TrendingUp,
-                    iconColor:
+                    label: "Retenção",
+                    value: formacaoStats.retentionRate.toFixed(0) + "%",
+                    hint: "Participantes ativos nos últimos 30 dias sobre o total histórico.",
+                    color:
                       formacaoStats.retentionRate > 70
                         ? "#22C55E"
                         : formacaoStats.retentionRate > 40
                           ? "#F59E0B"
                           : "#EF4444",
-                    iconBg:
-                      formacaoStats.retentionRate > 70
-                        ? "rgba(34,197,94,0.1)"
-                        : formacaoStats.retentionRate > 40
-                          ? "rgba(245,158,11,0.1)"
-                          : "rgba(239,68,68,0.1)",
                   },
-                ].map((card, i) => (
-                  <StatCard key={card.label} card={card} delay={0.55 + i * 0.06} />
-                ))}
-              </div>
+                ]}
+              />
+
+              <div className="h-5" />
 
               {/* ── Atividade recente (feedbacks do /certificado) ── */}
               <motion.div
@@ -1391,6 +1286,7 @@ export default function AdminDashboard() {
                   hideRangeSelector
                   accent="#C84B31"
                   csvName="atividade_certificado"
+                  notes={dayNotes}
                   subtitle="Cada feedback enviado no formulário de certificação, do mais recente para o mais antigo. A janela é a mesma escolhida no topo da aba."
                 />
               </motion.div>
@@ -1715,69 +1611,6 @@ export default function AdminDashboard() {
                   </Card>
                 </motion.div>
 
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.0, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Activity
-                        className="h-4 w-4"
-                        style={{ color: "#2E9E8F" }}
-                      />
-                      <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                        Grupos com maior adesão
-                      </h3>
-                    </div>
-                    {formacaoStats.topGroupsByParticipation.length > 0 ? (
-                      <div className="space-y-2.5">
-                        {formacaoStats.topGroupsByParticipation.map(
-                          (g) => {
-                            const maxCount =
-                              formacaoStats
-                                .topGroupsByParticipation[0]?.count ||
-                              1;
-                            const barWidth =
-                              (g.count / maxCount) * 100;
-                            return (
-                              <div key={g.name}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-dm text-xs text-cream/60 truncate flex-1 mr-2">
-                                    {g.name}
-                                  </span>
-                                  <span className="font-fraunces font-bold text-xs text-cream/50 tabular-nums">
-                                    {g.count}
-                                  </span>
-                                </div>
-                                <div
-                                  className="h-1.5 rounded-full overflow-hidden"
-                                  style={{
-                                    background:
-                                      "rgba(255,255,255,0.04)",
-                                  }}
-                                >
-                                  <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{
-                                      width: `${barWidth}%`,
-                                      background:
-                                        "rgba(46,158,143,0.5)",
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                          }
-                        )}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-cream/30 text-center py-4">
-                        Sem dados
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
               </div>
 
               {/* ── Rating distributions ── */}
@@ -1965,7 +1798,9 @@ export default function AdminDashboard() {
                         );
                         return (
                           <div className="space-y-3">
-                            <div className="flex items-end gap-3 h-36">
+                            {/* sem items-end: ele tira a altura das colunas e
+                                as barras percentuais colapsam no min-h */}
+                            <div className="flex gap-3 h-36">
                               {formacaoStats.retentionByMonth.map(
                                 (m) => {
                                   const activeH =
@@ -2082,100 +1917,46 @@ export default function AdminDashboard() {
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4 }}
         >
-          {/* Stat cards */}
+          {/* Números gerais dos cursos, em faixa única */}
           {stats && (
             <>
-              <div
-                className={`grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 ${
-                  stats.hasRevenue ? "lg:grid-cols-6" : "lg:grid-cols-5"
-                } gap-5 mb-8`}
-              >
-                {[
-                  {
-                    label: "Cursos publicados",
-                    value: String(stats.totalCourses),
-                    icon: BookOpen,
-                    iconColor: "#C84B31",
-                    iconBg: "rgba(200,75,49,0.1)",
-                  },
-                  {
-                    label: "Alunos matriculados",
-                    value: String(stats.totalStudents),
-                    icon: Users,
-                    iconColor: "#D4854A",
-                    iconBg: "rgba(212,133,74,0.1)",
-                  },
+              <StatStrip
+                title="Cursos"
+                accent="#2E9E8F"
+                delay={0.1}
+                items={[
+                  { label: "Cursos publicados", value: String(stats.totalCourses) },
+                  { label: "Alunos matriculados", value: String(stats.totalStudents) },
                   {
                     label: "Certificados emitidos",
                     value: String(stats.totalCertificates),
-                    icon: Award,
-                    iconColor: "#2E9E8F",
-                    iconBg: "rgba(46,158,143,0.1)",
                   },
                   {
                     label: "Rating médio",
-                    value: stats.avgRating
-                      ? stats.avgRating.toFixed(1)
-                      : "\u2014",
-                    icon: Star,
-                    iconColor: "#F59E0B",
-                    iconBg: "rgba(251,191,36,0.1)",
+                    value: stats.avgRating ? stats.avgRating.toFixed(1) : "\u2014",
+                    suffix: stats.avgRating ? "/5" : undefined,
+                    color: "#F59E0B",
                   },
                   {
                     label: "Taxa de conclusão",
                     value: stats.completionRate
                       ? `${stats.completionRate.toFixed(1)}%`
                       : "\u2014",
-                    icon: CheckCircle,
-                    iconColor: "#2E9E8F",
-                    iconBg: "rgba(46,158,143,0.1)",
+                    hint: "Matrículas concluídas sobre o total de matrículas.",
                   },
                   ...(stats.hasRevenue
                     ? [
                         {
                           label: "Receita total",
                           value: formatPrice(stats.totalRevenue),
-                          icon: DollarSign,
-                          iconColor: "#22C55E",
-                          iconBg: "rgba(34,197,94,0.1)",
+                          color: "#22C55E",
                         },
                       ]
                     : []),
-                ].map((stat, i) => (
-                  <motion.div
-                    key={stat.label}
-                    initial={{ opacity: 0, y: 16 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{
-                      delay: 0.1 + i * 0.08,
-                      duration: 0.5,
-                      ease: [0.22, 1, 0.36, 1],
-                    }}
-                  >
-                    <Card>
-                      <div className="flex items-center gap-4">
-                        <div
-                          className="w-12 h-12 rounded-[12px] flex items-center justify-center flex-shrink-0"
-                          style={{ background: stat.iconBg }}
-                        >
-                          <stat.icon
-                            className="h-6 w-6"
-                            style={{ color: stat.iconColor }}
-                          />
-                        </div>
-                        <div className="min-w-0">
-                          <p className="text-2xl font-bold text-cream tabular-nums truncate">
-                            {stat.value}
-                          </p>
-                          <p className="text-xs text-cream/40">
-                            {stat.label}
-                          </p>
-                        </div>
-                      </div>
-                    </Card>
-                  </motion.div>
-                ))}
-              </div>
+                ]}
+              />
+
+              <div className="h-5" />
 
               {/* Inactive students alert */}
               {stats.inactiveStudents > 0 && (
@@ -2229,166 +2010,11 @@ export default function AdminDashboard() {
                   loading={asyncEventsLoading}
                   accent="#2E9E8F"
                   csvName="atividade_cursos"
+                  notes={dayNotes}
                   truncated={truncatedSources}
                   subtitle="Quem chegou, quem assistiu e o que concluiu. Troque a janela para virar relatório do dia, da semana ou do histórico inteiro."
                 />
               </motion.div>
-
-              {/* Gráficos de matrícula e conclusão */}
-              <div className="grid grid-cols-1 gap-5 mb-8">
-                {/* Charts column */}
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.4, duration: 0.5 }}
-                  className="space-y-5"
-                >
-                  {/* Enrollment chart */}
-                  <Card>
-                    <h2 className="font-fraunces font-bold text-lg text-cream mb-4">
-                      Matrículas nos últimos 30 dias
-                    </h2>
-                    {recentEnrollments.length > 0 ? (
-                      <div className="flex items-end gap-1 h-40">
-                        {recentEnrollments.map((item) => {
-                          const maxCount =
-                            recentEnrollments.length > 0
-                              ? Math.max(
-                                  ...recentEnrollments.map(
-                                    (e) => e.count
-                                  )
-                                )
-                              : 1;
-                          const height =
-                            maxCount > 0
-                              ? (item.count / maxCount) * 100
-                              : 0;
-                          const dateLabel = item.date
-                            .split("-")
-                            .slice(1)
-                            .join("/");
-                          return (
-                            <div
-                              key={item.date}
-                              className="flex-1 flex flex-col items-center justify-end group relative"
-                            >
-                              <div className="absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                <div
-                                  className="px-2 py-1 rounded-md text-[10px] font-dm font-medium text-cream whitespace-nowrap"
-                                  style={{
-                                    background:
-                                      "rgba(30,30,30,0.95)",
-                                    border:
-                                      "1px solid rgba(200,75,49,0.2)",
-                                  }}
-                                >
-                                  {item.count} matrícula
-                                  {item.count !== 1 ? "s" : ""} &middot;{" "}
-                                  {dateLabel}
-                                </div>
-                              </div>
-                              <div
-                                className="w-full rounded-t-md min-h-[5px] transition-all duration-200"
-                                style={{
-                                  height: `${Math.max(height, 8)}%`,
-                                  background: "linear-gradient(180deg, rgba(200,75,49,0.85) 0%, rgba(200,75,49,0.4) 100%)",
-                                  boxShadow: "0 0 6px rgba(200,75,49,0.2)",
-                                }}
-                                onMouseEnter={(e) =>
-                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(200,75,49,1) 0%, rgba(200,75,49,0.65) 100%)")
-                                }
-                                onMouseLeave={(e) =>
-                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(200,75,49,0.85) 0%, rgba(200,75,49,0.4) 100%)")
-                                }
-                              />
-                              {recentEnrollments.indexOf(item) %
-                                5 ===
-                                0 && (
-                                <span className="text-[9px] text-cream/20 mt-1 font-dm">
-                                  {dateLabel}
-                                </span>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-cream/35 text-center py-8">
-                        Nenhuma matrícula nos últimos 30 dias.
-                      </p>
-                    )}
-                  </Card>
-
-                  {/* Completion trend */}
-                  <Card padding="sm">
-                    <div className="flex items-center gap-2 mb-3">
-                      <CheckCircle
-                        className="h-4 w-4"
-                        style={{ color: "#2E9E8F" }}
-                      />
-                      <h3 className="font-dm font-semibold text-sm text-cream/70">
-                        Conclusões nos últimos 30 dias
-                      </h3>
-                    </div>
-                    {completionTrend.length > 0 ? (
-                      <div className="flex items-end gap-[3px] h-16">
-                        {completionTrend.map((item) => {
-                          const maxCount = Math.max(
-                            ...completionTrend.map((e) => e.count)
-                          );
-                          const height =
-                            maxCount > 0
-                              ? (item.count / maxCount) * 100
-                              : 0;
-                          return (
-                            <div
-                              key={item.date}
-                              className="flex-1 flex flex-col items-center justify-end group relative"
-                            >
-                              <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                <div
-                                  className="px-2 py-0.5 rounded text-[9px] font-dm font-medium text-cream whitespace-nowrap"
-                                  style={{
-                                    background:
-                                      "rgba(30,30,30,0.95)",
-                                    border:
-                                      "1px solid rgba(46,158,143,0.2)",
-                                  }}
-                                >
-                                  {item.count} &middot;{" "}
-                                  {item.date
-                                    .split("-")
-                                    .slice(1)
-                                    .join("/")}
-                                </div>
-                              </div>
-                              <div
-                                className="w-full rounded-t-md min-h-[4px] transition-all duration-200"
-                                style={{
-                                  height: `${Math.max(height, 10)}%`,
-                                  background: "linear-gradient(180deg, rgba(46,158,143,0.85) 0%, rgba(46,158,143,0.4) 100%)",
-                                  boxShadow: "0 0 6px rgba(46,158,143,0.2)",
-                                }}
-                                onMouseEnter={(e) =>
-                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(46,158,143,1) 0%, rgba(46,158,143,0.65) 100%)")
-                                }
-                                onMouseLeave={(e) =>
-                                  (e.currentTarget.style.background = "linear-gradient(180deg, rgba(46,158,143,0.85) 0%, rgba(46,158,143,0.4) 100%)")
-                                }
-                              />
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-cream/30 text-center py-3">
-                        Nenhuma conclusão nos últimos 30 dias.
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
-
-              </div>
 
               {/* Engagement stats */}
               {asyncEngagement && (
