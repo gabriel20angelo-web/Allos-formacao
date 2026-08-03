@@ -71,6 +71,17 @@ export async function DELETE(req: NextRequest) {
 
     if (conferencias.length) {
       await sb.from("formacao_meet_presencas").delete().in("conference_record_id", conferencias);
+
+      // A lembrança precisa sobreviver ao apagar: o registro continua do lado
+      // do Google, e sem isto a varredura seguinte recria tudo.
+      await sb.from("formacao_meet_apagados").upsert(
+        conferencias.map((c) => ({
+          conference_record_id: c,
+          motivo: "Apagado em lote pelo administrador.",
+          apagado_por: auth.userId,
+        })),
+        { onConflict: "conference_record_id" }
+      );
     }
 
     const { error } = await sb
@@ -84,6 +95,43 @@ export async function DELETE(req: NextRequest) {
       ok: true,
       apagados: alvos.length,
       aviso: `${alvos.length} ${alvos.length === 1 ? "encontro apagado" : "encontros apagados"} de vez. Participações e falas foram junto.`,
+    });
+  }
+
+  // ── apagar os escolhidos ──
+  const ids = req.nextUrl.searchParams.get("ids");
+  if (ids) {
+    const lista = ids.split(",").filter(Boolean);
+    if (!lista.length) return NextResponse.json({ error: "Nenhum id." }, { status: 400 });
+
+    const { data: alvos } = await sb
+      .from("formacao_meet_encontros")
+      .select("id, conference_record_id, space_name")
+      .in("id", lista);
+
+    const conferencias = (alvos || [])
+      .map((e: { conference_record_id: string | null }) => e.conference_record_id)
+      .filter(Boolean) as string[];
+
+    if (conferencias.length) {
+      await sb.from("formacao_meet_presencas").delete().in("conference_record_id", conferencias);
+      await sb.from("formacao_meet_apagados").upsert(
+        conferencias.map((c) => ({
+          conference_record_id: c,
+          motivo: "Apagado pelo administrador.",
+          apagado_por: auth.userId,
+        })),
+        { onConflict: "conference_record_id" }
+      );
+    }
+
+    const { error } = await sb.from("formacao_meet_encontros").delete().in("id", lista);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true,
+      apagados: lista.length,
+      aviso: `${lista.length} ${lista.length === 1 ? "encontro apagado" : "encontros apagados"} de vez. Não voltam na próxima captura.`,
     });
   }
 
@@ -106,6 +154,15 @@ export async function DELETE(req: NextRequest) {
         .from("formacao_meet_presencas")
         .delete()
         .eq("conference_record_id", encontro.conference_record_id);
+
+      await sb.from("formacao_meet_apagados").upsert(
+        {
+          conference_record_id: encontro.conference_record_id,
+          motivo: "Apagado pelo administrador.",
+          apagado_por: auth.userId,
+        },
+        { onConflict: "conference_record_id" }
+      );
     }
     const { error } = await sb.from("formacao_meet_encontros").delete().eq("id", id);
     if (error) return NextResponse.json({ error: error.message }, { status: 500 });

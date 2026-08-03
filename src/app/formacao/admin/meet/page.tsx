@@ -268,6 +268,7 @@ export default function MeetAdminPage() {
   const [assistindo, setAssistindo] = useState<Clipe | null>(null);
   const [atalhos, setAtalhos] = useState<Record<string, string>>({});
   const [anotacao, setAnotacao] = useState("");
+  const [escolhidos, setEscolhidos] = useState<string[]>([]);
 
   const carregarClipes = useCallback(async () => {
     const j = await pegarJson<{ jobs?: ClipJob[]; configurado?: boolean; error?: string }>(
@@ -803,6 +804,34 @@ export default function MeetAdminPage() {
       );
     } catch (e) {
       setDiagDrive(e instanceof Error ? e.message : "Não consegui verificar.");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function apagarEscolhidos() {
+    if (!escolhidos.length) return;
+    if (
+      !confirm(
+        `Apagar de vez ${escolhidos.length} ${escolhidos.length === 1 ? "encontro" : "encontros"}?\n\n` +
+          "As participações e as falas vão junto, e eles não voltam na próxima captura. Isto não tem volta."
+      )
+    )
+      return;
+
+    setTrabalhando("escolhidos");
+    try {
+      const r = await fetch(
+        `/formacao/api/admin/meet/encontros?ids=${escolhidos.join(",")}`,
+        { method: "DELETE" }
+      );
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Apagados.");
+      setEscolhidos([]);
+      await carregarEncontros();
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
       setTrabalhando(null);
     }
@@ -1766,6 +1795,22 @@ export default function MeetAdminPage() {
               </button>
               {/* A faxina só existe enquanto se olha o lixo. Fora daí, é um
                   botão destrutivo esperando um clique errado. */}
+              {verDescartados && escolhidos.length > 0 && (
+                <button
+                  onClick={apagarEscolhidos}
+                  disabled={trabalhando === "escolhidos"}
+                  className="px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                  style={{
+                    background: "rgba(245,158,11,0.15)",
+                    color: "#F59E0B",
+                    border: "1px solid rgba(245,158,11,0.35)",
+                  }}
+                >
+                  {trabalhando === "escolhidos"
+                    ? "Apagando"
+                    : `Apagar os ${escolhidos.length} marcados`}
+                </button>
+              )}
               {verDescartados && encontros.length > 0 && (
                 <button
                   onClick={limparDescartados}
@@ -1862,9 +1907,25 @@ export default function MeetAdminPage() {
               return (
                 <Card key={e.id} className="p-4">
                   <div className="flex items-start justify-between gap-3 flex-wrap">
+                    {/* A marcação só aparece na lista dos descartados: é lá
+                        que se faz faxina, e uma caixa de seleção ao lado de
+                        encontro válido convida ao acidente. */}
+                    {verDescartados && (
+                      <input
+                        type="checkbox"
+                        checked={escolhidos.includes(e.id)}
+                        onChange={() =>
+                          setEscolhidos((m) =>
+                            m.includes(e.id) ? m.filter((x) => x !== e.id) : [...m, e.id]
+                          )
+                        }
+                        className="mt-1 accent-[#F59E0B]"
+                        title="Escolher para apagar"
+                      />
+                    )}
                     <button
                       onClick={() => setEncontroAberto(aberto ? null : e.id)}
-                      className="text-left min-w-[180px]"
+                      className="text-left min-w-[180px] flex-1"
                     >
                       <p className="text-sm text-cream font-semibold">
                         {new Date(e.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", {

@@ -213,6 +213,14 @@ export async function ingerir(opts?: {
     })
   );
 
+  // O que foi apagado de propósito e não pode voltar.
+  const { data: apagadosRows } = await sb
+    .from("formacao_meet_apagados")
+    .select("conference_record_id");
+  const apagados = new Set(
+    (apagadosRows || []).map((a: { conference_record_id: string }) => a.conference_record_id)
+  );
+
   const { data: aliasRows } = await sb
     .from("formacao_meet_aliases")
     .select("display_name_norm, aluno_id");
@@ -248,6 +256,11 @@ export async function ingerir(opts?: {
 
       for (const conf of conferencias) {
         if (!conf.endTime) continue; // ainda em curso
+
+        // Apagado é para sempre. O registro continua existindo do lado do
+        // Google, então sem esta checagem a varredura o traz de volta na
+        // rodada seguinte — e apagar viraria esconder por quinze minutos.
+        if (apagados.has(conf.name)) continue;
 
         const { data: existente } = await sb
           .from("formacao_meet_encontros")
@@ -503,7 +516,10 @@ export async function ingerir(opts?: {
         // Um participante sozinho por poucos minutos não é um encontro: é
         // alguém testando o link. Marcar na entrada evita que a média de
         // quórum do grupo nasça estragada e que alguém precise limpar depois.
-        const pareceTeste = total <= 1 && duracaoMin <= 5;
+        // Zero participante é lixo por definição: uma sala que ficou aberta
+        // sozinha por sete minutos escapava da regra antiga (que exigia UMA
+        // pessoa por até cinco minutos) e entrava nas médias.
+        const pareceTeste = total === 0 || (total <= 1 && duracaoMin <= 5);
 
         // Decisão de gente não é desfeita por rotina.
         //
