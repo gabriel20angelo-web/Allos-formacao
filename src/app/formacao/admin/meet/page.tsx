@@ -15,7 +15,7 @@ import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
   UserSearch, Video, FileText, X, Youtube,
-  Trash2,
+  Trash2, Play, ThumbsUp, ThumbsDown, EyeOff, Copy, ChevronDown, ChevronRight,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -169,6 +169,8 @@ interface Clipe {
   thumbnail_url: string | null;
   duracao_seg: number | null;
   pontuacao: number | null;
+  avaliacao: "gostei" | "rejeitado" | null;
+  oculto: boolean;
 }
 interface ClipJob {
   id: string;
@@ -259,6 +261,11 @@ export default function MeetAdminPage() {
   const [buscandoAulas, setBuscandoAulas] = useState(false);
   const [falhouEncontros, setFalhouEncontros] = useState(false);
   const [diagDrive, setDiagDrive] = useState<string | null>(null);
+  const [cursoParaBloqueada, setCursoParaBloqueada] = useState<Record<string, string>>({});
+  const [jobAberto, setJobAberto] = useState<string | null>(null);
+  const [filtroClipes, setFiltroClipes] = useState<"novos" | "gostei" | "todos">("novos");
+  const [assistindo, setAssistindo] = useState<Clipe | null>(null);
+  const [atalhos, setAtalhos] = useState<Record<string, string>>({});
 
   const carregarClipes = useCallback(async () => {
     const j = await pegarJson<{ jobs?: ClipJob[]; configurado?: boolean; error?: string }>(
@@ -626,6 +633,119 @@ export default function MeetAdminPage() {
     }
   }
 
+  /**
+   * Guarda a opinião sobre um clipe sem recarregar a lista inteira.
+   *
+   * Avaliar quarenta clipes é quarenta cliques seguidos; buscar tudo de novo a
+   * cada um faria a grade piscar e perder a posição da rolagem no meio do
+   * trabalho.
+   */
+  async function avaliarClipe(c: Clipe, valor: "gostei" | "rejeitado") {
+    const novo = c.avaliacao === valor ? null : valor;
+    setClipJobs((jobs) =>
+      jobs.map((j) => ({
+        ...j,
+        clipes: j.clipes.map((x) => (x.id === c.id ? { ...x, avaliacao: novo } : x)),
+      }))
+    );
+    try {
+      const r = await fetch("/formacao/api/admin/meet/clipes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clip_id: c.id, avaliacao: novo }),
+      });
+      await lerResposta(r);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não consegui salvar");
+      await carregarClipes();
+    }
+  }
+
+  async function ocultarClipe(c: Clipe) {
+    setClipJobs((jobs) =>
+      jobs.map((j) => ({
+        ...j,
+        clipes: j.clipes.map((x) => (x.id === c.id ? { ...x, oculto: true } : x)),
+      }))
+    );
+    try {
+      const r = await fetch("/formacao/api/admin/meet/clipes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clip_id: c.id, oculto: true }),
+      });
+      await lerResposta(r);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não consegui salvar");
+      await carregarClipes();
+    }
+  }
+
+  const carregarAtalhos = useCallback(async () => {
+    const sb = createClient();
+    const { data } = await sb
+      .from("study_links")
+      .select("slug, space_name")
+      .not("space_name", "is", null);
+    const mapa: Record<string, string> = {};
+    for (const l of (data || []) as { slug: string; space_name: string }[]) {
+      mapa[l.space_name] = l.slug;
+    }
+    setAtalhos(mapa);
+  }, []);
+
+  async function criarAtalhosDasSalas() {
+    setTrabalhando("atalhos");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", { method: "PUT" });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Feito.");
+      await carregarAtalhos();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function criarAulaDaGravacao(b: AulaBloqueada) {
+    const cursoId = cursoParaBloqueada[b.id];
+    if (!cursoId) return;
+    setTrabalhando(b.id);
+    try {
+      const r = await fetch("/formacao/api/admin/meet/aulas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "criar", encontro_id: b.id, curso_id: cursoId }),
+      });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Na fila.");
+      await carregarAulas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function ignorarGravacao(b: AulaBloqueada) {
+    setTrabalhando(b.id);
+    try {
+      const r = await fetch("/formacao/api/admin/meet/aulas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ acao: "ignorar", encontro_id: b.id }),
+      });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Fora da fila.");
+      await carregarAulas();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
   async function verificarDrive() {
     setTrabalhando("drive");
     setDiagDrive(null);
@@ -728,7 +848,16 @@ export default function MeetAdminPage() {
     if (aba === "encontros") carregarEncontros();
     if (aba === "aulas") carregarAulas();
     if (aba === "clipes") carregarClipes();
-  }, [aba, carregarFila, carregarVinculos, carregarEncontros, carregarAulas, carregarClipes]);
+    if (aba === "salas") carregarAtalhos();
+  }, [
+    aba,
+    carregarFila,
+    carregarVinculos,
+    carregarEncontros,
+    carregarAulas,
+    carregarClipes,
+    carregarAtalhos,
+  ]);
 
   const horarioPorId = useMemo(
     () => new Map(horarios.map((h) => [h.id, h])),
@@ -1157,6 +1286,32 @@ export default function MeetAdminPage() {
             necessária se você quiser o vídeo, e é ela que ocupa o Drive.
           </p>
 
+          {/* Endereço curto por sala.
+              Divulgar allos.org.br/formacao/<slug> em vez do link do Meet faz o
+              clique passar pelo site e, principalmente, deixa de exigir
+              reavisar todo mundo quando o link da reunião muda: o destino é
+              lido da sala a cada clique. */}
+          <Card className="p-4">
+            <div className="flex items-start justify-between gap-3 flex-wrap">
+              <div className="min-w-[200px] flex-1">
+                <p className="text-sm text-cream font-semibold">Endereço curto de cada sala</p>
+                <p className="text-xs text-cream/40 mt-0.5">
+                  Divulgue{" "}
+                  <code className="text-cream/60">allos.org.br/formacao/&lt;nome&gt;</code> em vez do
+                  link do Meet. Quando o link da reunião mudar, o atalho segue sozinho.
+                </p>
+              </div>
+              <button
+                onClick={criarAtalhosDasSalas}
+                disabled={trabalhando === "atalhos"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                {trabalhando === "atalhos" ? "Criando" : "Criar os que faltam"}
+              </button>
+            </div>
+          </Card>
+
           {/* ── Sala fora da grade ──
               Reunião de equipe, evento pontual, conversa com convidado. Mesma
               captura de quórum, sem precisar existir na grade semanal. */}
@@ -1266,6 +1421,23 @@ export default function MeetAdminPage() {
                         >
                           <Link2 className="h-3 w-3" /> {space.meeting_code}
                         </a>
+                        {/* O endereço a divulgar. Fica ao lado do link do Meet,
+                            e não no lugar dele, porque quem conduz ainda entra
+                            pelo Meet direto. */}
+                        {atalhos[space.space_name] && (
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(
+                                `https://allos.org.br/formacao/${atalhos[space.space_name]}`
+                              );
+                              toast.success("Endereço copiado.");
+                            }}
+                            title="Copiar o endereço curto para divulgar"
+                            className="inline-flex items-center gap-1 text-xs text-cream/45 hover:text-cream/70"
+                          >
+                            <Copy className="h-3 w-3" /> /{atalhos[space.space_name]}
+                          </button>
+                        )}
                         {space.pasta_drive_url ? (
                           <a
                             href={space.pasta_drive_url}
@@ -1852,16 +2024,60 @@ export default function MeetAdminPage() {
                     {aulasBloqueadas.length} gravação
                     {aulasBloqueadas.length > 1 ? "ões" : ""} sem virar aula
                   </p>
-                  <div className="mt-2 space-y-1.5">
+                  {/* Um aviso sem saída ensina a ignorar avisos. O motivo mais
+                      comum é o grupo não ter curso vinculado, e escolher o
+                      curso aqui resolve sem obrigar a ir configurar a sala. */}
+                  <div className="mt-2 space-y-3">
                     {aulasBloqueadas.map((b) => (
-                      <p key={b.id} className="text-xs text-cream/50">
-                        <span className="text-cream/70">
-                          {new Date(b.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}{" "}
-                          {b.titulo}
-                        </span>
-                        {": "}
-                        {b.motivo}
-                      </p>
+                      <div key={b.id} className="text-xs">
+                        <p className="text-cream/50">
+                          <span className="text-cream/70">
+                            {new Date(b.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}{" "}
+                            {b.titulo}
+                          </span>
+                          {": "}
+                          {b.motivo}
+                        </p>
+                        <div className="flex items-center gap-2 flex-wrap mt-1.5">
+                          <select
+                            value={cursoParaBloqueada[b.id] || ""}
+                            onChange={(ev) =>
+                              setCursoParaBloqueada((m) => ({ ...m, [b.id]: ev.target.value }))
+                            }
+                            className="border border-white/10 rounded-lg px-2 py-1 text-xs min-w-[180px]"
+                            style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                          >
+                            <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                              escolha o curso
+                            </option>
+                            {cursos.map((c) => (
+                              <option
+                                key={c.id}
+                                value={c.id}
+                                style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                              >
+                                {c.title}
+                              </option>
+                            ))}
+                          </select>
+                          <button
+                            onClick={() => criarAulaDaGravacao(b)}
+                            disabled={!cursoParaBloqueada[b.id] || trabalhando === b.id}
+                            className="px-2.5 py-1 rounded-lg text-xs font-semibold disabled:opacity-40"
+                            style={{ background: "rgba(74,222,128,0.12)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
+                          >
+                            {trabalhando === b.id ? "Criando" : "Virar aula"}
+                          </button>
+                          <button
+                            onClick={() => ignorarGravacao(b)}
+                            disabled={trabalhando === b.id}
+                            title="Tira da fila de aulas. O encontro continua contando para presença e quórum."
+                            className="px-2.5 py-1 rounded-lg text-xs text-cream/40 border border-white/10 disabled:opacity-40"
+                          >
+                            Nunca virar aula
+                          </button>
+                        </div>
+                      </div>
                     ))}
                   </div>
                 </div>
@@ -2134,57 +2350,87 @@ export default function MeetAdminPage() {
                       )}
                     </div>
 
-                    {/* Cada clipe já vem com título, descrição e hashtags
-                        prontos. Esconder isso atrás de um link obrigaria a
-                        abrir um por um para saber qual presta. */}
+                    {/* Quarenta clipes numa lista viram parede de texto. Ficam
+                        fechados, e abertos viram grade de miniaturas: o que
+                        decide se um corte presta é vê-lo, não ler sobre ele. */}
                     {j.clipes.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
-                        {j.clipes.map((c) => (
-                          <div key={c.id} className="flex items-start gap-2.5">
-                            {c.thumbnail_url && (
-                              // eslint-disable-next-line @next/next/no-img-element
-                              <img
-                                src={c.thumbnail_url}
-                                alt=""
-                                className="w-12 h-16 object-cover rounded-md shrink-0"
-                                style={{ background: "rgba(255,255,255,0.04)" }}
-                              />
+                      <div className="mt-3 pt-3 border-t border-white/5">
+                        <div className="flex items-center gap-2 flex-wrap">
+                          <button
+                            onClick={() => setJobAberto(jobAberto === j.id ? null : j.id)}
+                            className="flex items-center gap-1.5 text-xs text-cream/60 hover:text-cream"
+                          >
+                            {jobAberto === j.id ? (
+                              <ChevronDown className="h-3.5 w-3.5" />
+                            ) : (
+                              <ChevronRight className="h-3.5 w-3.5" />
                             )}
-                            <div className="min-w-0 flex-1">
-                              <a
-                                href={c.url || c.preview_url || "#"}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="text-xs text-cream hover:underline"
-                              >
-                                {c.titulo || "clipe"}
-                              </a>
-                              <p className="text-[11px] text-cream/35 mt-0.5">
-                                {c.duracao_seg ? `${Math.round(c.duracao_seg)}s` : ""}
-                                {c.pontuacao != null ? ` · nota ${Math.round(c.pontuacao)}` : ""}
-                                {c.hashtags?.length ? ` · ${c.hashtags.slice(0, 3).join(" ")}` : ""}
-                              </p>
-                              {c.descricao && (
-                                <p className="text-[11px] text-cream/45 mt-1 line-clamp-2">
-                                  {c.descricao}
-                                </p>
-                              )}
+                            {jobAberto === j.id ? "esconder" : "ver os clipes"}
+                          </button>
+
+                          {(() => {
+                            const bons = j.clipes.filter((c) => c.avaliacao === "gostei").length;
+                            const novos = j.clipes.filter(
+                              (c) => !c.avaliacao && !c.oculto
+                            ).length;
+                            return (
+                              <span className="text-[11px] text-cream/30">
+                                {bons > 0 && `${bons} aprovado${bons > 1 ? "s" : ""}`}
+                                {bons > 0 && novos > 0 && " · "}
+                                {novos > 0 && `${novos} por ver`}
+                              </span>
+                            );
+                          })()}
+                        </div>
+
+                        {jobAberto === j.id && (
+                          <>
+                            <div className="flex items-center gap-1.5 mt-3 mb-2 flex-wrap">
+                              {(
+                                [
+                                  ["novos", "Por ver"],
+                                  ["gostei", "Aprovados"],
+                                  ["todos", "Todos"],
+                                ] as const
+                              ).map(([k, rotulo]) => (
+                                <button
+                                  key={k}
+                                  onClick={() => setFiltroClipes(k)}
+                                  className="px-2 py-0.5 rounded-lg text-[11px]"
+                                  style={{
+                                    background:
+                                      filtroClipes === k
+                                        ? "rgba(108,92,231,0.12)"
+                                        : "transparent",
+                                    color: filtroClipes === k ? ROXO : "rgba(253,251,247,0.35)",
+                                    border: `1px solid ${filtroClipes === k ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
+                                  }}
+                                >
+                                  {rotulo}
+                                </button>
+                              ))}
                             </div>
-                            <button
-                              onClick={() => {
-                                const legenda = [c.titulo, c.descricao, c.hashtags?.join(" ")]
-                                  .filter(Boolean)
-                                  .join("\n\n");
-                                navigator.clipboard.writeText(legenda);
-                                toast.success("Legenda copiada.");
-                              }}
-                              className="text-[11px] px-2 py-1 rounded-lg shrink-0 text-cream/50 border border-white/10"
-                              title="Copia título, descrição e hashtags"
-                            >
-                              copiar
-                            </button>
-                          </div>
-                        ))}
+
+                            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                              {j.clipes
+                                .filter((c) => {
+                                  if (filtroClipes === "todos") return true;
+                                  if (filtroClipes === "gostei") return c.avaliacao === "gostei";
+                                  return !c.avaliacao && !c.oculto;
+                                })
+                                .map((c) => (
+                                  <ClipeCard
+                                    key={c.id}
+                                    clipe={c}
+                                    aoAssistir={() => setAssistindo(c)}
+                                    aoAvaliar={(v) => avaliarClipe(c, v)}
+                                    aoOcultar={() => ocultarClipe(c)}
+                                    ocupado={trabalhando === c.id}
+                                  />
+                                ))}
+                            </div>
+                          </>
+                        )}
                       </div>
                     )}
                   </Card>
@@ -2429,6 +2675,201 @@ export default function MeetAdminPage() {
           </Card>
         </div>
       )}
+
+      {/* Assistir sem sair da tela.
+          Abrir numa aba nova perderia a posição na grade, e avaliar quarenta
+          clipes é justamente ir e voltar quarenta vezes. */}
+      {assistindo && (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center p-4"
+          style={{ background: "rgba(0,0,0,0.8)" }}
+          onClick={() => setAssistindo(null)}
+        >
+          <div
+            className="rounded-2xl overflow-hidden max-w-[min(420px,90vw)] w-full"
+            style={{ background: "#111" }}
+            onClick={(ev) => ev.stopPropagation()}
+          >
+            <video
+              src={assistindo.preview_url || assistindo.url || undefined}
+              poster={assistindo.thumbnail_url || undefined}
+              controls
+              autoPlay
+              className="w-full"
+              style={{ aspectRatio: "9/16", background: "#000" }}
+            />
+            <div className="p-3">
+              <p className="text-sm text-cream">{assistindo.titulo}</p>
+              {assistindo.descricao && (
+                <p className="text-xs text-cream/45 mt-1">{assistindo.descricao}</p>
+              )}
+              {assistindo.hashtags?.length ? (
+                <p className="text-xs text-cream/30 mt-1">{assistindo.hashtags.join(" ")}</p>
+              ) : null}
+
+              <div className="flex items-center gap-2 mt-3">
+                <button
+                  onClick={() => {
+                    avaliarClipe(assistindo, "gostei");
+                    setAssistindo(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+                  style={{ background: "rgba(74,222,128,0.12)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
+                >
+                  <ThumbsUp className="h-3.5 w-3.5" /> Gostei
+                </button>
+                <button
+                  onClick={() => {
+                    avaliarClipe(assistindo, "rejeitado");
+                    setAssistindo(null);
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
+                  style={{ background: "rgba(255,255,255,0.04)", color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  <ThumbsDown className="h-3.5 w-3.5" /> Não presta
+                </button>
+                <button
+                  onClick={() => setAssistindo(null)}
+                  className="ml-auto p-1.5 rounded-lg text-cream/40"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Um corte, do tamanho de uma miniatura.
+ *
+ * A miniatura é o card inteiro e é ela que abre o vídeo: numa grade de
+ * quarenta, a imagem é o que diferencia um do outro, então ela precisa ser o
+ * alvo do clique, não um enfeite ao lado de um link.
+ */
+function ClipeCard({
+  clipe: c,
+  aoAssistir,
+  aoAvaliar,
+  aoOcultar,
+  ocupado,
+}: {
+  clipe: Clipe;
+  aoAssistir: () => void;
+  aoAvaliar: (v: "gostei" | "rejeitado") => void;
+  aoOcultar: () => void;
+  ocupado: boolean;
+}) {
+  const aprovado = c.avaliacao === "gostei";
+  const rejeitado = c.avaliacao === "rejeitado";
+
+  return (
+    <div
+      className="rounded-xl overflow-hidden flex flex-col"
+      style={{
+        background: "rgba(255,255,255,0.02)",
+        border: `1px solid ${aprovado ? "rgba(74,222,128,0.35)" : "rgba(255,255,255,0.06)"}`,
+        opacity: rejeitado ? 0.45 : 1,
+      }}
+    >
+      <button
+        onClick={aoAssistir}
+        className="relative block w-full group"
+        style={{ aspectRatio: "9/16", background: "rgba(0,0,0,0.3)" }}
+        title="Assistir"
+      >
+        {c.thumbnail_url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={c.thumbnail_url}
+            alt=""
+            className="w-full h-full object-cover"
+            loading="lazy"
+          />
+        ) : (
+          <span className="absolute inset-0 flex items-center justify-center text-cream/20 text-xs">
+            sem prévia
+          </span>
+        )}
+        <span
+          className="absolute inset-0 flex items-center justify-center transition-opacity opacity-0 group-hover:opacity-100"
+          style={{ background: "rgba(0,0,0,0.45)" }}
+        >
+          <Play className="h-8 w-8 text-white" fill="white" />
+        </span>
+        <span
+          className="absolute bottom-1 right-1 px-1.5 py-0.5 rounded text-[10px] text-white"
+          style={{ background: "rgba(0,0,0,0.65)" }}
+        >
+          {c.duracao_seg ? `${Math.round(c.duracao_seg)}s` : ""}
+        </span>
+        {c.pontuacao != null && (
+          <span
+            className="absolute top-1 left-1 px-1.5 py-0.5 rounded text-[10px]"
+            style={{ background: "rgba(0,0,0,0.65)", color: "#FDFBF7" }}
+          >
+            {Math.round(c.pontuacao)}
+          </span>
+        )}
+      </button>
+
+      <div className="p-2 flex-1 flex flex-col gap-1.5">
+        <p className="text-[11px] text-cream/80 leading-snug line-clamp-2">
+          {c.titulo || "clipe"}
+        </p>
+
+        <div className="flex items-center gap-1 mt-auto pt-1">
+          <button
+            onClick={() => aoAvaliar("gostei")}
+            disabled={ocupado}
+            title="Gostei"
+            className="p-1.5 rounded-lg"
+            style={{
+              background: aprovado ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.03)",
+              color: aprovado ? "#4ADE80" : "rgba(253,251,247,0.3)",
+            }}
+          >
+            <ThumbsUp className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => aoAvaliar("rejeitado")}
+            disabled={ocupado}
+            title="Não presta"
+            className="p-1.5 rounded-lg"
+            style={{
+              background: rejeitado ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)",
+              color: rejeitado ? "#F59E0B" : "rgba(253,251,247,0.3)",
+            }}
+          >
+            <ThumbsDown className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={() => {
+              const legenda = [c.titulo, c.descricao, c.hashtags?.join(" ")]
+                .filter(Boolean)
+                .join("\n\n");
+              navigator.clipboard.writeText(legenda);
+              toast.success("Legenda copiada.");
+            }}
+            title="Copiar título, descrição e hashtags"
+            className="p-1.5 rounded-lg text-cream/30"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          >
+            <Copy className="h-3.5 w-3.5" />
+          </button>
+          <button
+            onClick={aoOcultar}
+            title="Esconder da lista"
+            className="p-1.5 rounded-lg text-cream/30 ml-auto"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          >
+            <EyeOff className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
     </div>
   );
 }

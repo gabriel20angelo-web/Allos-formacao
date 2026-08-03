@@ -667,7 +667,7 @@ export async function ingerir(opts?: {
             duracao_minutos: duracaoMin,
             // Formato herdado da extensão: as telas antigas leem nome,
             // primeira_entrada, ultima_saida e snapshots_presente. Mantemos os
-            // quatro e acrescentamos os campos novos, senão /admin/quorum
+            // quatro e acrescentamos os campos novos, senão as telas de estatística
             // renderiza undefined onde havia horário.
             participantes: unicas.map((c) => ({
               nome: c.display_name,

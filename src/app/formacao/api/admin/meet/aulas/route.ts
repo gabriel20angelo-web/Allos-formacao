@@ -84,8 +84,11 @@ export async function GET() {
   // indistinguível de "está tudo certo, não houve encontro".
   const { data: comGravacao } = await sb
     .from("formacao_meet_encontros")
-    .select("id, space_name, atividade_nome, data_reuniao, gravacao_uri, youtube_status")
+    .select("id, space_name, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_status")
     .eq("descartado", false)
+    // O que foi marcado para não virar aula sai da fila sem descartar o
+    // encontro: a presença dele continua valendo.
+    .eq("aula_ignorada", false)
     .not("gravacao_uri", "is", null)
     .order("data_reuniao", { ascending: false })
     .limit(30);
@@ -139,17 +142,92 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  let body: { id?: string; acao?: "aprovar" | "descartar"; titulo?: string };
+  let body: {
+    id?: string;
+    acao?: "aprovar" | "descartar" | "criar" | "ignorar";
+    titulo?: string;
+    encontro_id?: string;
+    curso_id?: string;
+  };
   try {
     body = await req.json();
   } catch {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
+
+  const sb = await createServiceRoleClient();
+
+  // ── gravação bloqueada: virar aula agora, escolhendo o curso na hora ──
+  // O caminho normal pega o curso da sala, e é por isso que a gravação de um
+  // grupo sem curso vinculado empacava. Aqui o curso vem do clique, então
+  // resolve o caso sem obrigar a ir configurar a sala primeiro.
+  if (body.acao === "criar" && body.encontro_id) {
+    if (!body.curso_id) {
+      return NextResponse.json({ error: "Escolha o curso." }, { status: 400 });
+    }
+
+    const { data: e } = await sb
+      .from("formacao_meet_encontros")
+      .select("id, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_video_id")
+      .eq("id", body.encontro_id)
+      .maybeSingle();
+
+    if (!e) return NextResponse.json({ error: "Encontro não encontrado" }, { status: 404 });
+    if (!e.gravacao_uri) {
+      return NextResponse.json({ error: "Este encontro não tem gravação." }, { status: 400 });
+    }
+
+    const dia = new Date(`${e.data_reuniao}T12:00:00`).toLocaleDateString("pt-BR", {
+      day: "2-digit",
+      month: "2-digit",
+    });
+
+    const { error } = await sb.from("formacao_meet_aulas_sugeridas").insert({
+      encontro_id: e.id,
+      curso_id: body.curso_id,
+      titulo: body.titulo?.trim() || `${e.atividade_nome || "Encontro"} · ${dia}`,
+      video_url: e.youtube_video_id
+        ? `https://www.youtube.com/watch?v=${e.youtube_video_id}`
+        : e.gravacao_uri,
+      duracao_min: e.duracao_min || null,
+      data_reuniao: e.data_reuniao,
+    });
+
+    if (error) {
+      return NextResponse.json(
+        {
+          error: error.message.includes("duplicate")
+            ? "Esta gravação já está na fila."
+            : error.message,
+        },
+        { status: 400 }
+      );
+    }
+
+    return NextResponse.json({
+      ok: true,
+      aviso: "Na fila de aprovação. Confira o título e publique.",
+    });
+  }
+
+  // ── gravação que nunca vai virar aula ──
+  if (body.acao === "ignorar" && body.encontro_id) {
+    const { error } = await sb
+      .from("formacao_meet_encontros")
+      .update({ aula_ignorada: true })
+      .eq("id", body.encontro_id);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true,
+      aviso: "Fora da fila de aulas. O encontro continua contando para presença e quórum.",
+    });
+  }
+
   if (!body.id || !body.acao) {
     return NextResponse.json({ error: "id e acao obrigatórios" }, { status: 400 });
   }
-
-  const sb = await createServiceRoleClient();
 
   const { data: sug } = await sb
     .from("formacao_meet_aulas_sugeridas")

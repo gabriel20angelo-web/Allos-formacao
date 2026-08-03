@@ -49,6 +49,9 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
       "id, space_name, data_reuniao, duracao_min, gravacao_uri, atividade_nome, youtube_video_id, inicio_efetivo_seg"
     )
     .eq("descartado", false)
+    // Sem isto, a rodada seguinte traria de volta a gravação que alguém acabou
+    // de tirar da fila de aulas — o mesmo erro do descarte que se desfazia.
+    .eq("aula_ignorada", false)
     .not("gravacao_uri", "is", null)
     .order("data_reuniao", { ascending: true })
     .limit(50);

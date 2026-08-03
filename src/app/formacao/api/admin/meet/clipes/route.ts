@@ -124,6 +124,49 @@ export async function GET(req: NextRequest) {
   });
 }
 
+/**
+ * Avaliar ou esconder um clipe.
+ *
+ * Separado do POST de propósito: aquele gasta dinheiro, este só guarda uma
+ * opinião. Misturar os dois num endpoint faria a ação barata carregar o peso
+ * da cara.
+ */
+export async function PATCH(req: NextRequest) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  let body: { clip_id?: string; avaliacao?: "gostei" | "rejeitado" | null; oculto?: boolean };
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
+  }
+  if (!body.clip_id) {
+    return NextResponse.json({ error: "clip_id obrigatório" }, { status: 400 });
+  }
+
+  const sb = await createServiceRoleClient();
+
+  const campos: Record<string, unknown> = {};
+  if (body.avaliacao !== undefined) {
+    campos.avaliacao = body.avaliacao;
+    campos.avaliado_em = body.avaliacao ? new Date().toISOString() : null;
+    campos.avaliado_por = body.avaliacao ? auth.userId : null;
+  }
+  if (body.oculto !== undefined) campos.oculto = body.oculto;
+
+  if (!Object.keys(campos).length) {
+    return NextResponse.json({ error: "Nada para mudar." }, { status: 400 });
+  }
+
+  const { error } = await sb.from("formacao_clips").update(campos).eq("id", body.clip_id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ ok: true });
+}
+
 export async function POST(req: NextRequest) {
   const auth = await exigirAdmin();
   if (!auth.ok) {

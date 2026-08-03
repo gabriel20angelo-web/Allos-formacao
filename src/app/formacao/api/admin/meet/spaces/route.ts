@@ -14,6 +14,7 @@ import {
 } from "@/lib/meet/client";
 import type { AccessType } from "@/lib/meet/types";
 import { garantirPastaDoGrupo } from "@/lib/meet/pastas";
+import { RESERVED_STUDY_LINK_SLUGS } from "@/lib/utils/studyLink";
 
 export const dynamic = "force-dynamic";
 
@@ -131,6 +132,107 @@ export async function POST(req: NextRequest) {
     console.error("[meet/spaces] criar", msg, detalhe);
     return NextResponse.json({ error: msg, detalhe }, { status: 400 });
   }
+}
+
+/**
+ * Cria um atalho por sala ativa, apontando para a própria sala.
+ *
+ * O endereço divulgado passa a ser allos.org.br/formacao/<slug>, e o destino é
+ * lido da sala a cada clique. Trocar o link do Meet deixa de exigir reavisar
+ * todo mundo, e o clique passa pelo site antes de seguir para a reunião.
+ *
+ * Idempotente: sala que já tem atalho é pulada, não duplicada.
+ */
+export async function PUT() {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const sb = await createServiceRoleClient();
+
+  const { data: salas } = await sb
+    .from("formacao_meet_spaces")
+    .select("space_name, rotulo, slot_id, meeting_uri")
+    .eq("ativo", true);
+
+  if (!salas?.length) {
+    return NextResponse.json({ criados: 0, aviso: "Nenhuma sala ativa." });
+  }
+
+  const { data: slots } = await sb
+    .from("formacao_slots")
+    .select("id, atividade_nome, dia_semana, hora_inicio");
+  const slotPorId = new Map(
+    ((slots || []) as { id: string; atividade_nome: string | null; dia_semana: number; hora_inicio: string }[]).map(
+      (s) => [s.id, s]
+    )
+  );
+
+  const { data: jaTem } = await sb.from("study_links").select("slug, space_name");
+  const salasComAtalho = new Set(
+    ((jaTem || []) as { space_name: string | null }[]).map((l) => l.space_name).filter(Boolean)
+  );
+  const slugsUsados = new Set(((jaTem || []) as { slug: string }[]).map((l) => l.slug));
+
+  const DIAS = ["segunda", "terca", "quarta", "quinta", "sexta", "sabado", "domingo"];
+
+  const criados: { slug: string; sala: string }[] = [];
+
+  for (const s of salas as {
+    space_name: string;
+    rotulo: string | null;
+    slot_id: string | null;
+    meeting_uri: string | null;
+  }[]) {
+    if (salasComAtalho.has(s.space_name)) continue;
+
+    const slot = s.slot_id ? slotPorId.get(s.slot_id) : null;
+    const base = slot?.atividade_nome || s.rotulo || "encontro";
+
+    let slug = base
+      .toLowerCase()
+      .normalize("NFD")
+      .replace(/[̀-ͯ]/g, "")
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-+|-+$/g, "")
+      .slice(0, 40);
+
+    if (!slug) slug = "encontro";
+    if (RESERVED_STUDY_LINK_SLUGS.has(slug)) slug = `grupo-${slug}`;
+
+    // Dois grupos com a mesma atividade em horários diferentes precisam de
+    // endereços diferentes, e o dia da semana é o que a pessoa reconhece.
+    if (slugsUsados.has(slug) && slot) {
+      const dia = DIAS[slot.dia_semana] || "";
+      const hora = (slot.hora_inicio || "").slice(0, 2);
+      slug = `${slug}-${dia}${hora ? `-${hora}h` : ""}`.slice(0, 60);
+    }
+
+    let final = slug;
+    let n = 2;
+    while (slugsUsados.has(final)) final = `${slug}-${n++}`.slice(0, 63);
+
+    const { error } = await sb.from("study_links").insert({
+      slug: final,
+      space_name: s.space_name,
+      destination_url: null,
+      label: slot?.atividade_nome || s.rotulo || null,
+    });
+
+    if (!error) {
+      slugsUsados.add(final);
+      criados.push({ slug: final, sala: base });
+    }
+  }
+
+  return NextResponse.json({
+    criados: criados.length,
+    lista: criados,
+    aviso: criados.length
+      ? `${criados.length} ${criados.length === 1 ? "atalho criado" : "atalhos criados"}. Divulgue allos.org.br/formacao/<slug> em vez do link do Meet.`
+      : "Todas as salas ativas já têm atalho.",
+  });
 }
 
 export async function PATCH(req: NextRequest) {
