@@ -19,15 +19,20 @@ import {
   Activity,
   BarChart3,
   Users,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
 import type { CertificadoAtividade } from "@/types";
 
+type Vista = "ativas" | "arquivadas";
+
 export default function AtividadesPage() {
   const { isAdmin } = useAuth();
   const [atividades, setAtividades] = useState<CertificadoAtividade[]>([]);
   const [search, setSearch] = useState("");
+  const [vista, setVista] = useState<Vista>("ativas");
   const [loading, setLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [syncing, setSyncing] = useState(false);
@@ -76,15 +81,32 @@ export default function AtividadesPage() {
     fetch().catch(() => setLoading(false));
   }, []);
 
-  const filtered = atividades.filter((a) =>
-    a.nome.toLowerCase().includes(search.toLowerCase())
+  const matchBusca = (a: CertificadoAtividade) =>
+    a.nome.toLowerCase().includes(search.toLowerCase());
+
+  const naVista = atividades.filter((a) =>
+    vista === "arquivadas" ? !!a.arquivado : !a.arquivado
   );
+  const filtered = naVista.filter(matchBusca);
+  const totalAtivas = atividades.filter((a) => !a.arquivado).length;
+  const totalArquivadas = atividades.length - totalAtivas;
+  // quantas da outra aba a busca alcançaria — evita "não encontrada" enganoso
+  const matchesNaOutraVista = atividades.filter(
+    (a) => (vista === "arquivadas" ? !a.arquivado : !!a.arquivado) && matchBusca(a)
+  ).length;
 
   async function handleAdd() {
     const nome = newNome.trim();
     if (!nome) return;
-    if (atividades.some((a) => a.nome.toLowerCase() === nome.toLowerCase())) {
-      toast.error("Essa atividade já existe.");
+    const existente = atividades.find(
+      (a) => a.nome.toLowerCase() === nome.toLowerCase()
+    );
+    if (existente) {
+      toast.error(
+        existente.arquivado
+          ? "Essa atividade já existe — está arquivada."
+          : "Essa atividade já existe."
+      );
       return;
     }
 
@@ -179,6 +201,39 @@ export default function AtividadesPage() {
       prev.map((a) => (a.id === item.id ? { ...a, ativo: !a.ativo } : a))
     );
     toast.success(item.ativo ? "Atividade desativada." : "Atividade ativada.");
+  }
+
+  async function handleToggleArquivado(item: CertificadoAtividade) {
+    const arquivando = !item.arquivado;
+    // arquivar também despublica; desarquivar não republica sozinho
+    const patch = arquivando
+      ? { arquivado: true, ativo: false }
+      : { arquivado: false };
+
+    const client = createClient();
+    const { error } = await client
+      .from("certificado_atividades")
+      .update(patch)
+      .eq("id", item.id);
+
+    if (error) {
+      // 42703 = coluna inexistente: migration 039 ainda não rodou no Supabase
+      toast.error(
+        error.code === "42703"
+          ? "Falta rodar a migration 039 (coluna arquivado) no Supabase."
+          : "Erro ao arquivar atividade."
+      );
+      return;
+    }
+
+    setAtividades((prev) =>
+      prev.map((a) => (a.id === item.id ? { ...a, ...patch } : a))
+    );
+    toast.success(
+      arquivando
+        ? `"${item.nome}" arquivada.`
+        : `"${item.nome}" restaurada — ative para publicá-la de novo.`
+    );
   }
 
   function openEdit(item: CertificadoAtividade) {
@@ -327,12 +382,38 @@ export default function AtividadesPage() {
         👁 = publicada no formulário de certificação
       </p>
 
+      {/* Vista: em uso / arquivadas */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {([
+          { key: "ativas" as Vista, label: "Em uso", icon: Activity, count: totalAtivas },
+          { key: "arquivadas" as Vista, label: "Arquivadas", icon: Archive, count: totalArquivadas },
+        ]).map(({ key, label, icon: Icon, count }) => {
+          const active = vista === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setVista(key)}
+              className="font-dm text-xs px-3 py-2 sm:px-4 rounded-full flex items-center gap-1.5 transition-all min-h-[36px]"
+              style={{
+                backgroundColor: active ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
+                color: active ? "#C84B31" : "rgba(253,251,247,0.4)",
+                border: `1px solid ${active ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+              }}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+              <span className="opacity-60">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Search */}
       <div className="relative mb-6">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
         <input
           type="text"
-          placeholder="Buscar atividade..."
+          placeholder={vista === "arquivadas" ? "Buscar arquivada..." : "Buscar atividade..."}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-11 pr-4 py-2.5 dark-input rounded-[10px] text-sm font-dm"
@@ -348,10 +429,27 @@ export default function AtividadesPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
-          <Activity className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          {vista === "arquivadas" ? (
+            <Archive className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          ) : (
+            <Activity className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          )}
           <p className="text-cream/35 text-sm font-dm">
-            {search ? "Nenhuma atividade encontrada." : "Nenhuma atividade cadastrada."}
+            {search
+              ? "Nenhuma atividade encontrada."
+              : vista === "arquivadas"
+                ? "Nenhuma atividade arquivada."
+                : "Nenhuma atividade cadastrada."}
           </p>
+          {search && matchesNaOutraVista > 0 && (
+            <button
+              onClick={() => setVista(vista === "arquivadas" ? "ativas" : "arquivadas")}
+              className="mt-3 text-[11px] font-dm text-[#C84B31] hover:underline"
+            >
+              {matchesNaOutraVista} em{" "}
+              {vista === "arquivadas" ? "“Em uso”" : "“Arquivadas”"} — ver lá
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -382,20 +480,34 @@ export default function AtividadesPage() {
                   >
                     {item.carga_horaria}h
                   </span>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm"
-                    style={{
-                      background: item.ativo
-                        ? "rgba(46,158,143,0.1)"
-                        : "rgba(255,255,255,0.04)",
-                      color: item.ativo ? "#2E9E8F" : "rgba(253,251,247,0.3)",
-                      border: item.ativo
-                        ? "1px solid rgba(46,158,143,0.2)"
-                        : "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
-                    {item.ativo ? "Ativa" : "Inativa"}
-                  </span>
+                  {item.arquivado ? (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm inline-flex items-center gap-1"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        color: "rgba(253,251,247,0.3)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <Archive className="h-2.5 w-2.5" />
+                      Arquivada
+                    </span>
+                  ) : (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm"
+                      style={{
+                        background: item.ativo
+                          ? "rgba(46,158,143,0.1)"
+                          : "rgba(255,255,255,0.04)",
+                        color: item.ativo ? "#2E9E8F" : "rgba(253,251,247,0.3)",
+                        border: item.ativo
+                          ? "1px solid rgba(46,158,143,0.2)"
+                          : "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {item.ativo ? "Ativa" : "Inativa"}
+                    </span>
+                  )}
                 </div>
                 {quorumByAtividade[item.nome] && (
                   <span
@@ -426,12 +538,31 @@ export default function AtividadesPage() {
                 >
                   <BarChart3 className="h-4 w-4" />
                 </button>
+                {!item.arquivado && (
+                  <button
+                    onClick={() => handleToggleAtivo(item)}
+                    className="p-1.5 rounded-lg text-cream/20 hover:text-cream/60 hover:bg-white/[.04] transition-all"
+                    aria-label={item.ativo ? "Desativar" : "Ativar"}
+                    title={item.ativo ? "Despublicar do formulário" : "Publicar no formulário"}
+                  >
+                    {item.ativo ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                )}
                 <button
-                  onClick={() => handleToggleAtivo(item)}
-                  className="p-1.5 rounded-lg text-cream/20 hover:text-cream/60 hover:bg-white/[.04] transition-all"
-                  aria-label={item.ativo ? "Desativar" : "Ativar"}
+                  onClick={() => handleToggleArquivado(item)}
+                  className="p-1.5 rounded-lg text-cream/20 hover:text-[#D4A857] hover:bg-[#D4A857]/10 transition-all"
+                  aria-label={item.arquivado ? "Desarquivar" : "Arquivar"}
+                  title={
+                    item.arquivado
+                      ? "Desarquivar"
+                      : "Arquivar (some da lista, sem apagar o histórico)"
+                  }
                 >
-                  {item.ativo ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {item.arquivado ? (
+                    <ArchiveRestore className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
                 </button>
                 <button
                   onClick={() => openEdit(item)}

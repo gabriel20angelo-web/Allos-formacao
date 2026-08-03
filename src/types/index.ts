@@ -234,6 +234,8 @@ export interface CertificadoCondutor {
   telefone: string | null;
   observacoes: string | null;
   ativo: boolean;
+  /** Fora do painel, mas preservado (ver migration 039). */
+  arquivado?: boolean;
   created_at: string;
 }
 
@@ -243,6 +245,8 @@ export interface CertificadoAtividade {
   carga_horaria: number;
   descricao: string | null;
   ativo: boolean;
+  /** Fora do painel, mas preservado (ver migration 039). */
+  arquivado?: boolean;
   created_at: string;
 }
 

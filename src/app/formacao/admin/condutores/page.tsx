@@ -22,9 +22,13 @@ import {
   Star,
   BarChart3,
   Users,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
+
+type Vista = "ativos" | "arquivados";
 
 export default function CondutoresPage() {
   const { isAdmin } = useAuth();
@@ -34,6 +38,7 @@ export default function CondutoresPage() {
     setData: setCondutores,
   } = useCondutores();
   const [search, setSearch] = useState("");
+  const [vista, setVista] = useState<Vista>("ativos");
   const [extrasLoading, setExtrasLoading] = useState(true);
   const [adding, setAdding] = useState(false);
   const [newNome, setNewNome] = useState("");
@@ -94,13 +99,34 @@ export default function CondutoresPage() {
     return map;
   }, [submissions]);
 
-  const filtered = condutores.filter((c) =>
-    c.nome.toLowerCase().includes(search.toLowerCase())
+  const matchBusca = (c: CertificadoCondutor) =>
+    c.nome.toLowerCase().includes(search.toLowerCase());
+
+  const naVista = condutores.filter((c) =>
+    vista === "arquivados" ? !!c.arquivado : !c.arquivado
   );
+  const filtered = naVista.filter(matchBusca);
+  const totalAtivos = condutores.filter((c) => !c.arquivado).length;
+  const totalArquivados = condutores.length - totalAtivos;
+  // quantos da outra aba a busca alcançaria — evita "não encontrado" enganoso
+  const matchesNaOutraVista = condutores.filter(
+    (c) => (vista === "arquivados" ? !c.arquivado : !!c.arquivado) && matchBusca(c)
+  ).length;
 
   async function handleAdd() {
     const nome = newNome.trim();
     if (!nome) return;
+    const existente = condutores.find(
+      (c) => c.nome.toLowerCase() === nome.toLowerCase()
+    );
+    if (existente) {
+      toast.error(
+        existente.arquivado
+          ? "Esse condutor já existe — está arquivado."
+          : "Esse condutor já existe."
+      );
+      return;
+    }
     setAdding(true);
     const client = createClient();
     const { data, error } = await client
@@ -139,6 +165,39 @@ export default function CondutoresPage() {
       prev.map((c) => (c.id === item.id ? { ...c, ativo: !c.ativo } : c))
     );
     toast.success(item.ativo ? "Condutor desativado." : "Condutor ativado.");
+  }
+
+  async function handleToggleArquivado(item: CertificadoCondutor) {
+    const arquivando = !item.arquivado;
+    // arquivar também desativa; desarquivar não reativa sozinho
+    const patch = arquivando
+      ? { arquivado: true, ativo: false }
+      : { arquivado: false };
+
+    const client = createClient();
+    const { error } = await client
+      .from("certificado_condutores")
+      .update(patch)
+      .eq("id", item.id);
+
+    if (error) {
+      // 42703 = coluna inexistente: migration 039 ainda não rodou no Supabase
+      toast.error(
+        error.code === "42703"
+          ? "Falta rodar a migration 039 (coluna arquivado) no Supabase."
+          : "Erro ao arquivar condutor."
+      );
+      return;
+    }
+
+    setCondutores((prev) =>
+      prev.map((c) => (c.id === item.id ? { ...c, ...patch } : c))
+    );
+    toast.success(
+      arquivando
+        ? `"${item.nome}" arquivado.`
+        : `"${item.nome}" restaurado — ative para usá-lo de novo.`
+    );
   }
 
   function openEdit(item: CertificadoCondutor) {
@@ -263,12 +322,38 @@ export default function CondutoresPage() {
         </Button>
       </div>
 
+      {/* Vista: em uso / arquivados */}
+      <div className="flex flex-wrap gap-2 mb-4">
+        {([
+          { key: "ativos" as Vista, label: "Em uso", icon: UserCircle, count: totalAtivos },
+          { key: "arquivados" as Vista, label: "Arquivados", icon: Archive, count: totalArquivados },
+        ]).map(({ key, label, icon: Icon, count }) => {
+          const active = vista === key;
+          return (
+            <button
+              key={key}
+              onClick={() => setVista(key)}
+              className="font-dm text-xs px-3 py-2 sm:px-4 rounded-full flex items-center gap-1.5 transition-all min-h-[36px]"
+              style={{
+                backgroundColor: active ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
+                color: active ? "#C84B31" : "rgba(253,251,247,0.4)",
+                border: `1px solid ${active ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+              }}
+            >
+              <Icon className="w-3.5 h-3.5" />
+              {label}
+              <span className="opacity-60">{count}</span>
+            </button>
+          );
+        })}
+      </div>
+
       {/* Search */}
       <div className="relative mb-6">
         <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
         <input
           type="text"
-          placeholder="Buscar condutor..."
+          placeholder={vista === "arquivados" ? "Buscar arquivado..." : "Buscar condutor..."}
           value={search}
           onChange={(e) => setSearch(e.target.value)}
           className="w-full pl-11 pr-4 py-2.5 dark-input rounded-[10px] text-sm font-dm"
@@ -284,10 +369,27 @@ export default function CondutoresPage() {
         </div>
       ) : filtered.length === 0 ? (
         <div className="text-center py-16">
-          <UserCircle className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          {vista === "arquivados" ? (
+            <Archive className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          ) : (
+            <UserCircle className="h-10 w-10 text-cream/15 mx-auto mb-3" />
+          )}
           <p className="text-cream/35 text-sm font-dm">
-            {search ? "Nenhum condutor encontrado." : "Nenhum condutor cadastrado."}
+            {search
+              ? "Nenhum condutor encontrado."
+              : vista === "arquivados"
+                ? "Nenhum condutor arquivado."
+                : "Nenhum condutor cadastrado."}
           </p>
+          {search && matchesNaOutraVista > 0 && (
+            <button
+              onClick={() => setVista(vista === "arquivados" ? "ativos" : "arquivados")}
+              className="mt-3 text-[11px] font-dm text-[#C84B31] hover:underline"
+            >
+              {matchesNaOutraVista} em{" "}
+              {vista === "arquivados" ? "“Em uso”" : "“Arquivados”"} — ver lá
+            </button>
+          )}
         </div>
       ) : (
         <div className="space-y-3">
@@ -308,20 +410,34 @@ export default function CondutoresPage() {
                   <p className="text-sm font-medium text-cream font-dm truncate">
                     {item.nome}
                   </p>
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm"
-                    style={{
-                      background: item.ativo
-                        ? "rgba(46,158,143,0.1)"
-                        : "rgba(255,255,255,0.04)",
-                      color: item.ativo ? "#2E9E8F" : "rgba(253,251,247,0.3)",
-                      border: item.ativo
-                        ? "1px solid rgba(46,158,143,0.2)"
-                        : "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
-                    {item.ativo ? "Ativo" : "Inativo"}
-                  </span>
+                  {item.arquivado ? (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm inline-flex items-center gap-1"
+                      style={{
+                        background: "rgba(255,255,255,0.04)",
+                        color: "rgba(253,251,247,0.3)",
+                        border: "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      <Archive className="h-2.5 w-2.5" />
+                      Arquivado
+                    </span>
+                  ) : (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm"
+                      style={{
+                        background: item.ativo
+                          ? "rgba(46,158,143,0.1)"
+                          : "rgba(255,255,255,0.04)",
+                        color: item.ativo ? "#2E9E8F" : "rgba(253,251,247,0.3)",
+                        border: item.ativo
+                          ? "1px solid rgba(46,158,143,0.2)"
+                          : "1px solid rgba(255,255,255,0.06)",
+                      }}
+                    >
+                      {item.ativo ? "Ativo" : "Inativo"}
+                    </span>
+                  )}
                   {(() => {
                     const s = condutorStats.get(item.nome);
                     if (!s || s.total === 0) return null;
@@ -374,12 +490,31 @@ export default function CondutoresPage() {
                     <MessageCircle className="h-4 w-4" />
                   </a>
                 )}
+                {!item.arquivado && (
+                  <button
+                    onClick={() => handleToggleAtivo(item)}
+                    className="p-1.5 rounded-lg text-cream/20 hover:text-cream/60 hover:bg-white/[.04] transition-all"
+                    aria-label={item.ativo ? "Desativar" : "Ativar"}
+                    title={item.ativo ? "Desativar" : "Ativar"}
+                  >
+                    {item.ativo ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                )}
                 <button
-                  onClick={() => handleToggleAtivo(item)}
-                  className="p-1.5 rounded-lg text-cream/20 hover:text-cream/60 hover:bg-white/[.04] transition-all"
-                  aria-label={item.ativo ? "Desativar" : "Ativar"}
+                  onClick={() => handleToggleArquivado(item)}
+                  className="p-1.5 rounded-lg text-cream/20 hover:text-[#D4A857] hover:bg-[#D4A857]/10 transition-all"
+                  aria-label={item.arquivado ? "Desarquivar" : "Arquivar"}
+                  title={
+                    item.arquivado
+                      ? "Desarquivar"
+                      : "Arquivar (some da lista, sem apagar o histórico)"
+                  }
                 >
-                  {item.ativo ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  {item.arquivado ? (
+                    <ArchiveRestore className="h-4 w-4" />
+                  ) : (
+                    <Archive className="h-4 w-4" />
+                  )}
                 </button>
                 <button
                   onClick={() => openEdit(item)}

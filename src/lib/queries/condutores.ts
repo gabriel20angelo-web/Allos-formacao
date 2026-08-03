@@ -16,7 +16,9 @@ export async function listCondutoresAtivos() {
     .select("*")
     .eq("ativo", true)
     .order("nome");
-  return { data: (data ?? []) as CertificadoCondutor[], error };
+  // arquivar já desativa, mas o filtro protege registros mexidos direto no banco
+  const rows = ((data ?? []) as CertificadoCondutor[]).filter((c) => !c.arquivado);
+  return { data: rows, error };
 }
 
 export async function getCondutorById(id: string) {
