@@ -39,6 +39,7 @@ import {
   ArrowUp,
   ArrowDown,
   Youtube,
+  FileText,
 } from "lucide-react";
 import {
   DndContext,
@@ -195,6 +196,7 @@ export default function CourseForm({ courseId }: CourseFormProps) {
   const [saving, setSaving] = useState(false);
   const [publicando, setPublicando] = useState(false);
   const [trocarFonte, setTrocarFonte] = useState(true);
+  const [baixando, setBaixando] = useState<string | null>(null);
 
   // Basic info
   const [title, setTitle] = useState("");
@@ -770,6 +772,42 @@ export default function CourseForm({ courseId }: CourseFormProps) {
       toast.error(e instanceof Error ? e.message : "Erro ao publicar");
     } finally {
       setPublicando(false);
+    }
+  }
+
+  /**
+   * Baixa o que a rota devolver, com o nome que ela mandar.
+   *
+   * A rota devolve arquivo, não JSON, então o erro também chega como arquivo se
+   * a gente não olhar o tipo — e o usuário salvaria um .md contendo a mensagem
+   * de erro sem perceber.
+   */
+  async function baixarTranscricao(query: string, rotulo: string) {
+    setBaixando(rotulo);
+    try {
+      const r = await fetch(`/formacao/api/admin/meet/transcricoes?${query}`);
+
+      if (!r.ok || (r.headers.get("content-type") || "").includes("application/json")) {
+        const j = await r.json().catch(() => ({}));
+        throw new Error(j.error || "Não foi possível baixar.");
+      }
+
+      const nome =
+        r.headers.get("content-disposition")?.match(/filename="([^"]+)"/)?.[1] ||
+        "transcricao.md";
+
+      const blob = await r.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = nome;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${nome} baixado.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao baixar");
+    } finally {
+      setBaixando(null);
     }
   }
 
@@ -1437,6 +1475,42 @@ export default function CourseForm({ courseId }: CourseFormProps) {
             </div>
           )}
 
+          {/* Transcrições.
+              O curso sai como um documento contínuo, não como vários arquivos:
+              o que se faz com isso é escrever, e sete arquivos soltos dariam
+              trabalho para juntar de novo. */}
+          {isEdit && (
+            <div
+              className="flex flex-wrap items-center gap-3 p-4 rounded-xl"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <FileText className="h-4 w-4 text-cream/30" />
+              <span className="text-xs text-cream/50 font-medium">Transcrições</span>
+              <button
+                type="button"
+                onClick={() => baixarTranscricao(`curso_id=${courseId}`, "curso")}
+                disabled={baixando === "curso"}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ background: "rgba(200,75,49,0.12)", border: "1px solid rgba(200,75,49,0.2)", color: "#C84B31" }}
+              >
+                {baixando === "curso" ? "Montando…" : "Baixar o curso inteiro"}
+              </button>
+              <button
+                type="button"
+                onClick={() => baixarTranscricao("tudo=1", "tudo")}
+                disabled={baixando === "tudo"}
+                className="px-3 py-1.5 rounded-lg text-xs text-cream/50 border border-white/10 disabled:opacity-40"
+              >
+                {baixando === "tudo" ? "Montando…" : "Todos os cursos"}
+              </button>
+              <span className="text-[11px] text-cream/30 w-full">
+                Um documento em Markdown, cada encontro virando uma seção, com os nomes de quem
+                falou quando o encontro passou pelo Meet. Aula sem transcrição fica listada no
+                começo, para não parecer que o texto sumiu.
+              </span>
+            </div>
+          )}
+
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
             <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
               {sections.map((section, si) => (
@@ -1611,13 +1685,35 @@ export default function CourseForm({ courseId }: CourseFormProps) {
                                       </button>
                                     </div>
                                   ) : (
-                                    <button
-                                      onClick={() => setDeleteConfirmId(`lesson-${lesson.id}`)}
-                                      className="p-1 text-cream/30 hover:text-accent"
-                                      aria-label="Remover aula"
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </button>
+                                    <>
+                                      {/* Aula ainda não salva não existe no
+                                          banco: não há transcrição para buscar
+                                          por um id que só vive nesta tela. */}
+                                      {!lesson.id.startsWith("new-") && (
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            baixarTranscricao(
+                                              `lesson_id=${lesson.id}`,
+                                              lesson.id
+                                            )
+                                          }
+                                          disabled={baixando === lesson.id}
+                                          className="p-1 text-cream/30 hover:text-cream/70 disabled:opacity-40"
+                                          aria-label="Baixar transcrição desta aula"
+                                          title="Baixar a transcrição desta aula"
+                                        >
+                                          <FileText className="h-3.5 w-3.5" />
+                                        </button>
+                                      )}
+                                      <button
+                                        onClick={() => setDeleteConfirmId(`lesson-${lesson.id}`)}
+                                        className="p-1 text-cream/30 hover:text-accent"
+                                        aria-label="Remover aula"
+                                      >
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </button>
+                                    </>
                                   )}
                                 </div>
 

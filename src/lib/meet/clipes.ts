@@ -337,17 +337,28 @@ export async function recolherProjeto(
   jobId: string,
   externalId: string
 ): Promise<number | null> {
-  const { status, clipes, transcricaoUrl } = await consultarProjeto(externalId);
+  const { status, clipes, transcricaoUrl, transcricaoSrtUrl } =
+    await consultarProjeto(externalId);
   if (!TERMINOU.includes(status.toLowerCase())) return null;
 
   // A transcrição vale por si, mesmo que o corte não tenha rendido clipe
   // nenhum: é o único jeito de ter texto de um vídeo que nunca passou pelo Meet.
-  if (transcricaoUrl) {
-    const texto = await baixarTranscricao(transcricaoUrl);
-    if (texto) {
+  //
+  // Guarda os dois arquivos. A legenda é a que presta para ler, porque tem os
+  // tempos e é deles que saem os parágrafos; o texto corrido fica de reserva.
+  if (transcricaoUrl || transcricaoSrtUrl) {
+    const [texto, srt] = await Promise.all([
+      transcricaoUrl ? baixarTranscricao(transcricaoUrl) : null,
+      transcricaoSrtUrl ? baixarTranscricao(transcricaoSrtUrl) : null,
+    ]);
+    if (texto || srt) {
       await sb
         .from("formacao_clip_jobs")
-        .update({ transcricao_texto: texto, transcricao_em: new Date().toISOString() })
+        .update({
+          ...(texto ? { transcricao_texto: texto } : {}),
+          ...(srt ? { transcricao_srt: srt } : {}),
+          transcricao_em: new Date().toISOString(),
+        })
         .eq("id", jobId);
     }
   }
