@@ -181,6 +181,7 @@ export default function MeetAdminPage() {
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
+  const [limiteEncerramento, setLimiteEncerramento] = useState(120);
   const [novaAvulsa, setNovaAvulsa] = useState("");
   const [filtroGrupo, setFiltroGrupo] = useState("");
   const [busca, setBusca] = useState("");
@@ -234,10 +235,13 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/config", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tolerancia_atraso_min: tolerancia }),
+        body: JSON.stringify({
+          tolerancia_atraso_min: tolerancia,
+          limite_encerramento_min: limiteEncerramento,
+        }),
       });
       await lerResposta(r);
-      toast.success(`Tolerância de ${tolerancia} minutos salva.`);
+      toast.success("Configuração salva.");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
@@ -253,16 +257,21 @@ export default function MeetAdminPage() {
       sb.from("formacao_horarios").select("*").order("ordem"),
       sb.from("formacao_meet_spaces").select("*"),
       sb.from("formacao_meet_excecoes").select("*").is("revertida_em", null),
-      pegarJson<{ tolerancia_atraso_min?: number; error?: string }>(
-        "/formacao/api/admin/meet/config"
-      ),
+      pegarJson<{
+        tolerancia_atraso_min?: number;
+        limite_encerramento_min?: number;
+        error?: string;
+      }>("/formacao/api/admin/meet/config"),
     ]);
     setStatus(st && !st.error ? st : null);
     setSlots((sl.data as Slot[]) || []);
     setHorarios((hr.data as Horario[]) || []);
     setSpaces((sp.data as SpaceRow[]) || []);
     setExcecoes((ex.data as Excecao[]) || []);
-    if (cfg && !cfg.error) setTolerancia(cfg.tolerancia_atraso_min ?? 7);
+    if (cfg && !cfg.error) {
+      setTolerancia(cfg.tolerancia_atraso_min ?? 7);
+      setLimiteEncerramento(cfg.limite_encerramento_min ?? 120);
+    }
     setLoading(false);
   }, []);
 
@@ -1282,6 +1291,32 @@ export default function MeetAdminPage() {
                 className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
               />
               <span className="text-xs text-cream/40">minutos</span>
+            </div>
+
+            <p className="text-sm text-cream font-semibold mt-4 mb-1">
+              Encerrar reunião esquecida aberta
+            </p>
+            <p className="text-xs text-cream/40 mb-3">
+              A sala é permanente e o link nunca expira, então uma reunião que ninguém encerrou
+              continua de pé e continua gravando. Passando deste tempo, o sistema encerra para
+              todos. Zero desliga.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="number"
+                min={0}
+                max={600}
+                step={30}
+                value={limiteEncerramento}
+                onChange={(e) => setLimiteEncerramento(Number(e.target.value))}
+                className="w-24 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+              />
+              <span className="text-xs text-cream/40">
+                minutos
+                {limiteEncerramento >= 60
+                  ? ` (${(limiteEncerramento / 60).toFixed(1).replace(".0", "")} h)`
+                  : ""}
+              </span>
               <button
                 onClick={salvarTolerancia}
                 disabled={trabalhando === "tolerancia"}

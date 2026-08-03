@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { ingerir } from "@/lib/meet/ingest";
 import { atualizarStatusSlots, fecharSemanaSePreciso } from "@/lib/meet/status-slots";
@@ -36,6 +37,12 @@ export async function GET(req: NextRequest) {
 
   try {
     const sb = await createServiceRoleClient();
+
+    // Primeiro de tudo: sala aberta além do teto continua gravando enquanto o
+    // resto roda. Encerrar antes também faz a captura logo abaixo já pegar o
+    // encontro fechado, em vez de esperar a próxima batida.
+    const encerramento = await encerrarReunioesLongas(sb);
+
     const excecoes = await sincronizarExcecoes(sb);
     const ingestao = await ingerir({ origem: "cron", diasAtras: 15 });
 
@@ -48,6 +55,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: true,
+      encerramento,
       excecoes,
       ingestao,
       status,
