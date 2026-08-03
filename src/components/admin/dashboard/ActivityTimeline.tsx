@@ -213,7 +213,8 @@ export default function ActivityTimeline({
       return (
         e.person.toLowerCase().includes(q) ||
         e.title.toLowerCase().includes(q) ||
-        (e.detail || "").toLowerCase().includes(q)
+        (e.detail || "").toLowerCase().includes(q) ||
+        (e.body || "").toLowerCase().includes(q)
       );
     });
   }, [current, activeTypes, query]);
@@ -256,7 +257,7 @@ export default function ActivityTimeline({
   }
 
   function exportCSV() {
-    const lines = ["Data,Hora,Tipo,Pessoa,Referência,Detalhe,Nota"];
+    const lines = ["Data,Hora,Tipo,Pessoa,Referência,Contexto,Texto,Nota"];
     filtered.forEach((e) => {
       const d = new Date(e.timestamp);
       const esc = (s: string) => `"${(s || "").replace(/"/g, '""').replace(/\n/g, " ")}"`;
@@ -268,6 +269,7 @@ export default function ActivityTimeline({
           esc(e.person),
           esc(e.title),
           esc(e.detail || ""),
+          esc(e.body || ""),
           e.score !== undefined ? String(e.score) : "",
         ].join(",")
       );
@@ -572,6 +574,16 @@ export default function ActivityTimeline({
                       const many = cluster.items.length > 1;
                       const open = expanded.has(cluster.key);
                       const last = cluster.items[cluster.items.length - 1];
+                      // uma linha só é clicável quando há texto escrito para ler
+                      const readable = !many && !!e.body;
+
+                      const toggle = () =>
+                        setExpanded((prev) => {
+                          const next = new Set(prev);
+                          if (next.has(cluster.key)) next.delete(cluster.key);
+                          else next.add(cluster.key);
+                          return next;
+                        });
 
                       return (
                         <motion.div
@@ -579,7 +591,24 @@ export default function ActivityTimeline({
                           initial={{ opacity: 0, x: -4 }}
                           animate={{ opacity: 1, x: 0 }}
                           transition={{ delay: Math.min(di * 0.02 + i * 0.012, 0.4) }}
-                          className="relative flex items-start gap-2.5 py-1.5 pl-3 pr-2 rounded-[8px] hover:bg-white/[.02] transition-colors group"
+                          onClick={readable ? toggle : undefined}
+                          role={readable ? "button" : undefined}
+                          tabIndex={readable ? 0 : undefined}
+                          onKeyDown={
+                            readable
+                              ? (ev) => {
+                                  if (ev.key === "Enter" || ev.key === " ") {
+                                    ev.preventDefault();
+                                    toggle();
+                                  }
+                                }
+                              : undefined
+                          }
+                          className={`relative flex items-start gap-2.5 py-1.5 pl-3 pr-2 rounded-[8px] transition-colors group ${
+                            readable
+                              ? "cursor-pointer hover:bg-white/[.04]"
+                              : "hover:bg-white/[.02]"
+                          }`}
                         >
                           <span
                             className="absolute -left-[12px] top-[11px] w-[9px] h-[9px] rounded-full border-2"
@@ -608,14 +637,7 @@ export default function ActivityTimeline({
                                     </>
                                   )}
                                   <button
-                                    onClick={() =>
-                                      setExpanded((prev) => {
-                                        const next = new Set(prev);
-                                        if (next.has(cluster.key)) next.delete(cluster.key);
-                                        else next.add(cluster.key);
-                                        return next;
-                                      })
-                                    }
+                                    onClick={toggle}
                                     className="ml-1.5 text-[10px] font-dm hover:underline"
                                     style={{ color: meta.color }}
                                   >
@@ -643,6 +665,35 @@ export default function ActivityTimeline({
                                 {e.detail}
                               </p>
                             )}
+                            {readable &&
+                              (open ? (
+                                <div
+                                  className="mt-1.5 pl-2.5 py-1 border-l-2"
+                                  style={{ borderColor: `${meta.color}55` }}
+                                >
+                                  <p className="font-dm text-[11px] text-cream/60 leading-relaxed whitespace-pre-wrap">
+                                    {e.body}
+                                  </p>
+                                  <span
+                                    className="font-dm text-[10px] mt-1 inline-block"
+                                    style={{ color: meta.color }}
+                                  >
+                                    ocultar
+                                  </span>
+                                </div>
+                              ) : (
+                                <div className="flex items-baseline gap-1.5 mt-0.5">
+                                  <p className="font-dm text-[11px] text-cream/30 leading-snug truncate min-w-0">
+                                    “{e.body}”
+                                  </p>
+                                  <span
+                                    className="font-dm text-[10px] flex-shrink-0 group-hover:underline"
+                                    style={{ color: meta.color }}
+                                  >
+                                    ler
+                                  </span>
+                                </div>
+                              ))}
                             {many && open && (
                               <div className="mt-1 space-y-0.5">
                                 {cluster.items.map((item) => (

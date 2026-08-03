@@ -112,8 +112,13 @@ export interface TimelineEvent {
   person: string;
   /** Onde: curso, aula ou atividade. */
   title: string;
-  /** Texto livre (relato, comentário) mostrado em segunda linha. */
+  /** Contexto curto (curso, condutores) mostrado em segunda linha. */
   detail?: string;
+  /**
+   * Texto escrito por uma pessoa — relato, comentário, avaliação. É o que
+   * torna a linha clicável: fechada mostra o começo, aberta mostra tudo.
+   */
+  body?: string;
   /** Nota, quando o evento tiver uma. */
   score?: number;
   /** Sufixo da nota ("/10", "/5"). */

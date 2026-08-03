@@ -514,7 +514,7 @@ export default function AdminDashboard() {
             timestamp: r.created_at,
             person: r.user?.full_name || "Aluno",
             title: r.course?.title || "Curso",
-            detail: r.comment || undefined,
+            body: r.comment?.trim() || undefined,
             score: r.rating,
             scoreSuffix: "/5",
           });
@@ -540,7 +540,7 @@ export default function AdminDashboard() {
           timestamp: c.created_at,
           person: c.user?.full_name || "Aluno",
           title: c.lesson?.title?.trim() || "uma aula",
-          detail: c.content,
+          body: c.content?.trim() || undefined,
         });
       });
       flagIfCapped("comentários", comments.count);
@@ -745,7 +745,7 @@ export default function AdminDashboard() {
               const condutores = (s.condutores || []).filter(Boolean);
               const partes = [
                 condutores.length > 0 ? `com ${condutores.join(", ")}` : "",
-                s.relato?.trim() ? `“${s.relato.trim()}”` : "",
+                s.nota_condutor ? `condutor ${s.nota_condutor}/10` : "",
               ].filter(Boolean);
               return {
                 id: `sub-${s.id}`,
@@ -754,6 +754,7 @@ export default function AdminDashboard() {
                 person: (s.nome_completo || "Sem nome").trim(),
                 title: s.atividade_nome || "atividade",
                 detail: partes.join(" · ") || undefined,
+                body: s.relato?.trim() || undefined,
                 score: s.nota_grupo ?? undefined,
                 scoreSuffix: "/10",
               };
