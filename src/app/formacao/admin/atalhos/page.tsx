@@ -11,7 +11,17 @@ import Input from "@/components/ui/Input";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
-import { Plus, Search, Pencil, Trash2, Copy, ExternalLink, Link as LinkIcon } from "lucide-react";
+import {
+  Plus,
+  Search,
+  Pencil,
+  Trash2,
+  Copy,
+  ExternalLink,
+  Link as LinkIcon,
+  Video,
+  AlertTriangle,
+} from "lucide-react";
 import { toast } from "sonner";
 import {
   validateStudyLinkSlug,
@@ -21,11 +31,20 @@ import {
 interface StudyLink {
   id: string;
   slug: string;
-  destination_url: string;
+  destination_url: string | null;
   label: string | null;
   clicks: number;
+  space_name: string | null;
   created_at: string;
   updated_at: string;
+}
+
+/** Sala do Meet que um atalho pode seguir em vez de guardar um endereço fixo. */
+interface SalaMeet {
+  space_name: string;
+  meeting_uri: string | null;
+  rotulo: string | null;
+  atividade: string | null;
 }
 
 const APP_URL =
@@ -33,21 +52,78 @@ const APP_URL =
     ? window.location.origin
     : process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
+/**
+ * Escolha entre endereço fixo e sala do Meet.
+ *
+ * Apontar para a sala é o que faz o atalho sobreviver à troca do link da
+ * reunião: o destino é lido no momento do clique, então não existe endereço
+ * copiado esperando para ficar velho.
+ */
+function SeletorDeSala({
+  salas,
+  valor,
+  aoMudar,
+  nomeDaSala,
+}: {
+  salas: SalaMeet[];
+  valor: string;
+  aoMudar: (v: string) => void;
+  nomeDaSala: (s: SalaMeet) => string;
+}) {
+  if (!salas.length) return null;
+
+  return (
+    <div>
+      <label className="block text-sm text-cream/70 mb-1.5">Para onde leva</label>
+      <select
+        value={valor}
+        onChange={(e) => aoMudar(e.target.value)}
+        className="w-full px-3 py-2.5 rounded-[10px] outline-none border-[1.5px] border-border-soft-2 focus:border-accent/50 text-sm"
+        style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+      >
+        <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+          um endereço que eu digito
+        </option>
+        {salas.map((s) => (
+          <option
+            key={s.space_name}
+            value={s.space_name}
+            style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+          >
+            sala do Meet · {nomeDaSala(s)}
+          </option>
+        ))}
+      </select>
+      {valor && (
+        <p className="text-xs text-cream/45 mt-1.5">
+          O destino vem da sala a cada clique. Se o link do Meet mudar, o atalho segue sozinho e
+          ninguém precisa ser avisado de novo.
+        </p>
+      )}
+    </div>
+  );
+}
+
 export default function AtalhosPage() {
   const [links, setLinks] = useState<StudyLink[]>([]);
   const [search, setSearch] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
+  const [erroCarregar, setErroCarregar] = useState<string | null>(null);
+  const [salas, setSalas] = useState<SalaMeet[]>([]);
+
   const [createOpen, setCreateOpen] = useState(false);
   const [newSlug, setNewSlug] = useState("");
   const [newUrl, setNewUrl] = useState("");
   const [newLabel, setNewLabel] = useState("");
+  const [newSala, setNewSala] = useState("");
 
   const [editTarget, setEditTarget] = useState<StudyLink | null>(null);
   const [editSlug, setEditSlug] = useState("");
   const [editUrl, setEditUrl] = useState("");
   const [editLabel, setEditLabel] = useState("");
+  const [editSala, setEditSala] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<StudyLink | null>(null);
 
@@ -59,15 +135,50 @@ export default function AtalhosPage() {
         .select("*")
         .order("created_at", { ascending: false });
 
+      // Engolir o motivo escondeu por meses que a tabela nem existia: a tela
+      // dizia "Erro ao carregar atalhos" e ninguém tinha como saber o porquê.
       if (error) {
-        toast.error("Erro ao carregar atalhos.");
+        console.error("[atalhos]", error);
+        const faltaTabela = error.code === "PGRST205" || error.code === "42P01";
+        setErroCarregar(
+          faltaTabela
+            ? "A tabela de atalhos ainda não existe no banco. Rode a migration dos atalhos."
+            : `Erro ao carregar atalhos: ${error.message}`
+        );
       } else if (data) {
         setLinks(data as StudyLink[]);
       }
       setLoading(false);
     }
     fetchLinks();
+
+    // As salas do Meet: um atalho pode seguir uma delas em vez de guardar o
+    // endereço. Falhar aqui não atrapalha o resto da tela.
+    async function fetchSalas() {
+      const client = createClient();
+      const { data } = await client
+        .from("formacao_meet_spaces")
+        .select("space_name, meeting_uri, rotulo, ativo, formacao_cronograma(atividade)")
+        .eq("ativo", true);
+      if (!data) return;
+      setSalas(
+        (data as unknown as (SalaMeet & { formacao_cronograma?: { atividade?: string } })[]).map(
+          (s) => ({
+            space_name: s.space_name,
+            meeting_uri: s.meeting_uri,
+            rotulo: s.rotulo,
+            atividade: s.formacao_cronograma?.atividade || null,
+          })
+        )
+      );
+    }
+    fetchSalas();
   }, []);
+
+  /** Como a sala aparece na lista de escolha. */
+  function nomeDaSala(s: SalaMeet): string {
+    return s.rotulo || s.atividade || s.meeting_uri?.replace("https://meet.google.com/", "") || s.space_name;
+  }
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
@@ -76,7 +187,7 @@ export default function AtalhosPage() {
       (l) =>
         l.slug.toLowerCase().includes(q) ||
         (l.label || "").toLowerCase().includes(q) ||
-        l.destination_url.toLowerCase().includes(q)
+        (l.destination_url || "").toLowerCase().includes(q)
     );
   }, [links, search]);
 
@@ -84,6 +195,7 @@ export default function AtalhosPage() {
     setNewSlug("");
     setNewUrl("");
     setNewLabel("");
+    setNewSala("");
   }
 
   async function handleCreate() {
@@ -96,10 +208,15 @@ export default function AtalhosPage() {
       toast.error(slugCheck.reason);
       return;
     }
-    const urlCheck = validateStudyLinkUrl(url);
-    if (!urlCheck.ok) {
-      toast.error(urlCheck.reason);
-      return;
+    // Atalho ligado a uma sala não tem endereço próprio: ele vem da sala a cada
+    // clique, e é isso que faz trocar o link do Meet não exigir reavisar todo
+    // mundo.
+    if (!newSala) {
+      const urlCheck = validateStudyLinkUrl(url);
+      if (!urlCheck.ok) {
+        toast.error(urlCheck.reason);
+        return;
+      }
     }
     if (links.some((l) => l.slug === slug)) {
       toast.error("Esse slug já está em uso.");
@@ -112,7 +229,8 @@ export default function AtalhosPage() {
       .from("study_links")
       .insert({
         slug,
-        destination_url: url,
+        destination_url: newSala ? null : url,
+        space_name: newSala || null,
         label: label || null,
       })
       .select("*")
@@ -137,8 +255,9 @@ export default function AtalhosPage() {
   function openEdit(link: StudyLink) {
     setEditTarget(link);
     setEditSlug(link.slug);
-    setEditUrl(link.destination_url);
+    setEditUrl(link.destination_url || "");
     setEditLabel(link.label || "");
+    setEditSala(link.space_name || "");
   }
 
   async function handleEditSave() {
@@ -152,10 +271,12 @@ export default function AtalhosPage() {
       toast.error(slugCheck.reason);
       return;
     }
-    const urlCheck = validateStudyLinkUrl(url);
-    if (!urlCheck.ok) {
-      toast.error(urlCheck.reason);
-      return;
+    if (!editSala) {
+      const urlCheck = validateStudyLinkUrl(url);
+      if (!urlCheck.ok) {
+        toast.error(urlCheck.reason);
+        return;
+      }
     }
     if (slug !== editTarget.slug && links.some((l) => l.slug === slug)) {
       toast.error("Esse slug já está em uso.");
@@ -164,13 +285,15 @@ export default function AtalhosPage() {
 
     setSaving(true);
     const client = createClient();
+    const campos = {
+      slug,
+      destination_url: editSala ? null : url,
+      space_name: editSala || null,
+      label: label || null,
+    };
     const { error } = await client
       .from("study_links")
-      .update({
-        slug,
-        destination_url: url,
-        label: label || null,
-      })
+      .update(campos)
       .eq("id", editTarget.id);
 
     if (error) {
@@ -180,11 +303,7 @@ export default function AtalhosPage() {
     }
 
     setLinks((prev) =>
-      prev.map((l) =>
-        l.id === editTarget.id
-          ? { ...l, slug, destination_url: url, label: label || null }
-          : l
-      )
+      prev.map((l) => (l.id === editTarget.id ? { ...l, ...campos } : l))
     );
     setEditTarget(null);
     setSaving(false);
@@ -247,6 +366,18 @@ export default function AtalhosPage() {
         />
       </div>
 
+      {/* O motivo, não só o sintoma: a tela dizia "erro" e escondia que a
+          tabela nem existia. */}
+      {erroCarregar && (
+        <div
+          className="rounded-[12px] p-4 flex items-start gap-3"
+          style={{ background: "rgba(255,193,7,0.06)", border: "1px solid rgba(255,193,7,0.2)" }}
+        >
+          <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+          <p className="text-sm text-cream/70">{erroCarregar}</p>
+        </div>
+      )}
+
       {/* List */}
       {loading ? (
         <div className="space-y-2">
@@ -289,15 +420,31 @@ export default function AtalhosPage() {
                     <span className="text-xs text-cream/50">— {link.label}</span>
                   )}
                 </div>
-                <a
-                  href={link.destination_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-xs text-cream/45 hover:text-accent inline-flex items-center gap-1 mt-1 break-all"
-                >
-                  <ExternalLink className="h-3 w-3 flex-shrink-0" />
-                  <span className="truncate">{link.destination_url}</span>
-                </a>
+                {/* Atalho de sala não mostra endereço fixo: o destino é lido da
+                    sala no momento do clique, e mostrar um endereço aqui daria
+                    a impressão de que é ele que vale. */}
+                {link.space_name ? (
+                  <p className="text-xs text-cream/45 inline-flex items-center gap-1 mt-1">
+                    <Video className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">
+                      sala do Meet
+                      {(() => {
+                        const s = salas.find((x) => x.space_name === link.space_name);
+                        return s ? ` · ${nomeDaSala(s)}` : " · sala não encontrada";
+                      })()}
+                    </span>
+                  </p>
+                ) : (
+                  <a
+                    href={link.destination_url || "#"}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="text-xs text-cream/45 hover:text-accent inline-flex items-center gap-1 mt-1 break-all"
+                  >
+                    <ExternalLink className="h-3 w-3 flex-shrink-0" />
+                    <span className="truncate">{link.destination_url}</span>
+                  </a>
+                )}
               </div>
 
               <div className="flex items-center gap-1 flex-shrink-0 self-end sm:self-auto">
@@ -362,12 +509,21 @@ export default function AtalhosPage() {
               </p>
             )}
           </div>
-          <Input
-            label="URL de destino"
-            placeholder="https://chat.whatsapp.com/..."
-            value={newUrl}
-            onChange={(e) => setNewUrl(e.target.value)}
+          <SeletorDeSala
+            salas={salas}
+            valor={newSala}
+            aoMudar={setNewSala}
+            nomeDaSala={nomeDaSala}
           />
+
+          {!newSala && (
+            <Input
+              label="URL de destino"
+              placeholder="https://chat.whatsapp.com/..."
+              value={newUrl}
+              onChange={(e) => setNewUrl(e.target.value)}
+            />
+          )}
           <Input
             label="Rótulo do botão (opcional)"
             placeholder="Entrar no grupo de estudo"
@@ -412,11 +568,20 @@ export default function AtalhosPage() {
               </p>
             )}
           </div>
-          <Input
-            label="URL de destino"
-            value={editUrl}
-            onChange={(e) => setEditUrl(e.target.value)}
+          <SeletorDeSala
+            salas={salas}
+            valor={editSala}
+            aoMudar={setEditSala}
+            nomeDaSala={nomeDaSala}
           />
+
+          {!editSala && (
+            <Input
+              label="URL de destino"
+              value={editUrl}
+              onChange={(e) => setEditUrl(e.target.value)}
+            />
+          )}
           <Input
             label="Rótulo do botão (opcional)"
             value={editLabel}

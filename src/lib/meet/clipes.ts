@@ -69,6 +69,9 @@ interface JobLinha {
   video_url: string;
   video_url_envio: string | null;
   drive_file_id: string | null;
+  lesson_id: string | null;
+  gerar_clipes: boolean;
+  trocar_fonte_da_aula: boolean;
   tentativas: number;
   youtube_upload_url: string | null;
   youtube_bytes_enviados: number;
@@ -155,21 +158,36 @@ async function subirParaYoutube(
       };
     }
 
-    // Pronto no YouTube: agora existe um endereço que o OpusClip lê, e o job
-    // volta para a fila de envio.
-    //
-    // Mas não já: terminar de enviar não é estar disponível. O YouTube ainda
+    const linkYoutube = `https://www.youtube.com/watch?v=${r.videoId}`;
+
+    // Pedido de trocar a fonte da aula: o aluno passa a assistir pelo YouTube.
+    // Só acontece quando foi pedido, porque muda o que ele vê.
+    if (job.trocar_fonte_da_aula && job.lesson_id) {
+      await sb
+        .from("lessons")
+        .update({ video_url: linkYoutube, video_source: "youtube" })
+        .eq("id", job.lesson_id);
+      await sb
+        .from("formacao_clip_jobs")
+        .update({ fonte_trocada_em: new Date().toISOString() })
+        .eq("id", job.id);
+    }
+
+    // Quem só queria publicar acabou aqui. Quem quer corte volta para a fila —
+    // mas não já: terminar de enviar não é estar disponível. O YouTube ainda
     // processa o arquivo, e nessa janela o OpusClip recusa. Sair batendo na
     // porta só gastaria tentativa.
     await sb
       .from("formacao_clip_jobs")
       .update({
         youtube_video_id: r.videoId,
-        video_url_envio: `https://www.youtube.com/watch?v=${r.videoId}`,
+        video_url_envio: linkYoutube,
         youtube_bytes_enviados: total,
         youtube_erro: null,
-        status: "pendente",
-        tentar_apos: new Date(Date.now() + ESPERA_MIN * 60_000).toISOString(),
+        status: job.gerar_clipes ? "pendente" : "publicado",
+        ...(job.gerar_clipes
+          ? { tentar_apos: new Date(Date.now() + ESPERA_MIN * 60_000).toISOString() }
+          : { concluido_em: new Date().toISOString() }),
         trabalhando_desde: null,
       })
       .eq("id", job.id);

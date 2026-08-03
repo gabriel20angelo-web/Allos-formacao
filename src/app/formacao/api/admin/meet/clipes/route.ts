@@ -130,7 +130,15 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  let body: { encontro_id?: string; curso_id?: string; lesson_ids?: string[] };
+  let body: {
+    encontro_id?: string;
+    curso_id?: string;
+    lesson_ids?: string[];
+    /** "publicar" leva ao YouTube e para por aí; "cortar" segue para o OpusClip. */
+    acao?: "publicar" | "cortar" | "publicar_e_cortar";
+    /** Depois de publicar, a aula passa a tocar pelo YouTube em vez do Drive. */
+    trocar_fonte?: boolean;
+  };
   try {
     body = await req.json();
   } catch {
@@ -215,7 +223,11 @@ export async function POST(req: NextRequest) {
       )
     );
 
+    const acao = body.acao || "cortar";
+    const vaiCortar = acao !== "publicar";
+
     let enfileirados = 0;
+    let jaNoYoutube = 0;
     const repetidos: string[] = [];
 
     for (const a of aulas as {
@@ -224,30 +236,47 @@ export async function POST(req: NextRequest) {
       video_url: string;
       section_id: string;
     }[]) {
+      const rota = rotaDoVideo(a.video_url);
+
+      // Publicar o que já é do YouTube não faz sentido: não há para onde subir.
+      if (acao === "publicar" && !rota.drive_file_id) {
+        jaNoYoutube++;
+        continue;
+      }
+
       const curso = cursoDaSecao.get(a.section_id);
       const { error } = await sb.from("formacao_clip_jobs").insert({
         lesson_id: a.id,
         curso_id: curso?.id || body.curso_id || null,
         titulo: `${curso?.titulo || "Curso"} · ${a.title}`,
         video_url: a.video_url,
-        // Vídeo que mora no Drive não pode ir direto: o OpusClip não lê Drive.
-        // Guardar o file id aqui é o que permite ao agendador levá-lo ao
-        // YouTube antes de mandar cortar.
-        ...rotaDoVideo(a.video_url),
+        // Vídeo que mora no Drive não pode ir direto ao corte: o OpusClip não
+        // lê Drive. Guardar o file id aqui é o que permite ao agendador
+        // levá-lo ao YouTube antes.
+        ...rota,
+        gerar_clipes: vaiCortar,
+        trocar_fonte_da_aula: !!body.trocar_fonte,
         criado_por: auth.userId,
       });
       if (error) repetidos.push(a.title);
       else enfileirados++;
     }
 
+    const oQueVaiAcontecer = vaiCortar
+      ? "Cada um é cobrado por minuto de vídeo."
+      : "Sobem como não listados, um por vez. Não há custo: só o corte é cobrado.";
+
     return NextResponse.json({
       ok: true,
       enfileirados,
       ja_estavam: repetidos.length,
+      ja_no_youtube: jaNoYoutube,
       aviso:
         enfileirados > 0
-          ? `${enfileirados} ${enfileirados === 1 ? "vídeo" : "vídeos"} na fila. O envio acontece um por vez, a cada rodada do agendador, porque cada um é cobrado por minuto de vídeo.`
-          : "Esses vídeos já tinham sido enviados antes.",
+          ? `${enfileirados} ${enfileirados === 1 ? "vídeo" : "vídeos"} na fila. O envio acontece um por vez, a cada rodada do agendador. ${oQueVaiAcontecer}`
+          : jaNoYoutube > 0
+            ? `${jaNoYoutube} ${jaNoYoutube === 1 ? "vídeo já está" : "vídeos já estão"} no YouTube.`
+            : "Esses vídeos já tinham sido enviados antes.",
     });
   }
 

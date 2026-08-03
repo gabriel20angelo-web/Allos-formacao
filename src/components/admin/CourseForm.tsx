@@ -38,6 +38,7 @@ import {
   Clock,
   ArrowUp,
   ArrowDown,
+  Youtube,
 } from "lucide-react";
 import {
   DndContext,
@@ -192,6 +193,8 @@ export default function CourseForm({ courseId }: CourseFormProps) {
 
   const [step, setStep] = useState<Step>("info");
   const [saving, setSaving] = useState(false);
+  const [publicando, setPublicando] = useState(false);
+  const [trocarFonte, setTrocarFonte] = useState(true);
 
   // Basic info
   const [title, setTitle] = useState("");
@@ -713,6 +716,61 @@ export default function CourseForm({ courseId }: CourseFormProps) {
         lessons: [],
       },
     ]);
+  }
+
+  /**
+   * As aulas que dá para publicar no YouTube.
+   *
+   * Só as que já existem no banco: aula recém-adicionada tem id temporário
+   * ("new-…") e ainda não foi salva, então não há o que a fila enfileirar. E só
+   * as que estão no Drive — o que já é do YouTube não tem para onde subir.
+   */
+  function aulasPublicaveis(): { id: string; title: string }[] {
+    return sections
+      .flatMap((s) => s.lessons)
+      .filter(
+        (l) =>
+          !l.id.startsWith("new-") &&
+          !!l.video_url &&
+          l.video_url.includes("drive.google.com")
+      )
+      .map((l) => ({ id: l.id, title: l.title }));
+  }
+
+  async function publicarNoYoutube() {
+    const alvos = aulasPublicaveis();
+    if (!alvos.length) return;
+
+    if (
+      !confirm(
+        `Publicar ${alvos.length} ${alvos.length === 1 ? "vídeo" : "vídeos"} no YouTube como não ${alvos.length === 1 ? "listado" : "listados"}?\n\n` +
+          (trocarFonte
+            ? "As aulas passam a tocar pelo YouTube em vez do Drive. Carrega mais rápido e não depende de permissão de arquivo.\n\n"
+            : "As aulas continuam tocando pelo Drive.\n\n") +
+          "Sobem um por vez, em segundo plano. Não há custo: só o corte em clipes é cobrado."
+      )
+    )
+      return;
+
+    setPublicando(true);
+    try {
+      const r = await fetch("/formacao/api/admin/meet/clipes", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lesson_ids: alvos.map((a) => a.id),
+          acao: "publicar",
+          trocar_fonte: trocarFonte,
+        }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Não foi possível enfileirar.");
+      toast.success(j.aviso || "Na fila.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao publicar");
+    } finally {
+      setPublicando(false);
+    }
   }
 
   function addLesson(sectionIndex: number) {
@@ -1338,6 +1396,46 @@ export default function CourseForm({ courseId }: CourseFormProps) {
               Aplicar a todas as aulas
             </button>
           </div>
+
+          {/* Publicar no YouTube.
+              Só aparece quando há o que publicar: barra que nunca faz nada é
+              ruído. Vídeo do Drive é pesado para o aluno e depende de permissão
+              de arquivo; no YouTube não. */}
+          {isEdit && aulasPublicaveis().length > 0 && (
+            <div
+              className="flex flex-wrap items-center gap-3 p-4 rounded-xl"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <Youtube className="h-4 w-4" style={{ color: "#FF4D4D" }} />
+              <span className="text-xs text-cream/50 font-medium">
+                {aulasPublicaveis().length}{" "}
+                {aulasPublicaveis().length === 1
+                  ? "vídeo está no Drive"
+                  : "vídeos estão no Drive"}
+              </span>
+              <label className="flex items-center gap-1.5 text-xs text-cream/50 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={trocarFonte}
+                  onChange={(e) => setTrocarFonte(e.target.checked)}
+                  className="accent-[#C84B31]"
+                />
+                trocar o vídeo da aula pelo do YouTube
+              </label>
+              <button
+                type="button"
+                onClick={publicarNoYoutube}
+                disabled={publicando}
+                className="px-3 py-1.5 rounded-lg text-xs font-medium transition-all hover:opacity-80 disabled:opacity-40"
+                style={{ background: "rgba(255,77,77,0.12)", border: "1px solid rgba(255,77,77,0.25)", color: "#FF4D4D" }}
+              >
+                {publicando ? "Enfileirando…" : "Publicar no YouTube"}
+              </button>
+              <span className="text-[11px] text-cream/30 w-full">
+                Sobem como não listados, um por vez, em segundo plano. Acompanhe em Meet → Clipes.
+              </span>
+            </div>
+          )}
 
           <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleSectionDragEnd}>
             <SortableContext items={sections.map((s) => s.id)} strategy={verticalListSortingStrategy}>
