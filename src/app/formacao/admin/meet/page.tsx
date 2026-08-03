@@ -85,6 +85,25 @@ type Aba = "salas" | "nomes" | "diagnostico";
  * causa de um endpoint só. Acontece de verdade quando se abre uma cópia antiga
  * do app: as rotas novas ainda não existem lá.
  */
+/**
+ * Lê a resposta de uma ação, traduzindo os dois jeitos de dar errado.
+ *
+ * Quando vem HTML em vez de JSON, a causa quase sempre é o painel estar aberto
+ * numa versão do app que não tem a rota. "Unexpected token '<'" não ajuda
+ * ninguém a resolver isso; dizer onde abrir, sim.
+ */
+async function lerResposta(r: Response): Promise<Record<string, unknown>> {
+  const tipo = r.headers.get("content-type") || "";
+  if (!tipo.includes("application/json")) {
+    throw new Error(
+      "O servidor respondeu uma página em vez de dados. Abra o painel por allos.org.br/formacao/admin/meet."
+    );
+  }
+  const j = (await r.json()) as Record<string, unknown>;
+  if (!r.ok) throw new Error((j.error as string) || "Não foi possível concluir.");
+  return j;
+}
+
 async function pegarJson<T>(url: string): Promise<T | null> {
   try {
     const r = await fetch(url);
@@ -117,8 +136,7 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ tolerancia_atraso_min: tolerancia }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      await lerResposta(r);
       toast.success(`Tolerância de ${tolerancia} minutos salva.`);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao salvar");
@@ -196,8 +214,7 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slot.id, gravar: false, transcrever: true, notas: false }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      await lerResposta(r);
       toast.success("Sala criada. O link do grupo já aponta para ela.");
       await carregar();
     } catch (e) {
@@ -216,8 +233,7 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ space_name: space.space_name, access_type: novo }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      await lerResposta(r);
       setSpaces((atual) =>
         atual.map((s) =>
           s.space_name === space.space_name ? { ...s, access_type: novo } : s
@@ -243,8 +259,7 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ space_name: space.space_name, [campo]: !space[campo] }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      await lerResposta(r);
       setSpaces((atual) =>
         atual.map((s) =>
           s.space_name === space.space_name ? { ...s, [campo]: !space[campo] } : s
@@ -264,8 +279,7 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ slot_id: slotId, data, gravar }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      await lerResposta(r);
       toast.success(gravar ? "Vai gravar nesta data." : "Não vai gravar nesta data.");
       setExcecaoAberta(null);
       await carregar();
@@ -294,8 +308,7 @@ export default function MeetAdminPage() {
             : { display_name: item.display_name, ignorar: true }
         ),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
+      const j = await lerResposta(r);
       toast.success(
         alunoId
           ? `${j.participacoes_atualizadas} participações ligadas a essa pessoa.`
@@ -318,11 +331,12 @@ export default function MeetAdminPage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ dias: 30 }),
       });
-      const j = await r.json();
-      if (!r.ok) throw new Error(j.error || "Falhou");
-      const res = j.resultado;
+      const j = await lerResposta(r);
+      const res = j.resultado as
+        | { encontros_novos: number; participacoes_gravadas: number }
+        | undefined;
       toast.success(
-        `${res.encontros_novos} encontros novos, ${res.participacoes_gravadas} participações.`
+        `${res?.encontros_novos ?? 0} encontros novos, ${res?.participacoes_gravadas ?? 0} participações.`
       );
       await carregar();
     } catch (e) {
