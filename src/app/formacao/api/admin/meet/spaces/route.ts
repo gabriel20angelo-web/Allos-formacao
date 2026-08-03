@@ -18,6 +18,7 @@ export const dynamic = "force-dynamic";
 
 interface CorpoPost {
   slot_id?: string;
+  rotulo?: string;
   gravar?: boolean;
   transcrever?: boolean;
   notas?: boolean;
@@ -36,8 +37,14 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
-  if (!body.slot_id) {
-    return NextResponse.json({ error: "slot_id obrigatório" }, { status: 400 });
+  // Ou a sala pertence a um grupo da grade, ou tem nome próprio. Sala sem os
+  // dois vira quórum órfão, que ninguém sabe de quem é.
+  const rotulo = (body.rotulo || "").trim();
+  if (!body.slot_id && !rotulo) {
+    return NextResponse.json(
+      { error: "Informe o grupo da grade ou um nome para a sala." },
+      { status: 400 }
+    );
   }
 
   const artefatos = {
@@ -48,17 +55,21 @@ export async function POST(req: NextRequest) {
 
   const sb = await createServiceRoleClient();
 
-  const { data: jaTem } = await sb
-    .from("formacao_meet_spaces")
-    .select("id, meeting_uri")
-    .eq("slot_id", body.slot_id)
-    .maybeSingle();
+  // Um grupo da grade só pode ter uma sala. Sala avulsa pode repetir nome sem
+  // problema: são reuniões diferentes com o mesmo assunto.
+  if (body.slot_id) {
+    const { data: jaTem } = await sb
+      .from("formacao_meet_spaces")
+      .select("id, meeting_uri")
+      .eq("slot_id", body.slot_id)
+      .maybeSingle();
 
-  if (jaTem) {
-    return NextResponse.json(
-      { error: "Este grupo já tem sala.", meeting_uri: jaTem.meeting_uri },
-      { status: 409 }
-    );
+    if (jaTem) {
+      return NextResponse.json(
+        { error: "Este grupo já tem sala.", meeting_uri: jaTem.meeting_uri },
+        { status: 409 }
+      );
+    }
   }
 
   try {
@@ -67,7 +78,8 @@ export async function POST(req: NextRequest) {
     const { data, error } = await sb
       .from("formacao_meet_spaces")
       .insert({
-        slot_id: body.slot_id,
+        slot_id: body.slot_id || null,
+        rotulo: rotulo || null,
         space_name: space.name,
         meeting_code: space.meetingCode || null,
         meeting_uri: space.meetingUri || null,
@@ -90,11 +102,13 @@ export async function POST(req: NextRequest) {
     }
 
     // O link do slot passa a ser o da sala nova, senão o grupo continua entrando
-    // na sala antiga e o quórum não captura nada.
-    await sb
-      .from("formacao_slots")
-      .update({ meet_link: space.meetingUri })
-      .eq("id", body.slot_id);
+    // na sala antiga e o quórum não captura nada. Sala avulsa não tem slot.
+    if (body.slot_id) {
+      await sb
+        .from("formacao_slots")
+        .update({ meet_link: space.meetingUri })
+        .eq("id", body.slot_id);
+    }
 
     return NextResponse.json({ ok: true, space: data });
   } catch (e) {

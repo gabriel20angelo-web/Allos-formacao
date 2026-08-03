@@ -32,6 +32,7 @@ export interface ResultadoIngestao {
 interface SpaceRow {
   id: string;
   slot_id: string | null;
+  rotulo: string | null;
   space_name: string;
   meeting_uri: string | null;
 }
@@ -162,7 +163,7 @@ export async function ingerir(opts?: {
   // ── contexto que vale para todos os encontros ──
   let q = sb
     .from("formacao_meet_spaces")
-    .select("id, slot_id, space_name, meeting_uri")
+    .select("id, slot_id, rotulo, space_name, meeting_uri")
     .eq("ativo", true);
   if (opts?.spaceName) q = q.eq("space_name", opts.spaceName);
   const { data: spaces, error: errSpaces } = await q;
@@ -426,7 +427,7 @@ export async function ingerir(opts?: {
           conference_record_id: conf.name,
           space_name: space.space_name,
           slot_id: space.slot_id,
-          atividade_nome: slot?.atividade_nome || null,
+          atividade_nome: slot?.atividade_nome || space.rotulo || null,
           condutor_nome: condutorTodos || null,
           data_reuniao: dataLocal(inicio),
           dia_semana: diaSemanaLocal(inicio),
@@ -485,7 +486,7 @@ export async function ingerir(opts?: {
             slot_id: space.slot_id,
             meet_link: space.meeting_uri || space.space_name,
             condutor_nome: condutorPrincipal || "Sem condutor",
-            atividade_nome: slot?.atividade_nome || null,
+            atividade_nome: slot?.atividade_nome || space.rotulo || null,
             data_reuniao: dataLocal(inicio),
             dia_semana: diaSemanaLocal(inicio),
             hora_inicio: inicio.toISOString(),

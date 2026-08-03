@@ -34,6 +34,7 @@ interface SpaceRow {
   space_name: string;
   meeting_code: string | null;
   meeting_uri: string | null;
+  rotulo: string | null;
   gravar: boolean;
   transcrever: boolean;
   notas: boolean;
@@ -156,6 +157,28 @@ export default function MeetAdminPage() {
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
+  const [novaAvulsa, setNovaAvulsa] = useState("");
+
+  async function criarSalaAvulsa() {
+    const nome = novaAvulsa.trim();
+    if (!nome) return;
+    setTrabalhando("avulsa");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ rotulo: nome, gravar: true, transcrever: true, notas: false }),
+      });
+      await lerResposta(r);
+      toast.success(`Sala "${nome}" criada.`);
+      setNovaAvulsa("");
+      await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar sala");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
 
   async function salvarTolerancia() {
     setTrabalhando("tolerancia");
@@ -226,6 +249,7 @@ export default function MeetAdminPage() {
     () => new Map(spaces.filter((s) => s.slot_id).map((s) => [s.slot_id as string, s])),
     [spaces]
   );
+  const avulsas = useMemo(() => spaces.filter((s) => !s.slot_id), [spaces]);
   const excecoesPorSlot = useMemo(() => {
     const m = new Map<string, Excecao[]>();
     for (const e of excecoes) {
@@ -520,6 +544,89 @@ export default function MeetAdminPage() {
             Cada grupo tem uma sala fixa. Transcrição ligada é o que permite medir tempo de
             fala; gravação só é necessária se você quiser o vídeo, e é ela que ocupa o Drive.
           </p>
+
+          {/* ── Sala fora da grade ──
+              Reunião de equipe, evento pontual, conversa com convidado. Mesma
+              captura de quórum, sem precisar existir na grade semanal. */}
+          <Card className="p-4">
+            <p className="text-sm text-cream font-semibold mb-1">Sala avulsa</p>
+            <p className="text-xs text-cream/40 mb-3">
+              Para reuniões que não são grupo da grade. O quórum é capturado igual.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={novaAvulsa}
+                onChange={(e) => setNovaAvulsa(e.target.value)}
+                placeholder="Nome da reunião"
+                className="flex-1 min-w-[180px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+              />
+              <button
+                onClick={criarSalaAvulsa}
+                disabled={!novaAvulsa.trim() || precisaAutorizar || trabalhando === "avulsa"}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                {trabalhando === "avulsa" ? (
+                  <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                ) : (
+                  <Video className="h-3.5 w-3.5" />
+                )}
+                Criar sala
+              </button>
+            </div>
+
+            {avulsas.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
+                {avulsas.map((s) => (
+                  <div key={s.id} className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-[140px]">
+                      <p className="text-xs text-cream">{s.rotulo}</p>
+                      {s.meeting_uri && (
+                        <a
+                          href={s.meeting_uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs"
+                          style={{ color: ROXO }}
+                        >
+                          <Link2 className="h-3 w-3" /> {s.meeting_code}
+                        </a>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      {([
+                        ["transcrever", "Transcrever", Mic],
+                        ["gravar", "Gravar", Video],
+                      ] as const).map(([campo, label, Icone]) => (
+                        <button
+                          key={campo}
+                          onClick={() => alternar(s, campo)}
+                          disabled={trabalhando === s.space_name + campo}
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs disabled:opacity-40"
+                          style={{
+                            background: s[campo] ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
+                            color: s[campo] ? ROXO : "rgba(253,251,247,0.35)",
+                            border: `1px solid ${s[campo] ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
+                          }}
+                        >
+                          <Icone className="h-3 w-3" /> {label}
+                        </button>
+                      ))}
+                      <button
+                        onClick={() => encerrarReuniao(s)}
+                        disabled={trabalhando === s.space_name + "encerrar"}
+                        className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-cream/40 hover:text-red-400 disabled:opacity-40"
+                        style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                      >
+                        <PhoneOff className="h-3 w-3" /> Encerrar
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
 
           {slotsOrdenados.map((slot) => {
             const space = spacePorSlot.get(slot.id);
