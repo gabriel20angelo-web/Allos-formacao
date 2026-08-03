@@ -15,7 +15,13 @@
 // vídeo, e mandar dez de uma vez transforma um erro de configuração numa conta
 // alta antes de alguém perceber.
 
-import { consultarProjeto, criarProjeto, ehCedoDemais, OpusError } from "./opusclip";
+import {
+  baixarTranscricao,
+  consultarProjeto,
+  criarProjeto,
+  ehCedoDemais,
+  OpusError,
+} from "./opusclip";
 import { abrirSessaoUpload, consultarProgresso, enviarAte, tamanhoDoArquivo } from "./youtube";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -302,38 +308,10 @@ export async function processarClipes(
 
   for (const p of (processando || []) as { id: string; external_id: string; titulo: string }[]) {
     try {
-      const { status, clipes } = await consultarProjeto(p.external_id);
-      const pronto = ["completed", "done", "finished", "success"].includes(
-        status.toLowerCase()
-      );
-      if (!pronto || !clipes.length) continue;
-
-      // Reescreve a lista inteira: repetir a consulta não pode duplicar clipe.
-      await sb.from("formacao_clips").delete().eq("job_id", p.id);
-
-      const linhas = clipes.map((c) => ({
-        job_id: p.id,
-        external_id: c.id || null,
-        titulo: c.title || null,
-        url: c.url || c.videoUrl || null,
-        thumbnail_url: c.thumbnailUrl || null,
-        duracao_seg: c.duration ?? null,
-        pontuacao: c.score ?? c.viralScore ?? null,
-      }));
-
-      const { error } = await sb.from("formacao_clips").insert(linhas);
-      if (error) {
-        res.erros.push(`Clipes de ${p.titulo}: ${error.message}`);
-        continue;
-      }
-
-      await sb
-        .from("formacao_clip_jobs")
-        .update({ status: "pronto", concluido_em: new Date().toISOString() })
-        .eq("id", p.id);
-
+      const n = await recolherProjeto(sb, p.id, p.external_id);
+      if (n === null) continue;
       res.concluidos++;
-      res.clipes_novos += linhas.length;
+      res.clipes_novos += n;
     } catch (e) {
       res.erros.push(
         `${p.titulo}: ${e instanceof OpusError ? e.message : String(e)}`
@@ -342,6 +320,67 @@ export async function processarClipes(
   }
 
   return res;
+}
+
+/** Termos que a API usa para dizer que acabou. */
+const TERMINOU = ["complete", "completed", "done", "finished", "success"];
+
+/**
+ * Guarda o que o corte produziu: os clipes e a transcrição do vídeo inteiro.
+ *
+ * Devolve quantos clipes entraram, ou `null` se ainda não terminou. Usado tanto
+ * pelo agendador quanto pelo aviso de conclusão, para que os dois caminhos
+ * gravem exatamente a mesma coisa.
+ */
+export async function recolherProjeto(
+  sb: Sb,
+  jobId: string,
+  externalId: string
+): Promise<number | null> {
+  const { status, clipes, transcricaoUrl } = await consultarProjeto(externalId);
+  if (!TERMINOU.includes(status.toLowerCase())) return null;
+
+  // A transcrição vale por si, mesmo que o corte não tenha rendido clipe
+  // nenhum: é o único jeito de ter texto de um vídeo que nunca passou pelo Meet.
+  if (transcricaoUrl) {
+    const texto = await baixarTranscricao(transcricaoUrl);
+    if (texto) {
+      await sb
+        .from("formacao_clip_jobs")
+        .update({ transcricao_texto: texto, transcricao_em: new Date().toISOString() })
+        .eq("id", jobId);
+    }
+  }
+
+  if (!clipes.length) return null;
+
+  // Reescreve a lista inteira: repetir a consulta não pode duplicar clipe.
+  await sb.from("formacao_clips").delete().eq("job_id", jobId);
+
+  const linhas = clipes.map((c) => ({
+    job_id: jobId,
+    external_id: c.id || null,
+    titulo: c.title || null,
+    descricao: c.description || null,
+    texto: c.text || null,
+    hashtags: c.hashtags?.length ? c.hashtags : null,
+    url: c.uriForExport || c.uriForPreview || null,
+    preview_url: c.uriForPreview || null,
+    thumbnail_url: c.uriForThumbnail || null,
+    duracao_seg: c.durationMs ? Math.round(c.durationMs / 100) / 10 : null,
+    pontuacao: c.score ?? null,
+    trechos: c.timeRanges?.length ? c.timeRanges : null,
+  }));
+
+  const { error } = await sb.from("formacao_clips").insert(linhas);
+  if (error) throw new Error(error.message);
+
+  await sb
+    .from("formacao_clip_jobs")
+    .update({ status: "pronto", concluido_em: new Date().toISOString() })
+    .eq("id", jobId);
+
+  return linhas.length;
 }
 
 /**

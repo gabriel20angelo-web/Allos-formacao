@@ -88,18 +88,31 @@ export interface ProjetoCriado {
 export async function criarProjeto(
   videoUrl: string,
   titulo: string,
-  webhookUrl?: string
+  webhookUrl?: string,
+  customPrompt?: string
 ): Promise<ProjetoCriado> {
   const corpo: Record<string, unknown> = {
     videoUrl,
     uploadedVideoAttr: { title: titulo.slice(0, 120) },
-    importPreference: { sourceLang: "pt" },
+    // `importPref`, não `importPreference`. O nome errado é ignorado em
+    // silêncio: o vídeo voltou com idioma nulo e as sugestões dele vieram em
+    // inglês, apesar de o encontro ser todo em português.
+    importPref: { sourceLang: "pt" },
     curationPref: {
       model: "ClipAnything",
-      // Faixa larga: encontro de formação tem trecho bom de trinta segundos e
-      // de dois minutos, e travar num tamanho só descarta metade do que presta.
-      clipDurations: [[15, 120]],
+      // As quatro faixas que a documentação lista. Todas, porque encontro de
+      // formação rende trecho bom de dezessete segundos e de dois minutos: o
+      // primeiro corte do encontro da Alice provou isso, e travar num tamanho
+      // só descartaria metade do que presta.
+      clipDurations: [
+        [0, 30],
+        [30, 60],
+        [60, 90],
+        [90, 180],
+      ],
       genre: "Auto",
+      // Dirige o que procurar, não como editar. Só existe no ClipAnything.
+      ...(customPrompt ? { customPrompt: customPrompt.slice(0, 2000) } : {}),
     },
   };
 
@@ -134,23 +147,36 @@ export async function criarProjeto(
 export interface ClipeRetornado {
   id?: string;
   title?: string;
-  url?: string;
-  videoUrl?: string;
-  thumbnailUrl?: string;
-  duration?: number;
+  description?: string;
+  /** O que é falado no clipe. Serve de legenda pronta. */
+  text?: string;
+  hashtags?: string[];
+  uriForExport?: string;
+  uriForPreview?: string;
+  uriForThumbnail?: string;
+  durationMs?: number;
   score?: number;
-  viralScore?: number;
+  /** Trechos do vídeo original, em milissegundos. Um clipe pode ser costurado. */
+  timeRanges?: number[][];
+}
+
+export interface EstadoProjeto {
+  status: string;
+  clipes: ClipeRetornado[];
+  /** Transcrição do vídeo inteiro, feita pelo próprio OpusClip. */
+  transcricaoUrl: string | null;
+  transcricaoSrtUrl: string | null;
 }
 
 /**
  * Estado do projeto e clipes prontos.
  *
- * Serve de rede para quando o aviso de conclusão não chega: o agendador
- * pergunta de tempos em tempos em vez de esperar para sempre.
+ * São duas chamadas porque são dois recursos: o projeto diz em que pé está, e
+ * os clipes moram em `exportable-clips`, que é recurso de topo e não
+ * sub-recurso do projeto. Procurá-los dentro do projeto devolve 404 — foi o
+ * que fez 41 clipes prontos parecerem zero por horas.
  */
-export async function consultarProjeto(
-  projetoId: string
-): Promise<{ status: string; clipes: ClipeRetornado[] }> {
+export async function consultarProjeto(projetoId: string): Promise<EstadoProjeto> {
   const resp = await fetch(`${API}/clip-projects/${projetoId}`, {
     headers: { Authorization: `Bearer ${chave()}` },
     cache: "no-store",
@@ -161,17 +187,53 @@ export async function consultarProjeto(
     throw new OpusError(traduzir(resp.status, texto), resp.status, texto.slice(0, 300));
   }
 
-  const json = JSON.parse(texto) as {
+  const projeto = JSON.parse(texto) as {
+    stage?: string;
     status?: string;
-    clips?: ClipeRetornado[];
-    data?: { status?: string; clips?: ClipeRetornado[] };
+    transcriptTxtUrl?: string;
+    transcriptSrtUrl?: string;
   };
 
-  // O formato da resposta não está documentado em detalhe; aceitar as duas
-  // formas evita quebrar por causa de um envelope a mais.
-  const raiz = json.data || json;
+  const status = projeto.stage || projeto.status || "unknown";
+
+  const respClipes = await fetch(
+    `${API}/exportable-clips?q=findByProjectId&projectId=${encodeURIComponent(projetoId)}&pageSize=100`,
+    { headers: { Authorization: `Bearer ${chave()}` }, cache: "no-store" }
+  );
+
+  let clipes: ClipeRetornado[] = [];
+  if (respClipes.ok) {
+    const corpo = JSON.parse(await respClipes.text()) as {
+      list?: ClipeRetornado[];
+      data?: ClipeRetornado[];
+    };
+    clipes = corpo.list || corpo.data || [];
+  } else {
+    console.error("[opusclip] clipes", respClipes.status, (await respClipes.text()).slice(0, 200));
+  }
+
   return {
-    status: raiz.status || "unknown",
-    clipes: raiz.clips || [],
+    status,
+    clipes,
+    transcricaoUrl: projeto.transcriptTxtUrl || null,
+    transcricaoSrtUrl: projeto.transcriptSrtUrl || null,
   };
+}
+
+/**
+ * Baixa a transcrição que o OpusClip fez do vídeo.
+ *
+ * Vale para vídeo que nunca passou pelo Meet: os encontros antigos, que só
+ * existiam como arquivo no Drive, ganham transcrição por terem passado por
+ * aqui. É o único caminho que o sistema tem para transcrever esses.
+ */
+export async function baixarTranscricao(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url, { cache: "no-store" });
+    if (!r.ok) return null;
+    const t = await r.text();
+    return t.trim() || null;
+  } catch {
+    return null;
+  }
 }

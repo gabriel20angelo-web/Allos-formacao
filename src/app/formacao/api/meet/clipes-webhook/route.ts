@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { consultarProjeto } from "@/lib/meet/opusclip";
+import { recolherProjeto } from "@/lib/meet/clipes";
 
 export const dynamic = "force-dynamic";
 
@@ -37,28 +37,12 @@ export async function POST(req: NextRequest) {
 
   // Não confia no conteúdo do aviso: pergunta à API o que ela tem. Assim um
   // payload forjado não vira clipe no banco, porque a resposta vem da fonte.
+  // A gravação é a mesma rotina do agendador, para que os dois caminhos nunca
+  // guardem coisas diferentes.
   try {
-    const { clipes } = await consultarProjeto(projetoId);
-    if (!clipes.length) return NextResponse.json({ ok: true, sem_clipes: true });
-
-    await sb.from("formacao_clips").delete().eq("job_id", job.id);
-    await sb.from("formacao_clips").insert(
-      clipes.map((c) => ({
-        job_id: job.id,
-        external_id: c.id || null,
-        titulo: c.title || null,
-        url: c.url || c.videoUrl || null,
-        thumbnail_url: c.thumbnailUrl || null,
-        duracao_seg: c.duration ?? null,
-        pontuacao: c.score ?? c.viralScore ?? null,
-      }))
-    );
-    await sb
-      .from("formacao_clip_jobs")
-      .update({ status: "pronto", concluido_em: new Date().toISOString() })
-      .eq("id", job.id);
-
-    return NextResponse.json({ ok: true, clipes: clipes.length });
+    const n = await recolherProjeto(sb, job.id, projetoId);
+    if (n === null) return NextResponse.json({ ok: true, sem_clipes: true });
+    return NextResponse.json({ ok: true, clipes: n });
   } catch (e) {
     console.error("[clipes-webhook]", e);
     // Devolve 200 mesmo assim: o agendador recolhe depois, e erro aqui só faria

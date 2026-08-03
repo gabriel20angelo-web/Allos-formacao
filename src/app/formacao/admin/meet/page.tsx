@@ -160,7 +160,11 @@ interface ResultadoBusca {
 interface Clipe {
   id: string;
   titulo: string | null;
+  descricao: string | null;
+  texto: string | null;
+  hashtags: string[] | null;
   url: string | null;
+  preview_url: string | null;
   thumbnail_url: string | null;
   duracao_seg: number | null;
   pontuacao: number | null;
@@ -2015,20 +2019,56 @@ export default function MeetAdminPage() {
                       )}
                     </div>
 
+                    {/* Cada clipe já vem com título, descrição e hashtags
+                        prontos. Esconder isso atrás de um link obrigaria a
+                        abrir um por um para saber qual presta. */}
                     {j.clipes.length > 0 && (
-                      <div className="mt-3 pt-3 border-t border-white/5 flex flex-wrap gap-2">
+                      <div className="mt-3 pt-3 border-t border-white/5 space-y-2">
                         {j.clipes.map((c) => (
-                          <a
-                            key={c.id}
-                            href={c.url || "#"}
-                            target="_blank"
-                            rel="noreferrer"
-                            className="text-xs px-2 py-1 rounded-lg"
-                            style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
-                          >
-                            {c.titulo || "clipe"}
-                            {c.duracao_seg ? ` · ${Math.round(c.duracao_seg)}s` : ""}
-                          </a>
+                          <div key={c.id} className="flex items-start gap-2.5">
+                            {c.thumbnail_url && (
+                              // eslint-disable-next-line @next/next/no-img-element
+                              <img
+                                src={c.thumbnail_url}
+                                alt=""
+                                className="w-12 h-16 object-cover rounded-md shrink-0"
+                                style={{ background: "rgba(255,255,255,0.04)" }}
+                              />
+                            )}
+                            <div className="min-w-0 flex-1">
+                              <a
+                                href={c.url || c.preview_url || "#"}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="text-xs text-cream hover:underline"
+                              >
+                                {c.titulo || "clipe"}
+                              </a>
+                              <p className="text-[11px] text-cream/35 mt-0.5">
+                                {c.duracao_seg ? `${Math.round(c.duracao_seg)}s` : ""}
+                                {c.pontuacao != null ? ` · nota ${Math.round(c.pontuacao)}` : ""}
+                                {c.hashtags?.length ? ` · ${c.hashtags.slice(0, 3).join(" ")}` : ""}
+                              </p>
+                              {c.descricao && (
+                                <p className="text-[11px] text-cream/45 mt-1 line-clamp-2">
+                                  {c.descricao}
+                                </p>
+                              )}
+                            </div>
+                            <button
+                              onClick={() => {
+                                const legenda = [c.titulo, c.descricao, c.hashtags?.join(" ")]
+                                  .filter(Boolean)
+                                  .join("\n\n");
+                                navigator.clipboard.writeText(legenda);
+                                toast.success("Legenda copiada.");
+                              }}
+                              className="text-[11px] px-2 py-1 rounded-lg shrink-0 text-cream/50 border border-white/10"
+                              title="Copia título, descrição e hashtags"
+                            >
+                              copiar
+                            </button>
+                          </div>
                         ))}
                       </div>
                     )}
