@@ -77,6 +77,25 @@ interface ItemFila {
 
 type Aba = "salas" | "nomes" | "diagnostico";
 
+/**
+ * Fetch que nunca explode a tela.
+ *
+ * Rota inexistente devolve a página de erro do Next em HTML, e `.json()` num
+ * HTML estoura com "Unexpected token '<'", derrubando o painel inteiro por
+ * causa de um endpoint só. Acontece de verdade quando se abre uma cópia antiga
+ * do app: as rotas novas ainda não existem lá.
+ */
+async function pegarJson<T>(url: string): Promise<T | null> {
+  try {
+    const r = await fetch(url);
+    const tipo = r.headers.get("content-type") || "";
+    if (!tipo.includes("application/json")) return null;
+    return (await r.json()) as T;
+  } catch {
+    return null;
+  }
+}
+
 export default function MeetAdminPage() {
   const [aba, setAba] = useState<Aba>("salas");
   const [loading, setLoading] = useState(true);
@@ -111,14 +130,16 @@ export default function MeetAdminPage() {
   const carregar = useCallback(async () => {
     const sb = createClient();
     const [st, sl, hr, sp, ex, cfg] = await Promise.all([
-      fetch("/formacao/api/admin/meet/status").then((r) => r.json()),
+      pegarJson<Status & { error?: string }>("/formacao/api/admin/meet/status"),
       sb.from("formacao_slots").select("*").eq("ativo", true),
       sb.from("formacao_horarios").select("*").order("ordem"),
       sb.from("formacao_meet_spaces").select("*"),
       sb.from("formacao_meet_excecoes").select("*").is("revertida_em", null),
-      fetch("/formacao/api/admin/meet/config").then((r) => r.json()),
+      pegarJson<{ tolerancia_atraso_min?: number; error?: string }>(
+        "/formacao/api/admin/meet/config"
+      ),
     ]);
-    setStatus(st?.error ? null : st);
+    setStatus(st && !st.error ? st : null);
     setSlots((sl.data as Slot[]) || []);
     setHorarios((hr.data as Horario[]) || []);
     setSpaces((sp.data as SpaceRow[]) || []);
@@ -128,9 +149,10 @@ export default function MeetAdminPage() {
   }, []);
 
   const carregarFila = useCallback(async () => {
-    const r = await fetch("/formacao/api/admin/meet/aliases");
-    const j = await r.json();
-    if (!j.error) setFila(j.fila || []);
+    const j = await pegarJson<{ fila?: ItemFila[]; error?: string }>(
+      "/formacao/api/admin/meet/aliases"
+    );
+    if (j && !j.error) setFila(j.fila || []);
   }, []);
 
   useEffect(() => {
