@@ -12,6 +12,7 @@ import { createServiceRoleClient } from "@/lib/supabase/server";
 import { arquivarGravacoes } from "@/lib/meet/arquivar";
 import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
 import { publicarProximoVideo } from "@/lib/meet/publicar-video";
+import { conciliarPendentes } from "@/lib/meet/conciliar";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
@@ -69,6 +70,10 @@ export async function GET(req: NextRequest) {
     // batidas, sem estourar o tempo desta requisição.
     const youtube = await publicarProximoVideo(sb);
 
+    // Volta nos nomes que ficaram na fila: aluno novo pode ter se cadastrado
+    // desde a última tentativa, e o que era ambíguo ontem pode não ser mais.
+    const nomes = await conciliarPendentes(sb);
+
     // Sugere, não publica. A aula só existe quando alguém aprovar.
     const aulas = await sugerirAulasDeGravacoes(sb);
 
@@ -82,6 +87,7 @@ export async function GET(req: NextRequest) {
       semana,
       arquivos,
       youtube,
+      nomes,
       aulas,
     });
   } catch (e) {

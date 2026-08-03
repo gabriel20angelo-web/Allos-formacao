@@ -259,10 +259,20 @@ export async function ingerir(opts?: {
           (!!existente?.gravacao_uri && !existente?.gravacao_file_id) ||
           (!!existente?.transcricao_uri && !existente?.transcricao_file_id);
 
-        if (existente?.transcricao_ingerida && !faltaIdentificador) continue;
-
+        // A gravação fica pronta DEPOIS da captura: o Google encerra a
+        // conferência e só então processa o vídeo, o que leva de minutos a
+        // horas. Sem esta janela, o encontro é marcado como concluído na
+        // primeira passada e ninguém volta nele quando o vídeo aparece.
         const inicio = new Date(conf.startTime);
         const fim = new Date(conf.endTime);
+
+        const horasDesdeOFim = (Date.now() - fim.getTime()) / 3_600_000;
+        const gravacaoAindaPodeChegar = !existente?.gravacao_uri && horasDesdeOFim < 48;
+
+        if (existente?.transcricao_ingerida && !faltaIdentificador && !gravacaoAindaPodeChegar) {
+          continue;
+        }
+
         const duracaoMin = Math.max(
           1,
           Math.round((fim.getTime() - inicio.getTime()) / MS_MIN)

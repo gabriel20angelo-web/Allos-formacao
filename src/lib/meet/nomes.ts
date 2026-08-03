@@ -43,28 +43,75 @@ function tokens(nomeNorm: string): string[] {
 }
 
 /**
+ * Distância de edição entre duas palavras.
+ *
+ * Existe para tolerar o que acontece de verdade em nome digitado: letra
+ * trocada, letra faltando, acento que a normalização não pegou. "Gabriel" e
+ * "Gabirel" são a mesma pessoa; comparação exata diria que não.
+ */
+function distancia(a: string, b: string): number {
+  if (a === b) return 0;
+  if (!a.length || !b.length) return Math.max(a.length, b.length);
+
+  // Matriz inteira, e não duas linhas, porque a regra de transposição precisa
+  // olhar duas linhas para trás. Trocar duas letras de lugar ("Gabirel" por
+  // "Gabriel") é o erro de digitação mais comum, e a distância clássica cobra
+  // dois por isso, o que basta para o nome deixar de casar.
+  const m: number[][] = Array.from({ length: a.length + 1 }, (_, i) =>
+    Array.from({ length: b.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+  );
+
+  for (let i = 1; i <= a.length; i++) {
+    for (let j = 1; j <= b.length; j++) {
+      const custo = a[i - 1] === b[j - 1] ? 0 : 1;
+      m[i][j] = Math.min(m[i - 1][j] + 1, m[i][j - 1] + 1, m[i - 1][j - 1] + custo);
+
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        m[i][j] = Math.min(m[i][j], m[i - 2][j - 2] + 1);
+      }
+    }
+  }
+  return m[a.length][b.length];
+}
+
+/** Duas palavras são a mesma, tolerando um erro a cada quatro letras. */
+function mesmaPalavra(a: string, b: string): boolean {
+  if (a === b) return true;
+  if (Math.abs(a.length - b.length) > 2) return false;
+  const limite = Math.max(1, Math.floor(Math.min(a.length, b.length) / 4));
+  return distancia(a, b) <= limite;
+}
+
+/**
  * Grau de parecença entre dois nomes, de 0 a 1.
  *
- * Combina cobertura de tokens com um peso maior para o primeiro nome: quem
- * escreve "Ana" no Meet e "Ana Paula Ferreira" no cadastro é a mesma pessoa
- * com muito mais frequência do que "Paula Ferreira" e "Ana Ferreira".
+ * O caso comum não é nome escrito errado: é nome escrito PELA METADE. A pessoa
+ * se cadastra como "Ana Paula Ferreira Lima" e entra no Meet como "Ana Paula".
+ * Por isso a cobertura é medida sobre o nome mais curto, e não sobre a união.
  */
 export function similaridade(a: string, b: string): number {
   const ta = tokens(a);
   const tb = tokens(b);
   if (!ta.length || !tb.length) return 0;
 
-  const setB = new Set(tb);
-  const comuns = ta.filter((t) => setB.has(t)).length;
-  const cobertura = comuns / Math.min(ta.length, tb.length);
+  const menor = ta.length <= tb.length ? ta : tb;
+  const maior = ta.length <= tb.length ? tb : ta;
 
-  const primeiroIgual = ta[0] === tb[0] ? 0.15 : 0;
+  const comuns = menor.filter((t) => maior.some((m) => mesmaPalavra(t, m))).length;
+  const cobertura = comuns / menor.length;
+
+  const primeiroIgual = mesmaPalavra(ta[0], tb[0]) ? 0.2 : 0;
   const sobrenomeIgual =
-    ta.length > 1 && tb.length > 1 && ta[ta.length - 1] === tb[tb.length - 1]
-      ? 0.1
+    ta.length > 1 && tb.length > 1 && mesmaPalavra(ta[ta.length - 1], tb[tb.length - 1])
+      ? 0.15
       : 0;
 
-  return Math.min(1, cobertura * 0.75 + primeiroIgual + sobrenomeIgual);
+  // Primeiro nome diferente é sinal forte de que são pessoas diferentes, mesmo
+  // com sobrenome igual: irmãos existem, e contaminar dois históricos é pior do
+  // que deixar um nome na fila.
+  const penalidade = !primeiroIgual && menor.length > 1 ? 0.25 : 0;
+
+  return Math.max(0, Math.min(1, cobertura * 0.7 + primeiroIgual + sobrenomeIgual - penalidade));
 }
 
 export interface CandidatoAluno {
@@ -103,10 +150,13 @@ export function sugerirAluno(
 
   const top = notas[0];
   const segundo = notas[1];
-  const automatico =
-    top && top.score >= 0.92 && (!segundo || top.score - segundo.score >= 0.25)
-      ? top.aluno_id
-      : null;
+
+  // Duas condições, e a segunda importa mais que a primeira: além de parecer,
+  // o primeiro colocado precisa estar sozinho na frente. Num universo com
+  // "Ana Paula Silva" e "Ana Paula Souza", o nome "Ana Paula" se parece muito
+  // com as duas, e casar com qualquer uma seria chute travestido de certeza.
+  const folgaSuficiente = !segundo || top.score - segundo.score >= 0.12;
+  const automatico = top && top.score >= 0.78 && folgaSuficiente ? top.aluno_id : null;
 
   return { sugestoes: notas.slice(0, 5), automatico };
 }
