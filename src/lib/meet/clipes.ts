@@ -1,47 +1,215 @@
-// Fila de cortes: envia o que está pendente e recolhe o que ficou pronto.
+// Fila de cortes: leva o vídeo até uma origem que o OpusClip aceita, manda, e
+// recolhe o que ficou pronto.
 //
-// Roda no agendador, junto do resto. Dois lados:
-//   enviar   → pega jobs pendentes e manda para o OpusClip
-//   recolher → pergunta pelos que estão processando e guarda os clipes
+// Roda no agendador, junto do resto. Três etapas, uma por rodada:
+//   subir    → vídeo que mora no Drive vai ao YouTube como não listado
+//   enviar   → manda o endereço para o OpusClip
+//   recolher → pergunta pelos que estão cortando e guarda os clipes
+//
+// A primeira etapa existe porque o OpusClip não lê Google Drive: ele aceita
+// YouTube, Vimeo, Zoom, Rumble, Twitch, Facebook, LinkedIn, Twitter e
+// StreamYard. Vídeo não listado do YouTube funciona, o que foi verificado antes
+// de escrever isto — é o formato em que este sistema publica.
 //
 // Um envio por rodada, de propósito. Cada envio custa dinheiro por minuto de
 // vídeo, e mandar dez de uma vez transforma um erro de configuração numa conta
 // alta antes de alguém perceber.
 
 import { consultarProjeto, criarProjeto, OpusError } from "./opusclip";
+import { abrirSessaoUpload, consultarProgresso, enviarAte, tamanhoDoArquivo } from "./youtube";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
 type Sb = SupabaseClient<any, "public", any>;
 
 const MAX_TENTATIVAS = 3;
+const MAX_TENTATIVAS_YT = 5;
+
+/** Quinze minutos sem tocar no trabalho: quem estava com ele morreu no meio. */
+const LOCK_MIN = 15;
+
+const ORIGENS_ACEITAS =
+  /(youtube\.com|youtu\.be|vimeo\.com|zoom\.us|rumble\.com|twitch\.tv|facebook\.com|fb\.watch|linkedin\.com|twitter\.com|x\.com|streamyard\.com)/i;
+
+/** O identificador do arquivo dentro de um endereço do Drive, nas três formas. */
+export function idDoDrive(url: string): string | null {
+  if (!/drive\.google\.com/i.test(url)) return null;
+  return (
+    url.match(/\/d\/([a-zA-Z0-9_-]{10,})/)?.[1] ||
+    url.match(/[?&]id=([a-zA-Z0-9_-]{10,})/)?.[1] ||
+    null
+  );
+}
 
 export interface ResultadoClipes {
+  subindo?: { titulo: string; pct: number; concluido: boolean };
   enviados: number;
   concluidos: number;
   clipes_novos: number;
   erros: string[];
 }
 
-export async function processarClipes(sb: Sb, baseUrl: string): Promise<ResultadoClipes> {
+interface JobLinha {
+  id: string;
+  titulo: string;
+  video_url: string;
+  video_url_envio: string | null;
+  drive_file_id: string | null;
+  tentativas: number;
+  youtube_upload_url: string | null;
+  youtube_bytes_enviados: number;
+  youtube_bytes_total: number | null;
+  youtube_tentativas: number;
+}
+
+/**
+ * Empurra para o YouTube o vídeo que ainda não tem endereço aceito.
+ *
+ * Devolve `null` quando não havia o que subir. O tempo é orçamento, não meta:
+ * a rodada leva o que couber e a seguinte continua de onde parou.
+ */
+async function subirParaYoutube(
+  sb: Sb,
+  deadline: number
+): Promise<ResultadoClipes["subindo"] | null> {
+  const limite = new Date(Date.now() - LOCK_MIN * 60_000).toISOString();
+
+  const { data: fila } = await sb
+    .from("formacao_clip_jobs")
+    .select(
+      "id, titulo, video_url, video_url_envio, drive_file_id, tentativas, youtube_upload_url, youtube_bytes_enviados, youtube_bytes_total, youtube_tentativas"
+    )
+    .in("status", ["pendente", "subindo"])
+    .is("video_url_envio", null)
+    .not("drive_file_id", "is", null)
+    .lt("youtube_tentativas", MAX_TENTATIVAS_YT)
+    .or(`trabalhando_desde.is.null,trabalhando_desde.lt.${limite}`)
+    .order("created_at", { ascending: true })
+    .limit(1);
+
+  const job = fila?.[0] as JobLinha | undefined;
+  if (!job?.drive_file_id) return null;
+
+  await sb
+    .from("formacao_clip_jobs")
+    .update({ status: "subindo", trabalhando_desde: new Date().toISOString() })
+    .eq("id", job.id);
+
+  try {
+    let uploadUrl = job.youtube_upload_url;
+    let total = job.youtube_bytes_total || 0;
+    let pos = job.youtube_bytes_enviados || 0;
+
+    if (!uploadUrl) {
+      total = await tamanhoDoArquivo(job.drive_file_id);
+      uploadUrl = await abrirSessaoUpload(
+        job.titulo,
+        `${job.titulo}\n\nVídeo não listado: só quem tem o link assiste.`,
+        total
+      );
+      pos = 0;
+      await sb
+        .from("formacao_clip_jobs")
+        .update({
+          youtube_upload_url: uploadUrl,
+          youtube_bytes_total: total,
+          youtube_bytes_enviados: 0,
+        })
+        .eq("id", job.id);
+    } else if (pos === 0) {
+      // Sessão aberta numa rodada que morreu antes de mandar nada: perguntar
+      // onde ele está evita reenviar o que já foi.
+      pos = (await consultarProgresso(uploadUrl, total)).proximoByte;
+    }
+
+    const r = await enviarAte(uploadUrl, job.drive_file_id, pos, total, deadline);
+
+    if (!r.concluido) {
+      await sb
+        .from("formacao_clip_jobs")
+        .update({
+          youtube_bytes_enviados: r.proximoByte,
+          youtube_erro: null,
+          trabalhando_desde: null,
+        })
+        .eq("id", job.id);
+
+      return {
+        titulo: job.titulo,
+        pct: total ? Math.round((r.proximoByte / total) * 100) : 0,
+        concluido: false,
+      };
+    }
+
+    // Pronto no YouTube: agora existe um endereço que o OpusClip lê, e o job
+    // volta para a fila de envio.
+    await sb
+      .from("formacao_clip_jobs")
+      .update({
+        youtube_video_id: r.videoId,
+        video_url_envio: `https://www.youtube.com/watch?v=${r.videoId}`,
+        youtube_bytes_enviados: total,
+        youtube_erro: null,
+        status: "pendente",
+        trabalhando_desde: null,
+      })
+      .eq("id", job.id);
+
+    return { titulo: job.titulo, pct: 100, concluido: true };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    const expirou = msg.includes("expirou");
+    const tentativas = job.youtube_tentativas + 1;
+
+    await sb
+      .from("formacao_clip_jobs")
+      .update({
+        youtube_tentativas: tentativas,
+        youtube_erro: msg.slice(0, 400),
+        status: tentativas >= MAX_TENTATIVAS_YT ? "erro" : "pendente",
+        erro: tentativas >= MAX_TENTATIVAS_YT ? msg.slice(0, 400) : null,
+        trabalhando_desde: null,
+        ...(expirou ? { youtube_upload_url: null, youtube_bytes_enviados: 0 } : {}),
+      })
+      .eq("id", job.id);
+
+    throw new Error(`${job.titulo}: ${msg}`);
+  }
+}
+
+export async function processarClipes(
+  sb: Sb,
+  baseUrl: string,
+  deadline = Date.now() + 200_000
+): Promise<ResultadoClipes> {
   const res: ResultadoClipes = { enviados: 0, concluidos: 0, clipes_novos: 0, erros: [] };
 
   if (!process.env.OPUSCLIP_API_KEY) return res;
 
-  // ── 1. envia um pendente ──
+  // ── 1. leva um vídeo do Drive até o YouTube ──
+  try {
+    const s = await subirParaYoutube(sb, deadline);
+    if (s) res.subindo = s;
+  } catch (e) {
+    res.erros.push(e instanceof Error ? e.message : String(e));
+  }
+
+  // ── 2. manda um que já tem endereço aceito ──
   const { data: pendentes } = await sb
     .from("formacao_clip_jobs")
-    .select("id, titulo, video_url, tentativas")
+    .select("id, titulo, video_url, video_url_envio, tentativas")
     .eq("status", "pendente")
+    .not("video_url_envio", "is", null)
     .lt("tentativas", MAX_TENTATIVAS)
     .order("created_at", { ascending: true })
     .limit(1);
 
   const job = pendentes?.[0];
   if (job) {
+    const endereco: string = job.video_url_envio || job.video_url;
     try {
       const projeto = await criarProjeto(
-        job.video_url,
+        endereco,
         job.titulo,
         `${baseUrl}/formacao/api/meet/clipes-webhook`
       );
@@ -69,7 +237,7 @@ export async function processarClipes(sb: Sb, baseUrl: string): Promise<Resultad
     }
   }
 
-  // ── 2. recolhe os que ficaram prontos ──
+  // ── 3. recolhe os que ficaram prontos ──
   const { data: processando } = await sb
     .from("formacao_clip_jobs")
     .select("id, external_id, titulo")
@@ -124,8 +292,9 @@ export async function processarClipes(sb: Sb, baseUrl: string): Promise<Resultad
 /**
  * Enfileira a gravação de um encontro para corte.
  *
- * Prefere o endereço do YouTube quando ele já existe: é público por link, e o
- * OpusClip lê sem depender de permissão do Drive.
+ * Prefere o endereço do YouTube quando ele já existe: é o formato que o
+ * OpusClip lê. Se só houver o arquivo no Drive, o job guarda o file id e o
+ * agendador cuida de levá-lo ao YouTube antes.
  */
 export async function enfileirarEncontro(
   sb: Sb,
@@ -134,7 +303,9 @@ export async function enfileirarEncontro(
 ): Promise<{ ok: boolean; motivo?: string }> {
   const { data: e } = await sb
     .from("formacao_meet_encontros")
-    .select("id, atividade_nome, data_reuniao, gravacao_uri, youtube_video_id, space_name")
+    .select(
+      "id, atividade_nome, data_reuniao, gravacao_uri, gravacao_file_id, youtube_video_id, space_name"
+    )
     .eq("id", encontroId)
     .maybeSingle();
 
@@ -156,6 +327,9 @@ export async function enfileirarEncontro(
     curso_id: space?.curso_id || null,
     titulo: `${e.atividade_nome || "Encontro"} ${e.data_reuniao}`,
     video_url: url,
+    video_url_envio: ORIGENS_ACEITAS.test(url) ? url : null,
+    drive_file_id: e.gravacao_file_id || idDoDrive(url),
+    youtube_video_id: e.youtube_video_id || null,
     criado_por: criadoPor || null,
   });
 
@@ -171,3 +345,16 @@ export async function enfileirarEncontro(
   }
   return { ok: true };
 }
+
+/** Os dois campos que decidem por onde o vídeo entra na fila. */
+export function rotaDoVideo(url: string): {
+  video_url_envio: string | null;
+  drive_file_id: string | null;
+} {
+  return {
+    video_url_envio: ORIGENS_ACEITAS.test(url) ? url : null,
+    drive_file_id: idDoDrive(url),
+  };
+}
+
+export { ORIGENS_ACEITAS };

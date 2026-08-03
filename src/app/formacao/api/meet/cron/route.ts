@@ -43,6 +43,8 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
+  const inicio = Date.now();
+
   try {
     const sb = await createServiceRoleClient();
 
@@ -69,9 +71,9 @@ export async function GET(req: NextRequest) {
     // falha não pode derrubar a captura de presença, que é o que importa.
     const arquivos = await arquivarGravacoes(sb);
 
-    // Um pedaço de vídeo por rodada. Vídeo grande sobe ao longo de várias
-    // batidas, sem estourar o tempo desta requisição.
-    const youtube = await publicarProximoVideo(sb);
+    // Vídeo grande sobe ao longo de várias batidas: cada rodada empurra o que
+    // couber no prazo e guarda onde parou.
+    const youtube = await publicarProximoVideo(sb, inicio + 150_000);
 
     // Volta nos nomes que ficaram na fila: aluno novo pode ter se cadastrado
     // desde a última tentativa, e o que era ambíguo ontem pode não ser mais.
@@ -80,8 +82,11 @@ export async function GET(req: NextRequest) {
     // Sugere, não publica. A aula só existe quando alguém aprovar.
     const aulas = await sugerirAulasDeGravacoes(sb);
 
-    // Um envio de corte por rodada: cada um é cobrado por minuto de vídeo.
-    const clipes = await processarClipes(sb, "https://allos.org.br");
+    // Por último porque é a etapa que come tempo: vídeo do Drive sobe ao
+    // YouTube aqui dentro, em pedaços, e leva o que sobrou da rodada. Deixar o
+    // prazo explícito é o que garante que a resposta ainda saia dentro do
+    // tempo da requisição.
+    const clipes = await processarClipes(sb, "https://allos.org.br", inicio + 240_000);
 
     return NextResponse.json({
       ok: true,

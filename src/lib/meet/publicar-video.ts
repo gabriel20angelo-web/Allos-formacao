@@ -11,7 +11,7 @@ import { MeetApiError } from "./client";
 import {
   abrirSessaoUpload,
   consultarProgresso,
-  enviarPedaco,
+  enviarAte,
   tamanhoDoArquivo,
 } from "./youtube";
 import type { SupabaseClient } from "@supabase/supabase-js";
@@ -59,7 +59,10 @@ async function calcularInicioEfetivo(
   return Math.max(0, seg - 10);
 }
 
-export async function publicarProximoVideo(sb: Sb): Promise<ResultadoPublicacao> {
+export async function publicarProximoVideo(
+  sb: Sb,
+  deadline = Date.now() + 120_000
+): Promise<ResultadoPublicacao> {
   // Marca os candidatos: gravação pronta, sala que publica, ainda sem vídeo.
   const { data: spaces } = await sb
     .from("formacao_meet_spaces")
@@ -120,7 +123,7 @@ export async function publicarProximoVideo(sb: Sb): Promise<ResultadoPublicacao>
       proximo = estado.proximoByte;
     }
 
-    const r = await enviarPedaco(uploadUrl, e.gravacao_file_id, proximo, total);
+    const r = await enviarAte(uploadUrl, e.gravacao_file_id, proximo, total, deadline);
 
     if (!r.concluido) {
       await sb

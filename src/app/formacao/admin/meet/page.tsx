@@ -169,10 +169,24 @@ interface ClipJob {
   id: string;
   titulo: string;
   video_url: string;
-  status: "pendente" | "processando" | "pronto" | "erro";
+  status: "pendente" | "subindo" | "processando" | "pronto" | "erro";
   erro: string | null;
   created_at: string;
+  youtube_video_id: string | null;
+  youtube_bytes_enviados: number | null;
+  youtube_bytes_total: number | null;
+  youtube_erro: string | null;
   clipes: Clipe[];
+}
+interface AulaParaClipe {
+  id: string;
+  titulo: string;
+  secao: string | null;
+  duracao_min: number | null;
+  passa_pelo_youtube: boolean;
+  ja_enviada: boolean;
+  status: string | null;
+  erro: string | null;
 }
 
 type Aba = "salas" | "encontros" | "aulas" | "clipes" | "nomes" | "diagnostico";
@@ -234,6 +248,9 @@ export default function MeetAdminPage() {
   const [clipJobs, setClipJobs] = useState<ClipJob[]>([]);
   const [clipesConfigurado, setClipesConfigurado] = useState(false);
   const [cursoParaClipes, setCursoParaClipes] = useState("");
+  const [aulasParaClipe, setAulasParaClipe] = useState<AulaParaClipe[]>([]);
+  const [marcadas, setMarcadas] = useState<string[]>([]);
+  const [buscandoAulas, setBuscandoAulas] = useState(false);
   const [falhouEncontros, setFalhouEncontros] = useState(false);
 
   const carregarClipes = useCallback(async () => {
@@ -246,14 +263,35 @@ export default function MeetAdminPage() {
     }
   }, []);
 
-  async function enviarCursoParaClipes() {
-    if (!cursoParaClipes) return;
-    const curso = cursos.find((c) => c.id === cursoParaClipes);
+  // Escolher o curso não manda nada: só mostra o que tem dentro. O envio é
+  // sempre por vídeo marcado, porque é por vídeo que se paga.
+  const carregarAulasDoCurso = useCallback(async (cursoId: string) => {
+    setMarcadas([]);
+    setAulasParaClipe([]);
+    if (!cursoId) return;
+    setBuscandoAulas(true);
+    const j = await pegarJson<{ aulas?: AulaParaClipe[] }>(
+      `/formacao/api/admin/meet/clipes?curso_id=${cursoId}`
+    );
+    setAulasParaClipe(j?.aulas || []);
+    setBuscandoAulas(false);
+  }, []);
+
+  async function enviarMarcadasParaClipes() {
+    if (!marcadas.length) return;
+
+    const escolhidas = aulasParaClipe.filter((a) => marcadas.includes(a.id));
+    const minutos = escolhidas.reduce((s, a) => s + (a.duracao_min || 0), 0);
+    const semDuracao = escolhidas.filter((a) => !a.duracao_min).length;
+
+    const custo = minutos
+      ? `São ${minutos} minutos de vídeo${semDuracao ? ` (mais ${semDuracao} sem duração registrada)` : ""}.`
+      : "A duração desses vídeos não está registrada, então não dá para estimar o custo aqui.";
+
     if (
       !confirm(
-        `Enviar todas as aulas com vídeo de "${curso?.title}" para gerar clipes?\n\n` +
-          `Cada vídeo é cobrado por minuto de duração. Um curso de 8 encontros de 1h30 ` +
-          `custa como 12 horas de processamento.`
+        `Gerar clipes de ${escolhidas.length} ${escolhidas.length === 1 ? "vídeo" : "vídeos"}?\n\n` +
+          `${custo}\n\nA cobrança é por minuto de vídeo original, não por clipe gerado.`
       )
     )
       return;
@@ -263,11 +301,12 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/clipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ curso_id: cursoParaClipes }),
+        body: JSON.stringify({ lesson_ids: marcadas }),
       });
       const j = await lerResposta(r);
       toast.success((j.aviso as string) || "Enviado.");
-      await carregarClipes();
+      setMarcadas([]);
+      await Promise.all([carregarClipes(), carregarAulasDoCurso(cursoParaClipes)]);
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao enviar");
     } finally {
@@ -1784,44 +1823,134 @@ export default function MeetAdminPage() {
             <>
               <Card className="p-4">
                 <p className="text-sm text-cream font-semibold mb-1">
-                  Cortar as aulas de um curso
+                  Escolher vídeos para cortar
                 </p>
                 {/* O custo é por minuto do vídeo original, e é a informação que
                     decide se vale a pena. Fica escrita aqui, não escondida. */}
                 <p className="text-xs text-cream/40 mb-3">
-                  Manda cada aula com vídeo para virar trechos curtos. A cobrança é por minuto de
-                  vídeo original, não por clipe gerado: oito encontros de uma hora e meia custam
-                  como doze horas de processamento. O envio acontece um por vez, a cada rodada.
+                  Escolha o curso e marque os vídeos, um a um. A cobrança é por minuto de vídeo
+                  original, não por clipe gerado. O envio acontece um por vez, a cada rodada.
                 </p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  <select
-                    value={cursoParaClipes}
-                    onChange={(e) => setCursoParaClipes(e.target.value)}
-                    className="flex-1 min-w-[220px] border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
-                    style={{ background: "#1A1A1A", color: "#FDFBF7" }}
-                  >
-                    <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
-                      escolha o curso
+
+                <select
+                  value={cursoParaClipes}
+                  onChange={(e) => {
+                    setCursoParaClipes(e.target.value);
+                    carregarAulasDoCurso(e.target.value);
+                  }}
+                  className="w-full border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
+                  style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                >
+                  <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                    escolha o curso
+                  </option>
+                  {cursos.map((c) => (
+                    <option
+                      key={c.id}
+                      value={c.id}
+                      style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                    >
+                      {c.title}
                     </option>
-                    {cursos.map((c) => (
-                      <option
-                        key={c.id}
-                        value={c.id}
-                        style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                  ))}
+                </select>
+
+                {buscandoAulas && (
+                  <p className="text-xs text-cream/40 mt-3">Procurando os vídeos…</p>
+                )}
+
+                {!buscandoAulas && cursoParaClipes && aulasParaClipe.length === 0 && (
+                  <p className="text-xs text-cream/40 mt-3">
+                    Nenhuma aula deste curso tem vídeo.
+                  </p>
+                )}
+
+                {aulasParaClipe.length > 0 && (
+                  <>
+                    <div className="mt-3 space-y-1 max-h-[320px] overflow-y-auto pr-1">
+                      {aulasParaClipe.map((a) => {
+                        const marcada = marcadas.includes(a.id);
+                        return (
+                          <label
+                            key={a.id}
+                            className={`flex items-start gap-2.5 px-2 py-1.5 rounded-lg text-xs ${
+                              a.ja_enviada ? "opacity-45" : "cursor-pointer hover:bg-white/[0.03]"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={marcada}
+                              disabled={a.ja_enviada}
+                              onChange={() =>
+                                setMarcadas((m) =>
+                                  m.includes(a.id) ? m.filter((x) => x !== a.id) : [...m, a.id]
+                                )
+                              }
+                              className="mt-0.5 accent-[#6C5CE7]"
+                            />
+                            <span className="flex-1 min-w-0">
+                              <span className="text-cream/80">{a.titulo}</span>
+                              <span className="text-cream/30">
+                                {a.duracao_min ? ` · ${a.duracao_min} min` : ""}
+                                {a.secao ? ` · ${a.secao}` : ""}
+                              </span>
+                              {a.ja_enviada && (
+                                <span className="block text-cream/40 mt-0.5">
+                                  já enviado
+                                  {a.status ? ` · ${a.status}` : ""}
+                                </span>
+                              )}
+                              {!a.ja_enviada && a.passa_pelo_youtube && (
+                                <span className="block text-cream/30 mt-0.5">
+                                  vai ao YouTube como não listado antes de cortar
+                                </span>
+                              )}
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+
+                    <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-white/5">
+                      <button
+                        onClick={() => {
+                          const livres = aulasParaClipe.filter((a) => !a.ja_enviada).map((a) => a.id);
+                          setMarcadas(marcadas.length === livres.length ? [] : livres);
+                        }}
+                        className="px-2.5 py-1 rounded-lg text-xs text-cream/50 border border-white/10"
                       >
-                        {c.title}
-                      </option>
-                    ))}
-                  </select>
-                  <button
-                    onClick={enviarCursoParaClipes}
-                    disabled={!cursoParaClipes || trabalhando === "clipes"}
-                    className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
-                    style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
-                  >
-                    {trabalhando === "clipes" ? "Enviando" : "Gerar clipes"}
-                  </button>
-                </div>
+                        {marcadas.length === aulasParaClipe.filter((a) => !a.ja_enviada).length &&
+                        marcadas.length > 0
+                          ? "desmarcar todos"
+                          : "marcar todos"}
+                      </button>
+                      <button
+                        onClick={enviarMarcadasParaClipes}
+                        disabled={!marcadas.length || trabalhando === "clipes"}
+                        className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                        style={{
+                          background: "rgba(108,92,231,0.12)",
+                          color: ROXO,
+                          border: "1px solid rgba(108,92,231,0.3)",
+                        }}
+                      >
+                        {trabalhando === "clipes"
+                          ? "Enviando"
+                          : marcadas.length
+                            ? `Gerar clipes de ${marcadas.length}`
+                            : "Gerar clipes"}
+                      </button>
+                      {marcadas.length > 0 && (
+                        <span className="text-xs text-cream/40">
+                          {aulasParaClipe
+                            .filter((a) => marcadas.includes(a.id))
+                            .reduce((s, a) => s + (a.duracao_min || 0), 0) || "?"}{" "}
+                          minutos de vídeo
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
               </Card>
 
               {clipJobs.length === 0 ? (
@@ -1832,17 +1961,51 @@ export default function MeetAdminPage() {
                 clipJobs.map((j) => (
                   <Card key={j.id} className="p-4">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
-                      <div className="min-w-[200px]">
+                      <div className="min-w-[200px] flex-1">
                         <p className="text-sm text-cream">{j.titulo}</p>
                         <p className="text-xs text-cream/40 mt-0.5">
                           {j.status === "pendente" && "na fila"}
+                          {j.status === "subindo" && "subindo para o YouTube"}
                           {j.status === "processando" && "cortando"}
                           {j.status === "pronto" && `${j.clipes.length} clipes`}
                           {j.status === "erro" && (
-                            <span className="text-amber-400/80">{j.erro || "falhou"}</span>
+                            <span className="text-amber-400/80">
+                              {j.erro || j.youtube_erro || "falhou"}
+                            </span>
                           )}
                         </p>
+
+                        {/* Envio de centenas de megabytes leva várias rodadas.
+                            Sem a barra, o estado "subindo" parece travado. */}
+                        {j.status === "subindo" && !!j.youtube_bytes_total && (
+                          <div className="mt-2">
+                            <div className="h-1 rounded-full bg-white/5 overflow-hidden">
+                              <div
+                                className="h-full rounded-full"
+                                style={{
+                                  width: `${Math.round(((j.youtube_bytes_enviados || 0) / j.youtube_bytes_total) * 100)}%`,
+                                  background: ROXO,
+                                }}
+                              />
+                            </div>
+                            <p className="text-xs text-cream/30 mt-1">
+                              {Math.round(((j.youtube_bytes_enviados || 0) / j.youtube_bytes_total) * 100)}
+                              % de {Math.round(j.youtube_bytes_total / 1_048_576)} MB
+                            </p>
+                          </div>
+                        )}
                       </div>
+
+                      {j.youtube_video_id && (
+                        <a
+                          href={`https://www.youtube.com/watch?v=${j.youtube_video_id}`}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="text-xs text-cream/40 underline decoration-white/20 shrink-0"
+                        >
+                          ver no YouTube
+                        </a>
+                      )}
                     </div>
 
                     {j.clipes.length > 0 && (

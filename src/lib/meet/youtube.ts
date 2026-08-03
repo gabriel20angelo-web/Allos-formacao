@@ -197,6 +197,41 @@ export async function enviarPedaco(
   );
 }
 
+/**
+ * Manda pedaço atrás de pedaço até acabar o vídeo ou o tempo.
+ *
+ * Um pedaço por rodada não serve para arquivo grande: 900 MB em fatias de 8 MB
+ * são 113 rodadas, e a cada quinze minutos isso é mais de um dia por vídeo. Com
+ * o laço aqui dentro, cada rodada empurra o quanto couber no tempo que sobrou.
+ *
+ * `deadline` é instante absoluto, não duração: quem chama já gastou parte do
+ * tempo da requisição, e só ele sabe quanto.
+ */
+export async function enviarAte(
+  uploadUrl: string,
+  driveFileId: string,
+  inicio: number,
+  total: number,
+  deadline: number
+): Promise<ResultadoPedaco> {
+  let pos = inicio;
+
+  while (pos < total) {
+    // Margem para gravar o progresso e devolver a resposta antes do corte.
+    if (Date.now() > deadline - 15_000) break;
+
+    const r = await enviarPedaco(uploadUrl, driveFileId, pos, total);
+    if (r.concluido) return r;
+
+    // Sem avanço é sinal de problema do outro lado. Parar e tentar na rodada
+    // seguinte é melhor que girar aqui até o tempo acabar.
+    if (r.proximoByte <= pos) break;
+    pos = r.proximoByte;
+  }
+
+  return { concluido: false, proximoByte: pos };
+}
+
 /** Onde o YouTube parou, quando não sabemos (retomada após falha). */
 export async function consultarProgresso(
   uploadUrl: string,
