@@ -15,6 +15,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -29,7 +30,7 @@ async function identificar() {
 
   const { data: perfil } = await client
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
 
@@ -40,7 +41,9 @@ async function identificar() {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  return { userId: user.id, ehAdmin: perfil?.role === "admin", condutorId: ficha?.id || null };
+  // Cargo, não papel principal: o administrador que também conduz carrega
+  // "admin" na lista de extras, e sem isso perderia a lista completa de cursos.
+  return { userId: user.id, ehAdmin: temCargo(perfil, "admin"), condutorId: ficha?.id || null };
 }
 
 /** Os cursos vinculados às salas desta pessoa. Admin sem ficha vê todos. */

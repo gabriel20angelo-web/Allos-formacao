@@ -2,89 +2,42 @@
 
 // A área de quem conduz.
 //
-// O condutor entra no painel e chega aqui, e daqui não sai — o middleware
-// prende. O que ele vê é o próprio grupo: os ajustes do encontro da semana e o
-// que saiu dos encontros passados.
+// A página tinha tudo numa coluna só, e o que a pessoa vem fazer toda semana —
+// avaliar os cortes — estava no fundo dela, atrás de dois acordeões. Os
+// interruptores da sala, que se mexem uma vez por semestre, ficavam no topo.
 //
-// A ordem da tela responde à pergunta que ele tem quando abre: primeiro "o que
-// acontece no meu encontro" (gravar, transcrever, porta aberta), depois "o que
-// saiu dos encontros" (o vídeo e os cortes). Configuração é raro; curadoria é
-// toda semana.
+// Agora são três abas, e a ordem responde à pergunta de quem abre: o que
+// acontece no meu encontro, o que saiu dele, e o combinado. A aba dos cortes
+// carrega o contador, porque é ela que costuma ter trabalho esperando.
+//
+// Aqui ficaram só os dados e o que muda o servidor. Cada aba é um arquivo.
 
 import { useCallback, useEffect, useState } from "react";
 import { useAuth } from "@/hooks/useAuth";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import ComoFunciona from "./ComoFunciona";
-import CortesDosCursos from "./CortesDosCursos";
+import AbaEncontro from "./AbaEncontro";
+import AbaCortes from "./AbaCortes";
+import Player from "./Player";
 import { toast } from "sonner";
-import {
-  Clock3,
-  DoorClosed,
-  DoorOpen,
-  Download,
-  Link2,
-  Mic,
-  Play,
-  ThumbsDown,
-  ThumbsUp,
-  Video,
-  FileText,
-  PhoneOff,
-  Youtube,
-  X,
-} from "lucide-react";
+import { BookOpen, Scissors, Video } from "lucide-react";
+import type { ClipeC, SalaC } from "./tipos";
 
-const ROXO = "#6C5CE7";
-const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
+type Aba = "encontro" | "cortes" | "combinado";
 
-interface ClipeC {
-  id: string;
-  titulo: string | null;
-  descricao: string | null;
-  hashtags: string[] | null;
-  url: string | null;
-  preview_url: string | null;
-  thumbnail_url: string | null;
-  duracao_seg: number | null;
-  pontuacao: number | null;
-  avaliacao: "gostei" | "rejeitado" | null;
-  anotacao: string | null;
-}
-interface EncontroC {
-  id: string;
-  data_reuniao: string;
-  inicio: string;
-  duracao_min: number | null;
-  total_participantes: number | null;
-  youtube_video_id: string | null;
-  gravacao_uri: string | null;
-  clipes: ClipeC[];
-}
-interface SalaC {
-  space_name: string;
-  rotulo: string | null;
-  meeting_uri: string | null;
-  meeting_code: string | null;
-  gravar: boolean;
-  transcrever: boolean;
-  notas: boolean;
-  access_type: string;
-  janela_automatica: boolean;
-  duracao_min: number | null;
-  dia_semana: number | null;
-  hora: string | null;
-  atividade_nome: string | null;
-  encontros: EncontroC[];
-}
+const ABAS: { id: Aba; rotulo: string; icone: typeof Video }[] = [
+  { id: "encontro", rotulo: "Meu encontro", icone: Video },
+  { id: "cortes", rotulo: "Cortes", icone: Scissors },
+  { id: "combinado", rotulo: "Como funciona", icone: BookOpen },
+];
 
 export default function MeuGrupoPage() {
   const { profile, loading: carregandoPerfil } = useAuth();
   const [salas, setSalas] = useState<SalaC[]>([]);
   const [carregando, setCarregando] = useState(true);
   const [erro, setErro] = useState<string | null>(null);
-  const [salaAberta, setSalaAberta] = useState<string | null>(null);
-  const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
+  const [aba, setAba] = useState<Aba>("encontro");
   const [assistindo, setAssistindo] = useState<ClipeC | null>(null);
   const [anotacao, setAnotacao] = useState("");
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
@@ -100,7 +53,6 @@ export default function MeuGrupoPage() {
       if (!r.ok) throw new Error(j.error || "Não consegui carregar.");
       setSalas(j.salas || []);
       setErro(j.aviso || null);
-      if (j.salas?.length === 1) setSalaAberta(j.salas[0].space_name);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "Não consegui carregar.");
     } finally {
@@ -207,6 +159,11 @@ export default function MeuGrupoPage() {
     }
   }
 
+  function assistir(c: ClipeC) {
+    setAnotacao(c.anotacao || "");
+    setAssistindo(c);
+  }
+
   if (carregandoPerfil || carregando) {
     return (
       <div className="space-y-3">
@@ -215,6 +172,11 @@ export default function MeuGrupoPage() {
       </div>
     );
   }
+
+  const porVer = salas.reduce(
+    (n, s) => n + s.encontros.reduce((m, e) => m + e.clipes.filter((c) => !c.avaliacao).length, 0),
+    0
+  );
 
   return (
     <div className="space-y-4">
@@ -226,7 +188,40 @@ export default function MeuGrupoPage() {
         </p>
       </div>
 
-      <ComoFunciona />
+      {/* As abas. O contador fica no que costuma ter trabalho esperando — sem
+          ele, a fila de cortes só é descoberta por quem for procurar. */}
+      <div className="flex items-center gap-1.5 flex-wrap">
+        {ABAS.map(({ id, rotulo, icone: Icone }) => {
+          const ativa = aba === id;
+          return (
+            <button
+              key={id}
+              onClick={() => setAba(id)}
+              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+              style={{
+                background: ativa ? "rgba(200,75,49,0.14)" : "rgba(255,255,255,0.03)",
+                color: ativa ? "#E8836A" : "rgba(253,251,247,0.45)",
+                border: `1px solid ${ativa ? "rgba(200,75,49,0.32)" : "rgba(255,255,255,0.07)"}`,
+              }}
+            >
+              <Icone className="h-3.5 w-3.5" />
+              {rotulo}
+              {id === "cortes" && porVer > 0 && (
+                <span
+                  className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                  style={{
+                    background: ativa ? "rgba(255,255,255,0.16)" : "rgba(212,168,87,0.14)",
+                    color: ativa ? "#FDFBF7" : "#D4A857",
+                  }}
+                  aria-label={`${porVer} cortes por avaliar`}
+                >
+                  {porVer}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
       {erro && (
         <Card className="p-4 border border-amber-400/30">
@@ -234,388 +229,31 @@ export default function MeuGrupoPage() {
         </Card>
       )}
 
-      {salas.map((sala) => {
-        const aberta = salaAberta === sala.space_name;
-        const ocupado = trabalhando === sala.space_name;
+      {aba === "encontro" && (
+        <AbaEncontro
+          salas={salas}
+          trabalhando={trabalhando}
+          aoMudarSala={mudarSala}
+          aoEncerrar={encerrarReuniao}
+          aoVerCortes={() => setAba("cortes")}
+        />
+      )}
 
-        return (
-          <Card key={sala.space_name} className="p-4">
-            <button
-              onClick={() => setSalaAberta(aberta ? null : sala.space_name)}
-              className="w-full text-left"
-            >
-              <p className="text-sm text-cream font-semibold">
-                {sala.dia_semana !== null ? DIAS[sala.dia_semana] : sala.rotulo}
-                {sala.hora ? ` · ${sala.hora}` : ""}
-              </p>
-              <p className="text-xs text-cream/50 mt-0.5">
-                {sala.atividade_nome || sala.rotulo || "Sem atividade definida"}
-              </p>
-            </button>
+      {aba === "cortes" && (
+        <AbaCortes salas={salas} aoAssistir={assistir} aoAvaliar={avaliar} />
+      )}
 
-            {sala.meeting_uri && (
-              <a
-                href={sala.meeting_uri}
-                target="_blank"
-                rel="noreferrer"
-                className="inline-flex items-center gap-1 text-xs mt-2"
-                style={{ color: ROXO }}
-              >
-                <Link2 className="h-3 w-3" /> {sala.meeting_code}
-              </a>
-            )}
-
-            {aberta && (
-              <>
-                {/* O que ele pode mexer. O que decide onde o material vai parar
-                    (YouTube, curso, pasta) não está aqui de propósito. */}
-                <div className="flex items-center gap-2 flex-wrap mt-3 pt-3 border-t border-white/5">
-                  {(
-                    [
-                      ["gravar", "Gravar", Video],
-                      ["transcrever", "Transcrever", Mic],
-                      ["notas", "Notas de IA", FileText],
-                    ] as const
-                  ).map(([campo, rotulo, Icone]) => {
-                    const ligado = sala[campo];
-                    return (
-                      <button
-                        key={campo}
-                        onClick={() => mudarSala(sala, { [campo]: !ligado })}
-                        disabled={ocupado}
-                        className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
-                        style={{
-                          background: ligado ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
-                          color: ligado ? ROXO : "rgba(253,251,247,0.35)",
-                          border: `1px solid ${ligado ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
-                        }}
-                      >
-                        <Icone className="h-3 w-3" /> {rotulo}
-                      </button>
-                    );
-                  })}
-
-                  <button
-                    onClick={() =>
-                      mudarSala(sala, {
-                        access_type: sala.access_type === "OPEN" ? "TRUSTED" : "OPEN",
-                      })
-                    }
-                    disabled={ocupado}
-                    title="Aberta deixa entrar sem bater à porta. Fechada exige que você aceite cada pessoa."
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
-                    style={{
-                      background:
-                        sala.access_type === "OPEN"
-                          ? "rgba(74,222,128,0.12)"
-                          : "rgba(255,255,255,0.03)",
-                      color: sala.access_type === "OPEN" ? "#4ADE80" : "rgba(253,251,247,0.35)",
-                      border: "1px solid rgba(255,255,255,0.06)",
-                    }}
-                  >
-                    {sala.access_type === "OPEN" ? (
-                      <DoorOpen className="h-3 w-3" />
-                    ) : (
-                      <DoorClosed className="h-3 w-3" />
-                    )}
-                    {sala.access_type === "OPEN" ? "Aberta" : "Fechada"}
-                    {sala.janela_automatica ? " no horário" : ""}
-                  </button>
-
-                  {!sala.janela_automatica && (
-                    <button
-                      onClick={() => mudarSala(sala, { janela_automatica: true })}
-                      disabled={ocupado}
-                      className="px-2.5 py-1.5 rounded-lg text-xs text-cream/40 border border-white/10"
-                    >
-                      voltar ao horário
-                    </button>
-                  )}
-
-                  {/* Encerrar derruba todo mundo de dentro, então pergunta
-                      antes e fica separado dos interruptores, que são
-                      reversíveis. */}
-                  <button
-                    onClick={() => encerrarReuniao(sala)}
-                    disabled={ocupado}
-                    title="Encerra a reunião em andamento para todos, sem precisar entrar nela."
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
-                    style={{
-                      background: "rgba(255,77,77,0.08)",
-                      color: "#FF6B6B",
-                      border: "1px solid rgba(255,77,77,0.22)",
-                    }}
-                  >
-                    <PhoneOff className="h-3 w-3" /> Encerrar
-                  </button>
-
-                  <span className="flex items-center gap-1 text-xs text-cream/30 ml-auto">
-                    <Clock3 className="h-3 w-3" />
-                    {sala.duracao_min ? `${sala.duracao_min} min` : "duração padrão"}
-                  </span>
-                </div>
-
-                {/* Encontros e o que saiu deles */}
-                <div className="mt-4 space-y-2">
-                  {sala.encontros.length === 0 && (
-                    <p className="text-xs text-cream/30">Nenhum encontro capturado ainda.</p>
-                  )}
-
-                  {sala.encontros.map((e) => {
-                    const abertoE = encontroAberto === e.id;
-                    const porVer = e.clipes.filter((c) => !c.avaliacao).length;
-
-                    return (
-                      <div
-                        key={e.id}
-                        className="rounded-xl p-3"
-                        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
-                      >
-                        <button
-                          onClick={() => setEncontroAberto(abertoE ? null : e.id)}
-                          className="w-full text-left flex items-center justify-between gap-2 flex-wrap"
-                        >
-                          <span className="text-xs text-cream/80">
-                            {new Date(e.inicio).toLocaleDateString("pt-BR", {
-                              day: "2-digit",
-                              month: "long",
-                            })}
-                            <span className="text-cream/35">
-                              {e.total_participantes ? ` · ${e.total_participantes} presentes` : ""}
-                              {e.duracao_min ? ` · ${e.duracao_min} min` : ""}
-                            </span>
-                          </span>
-                          <span className="text-[11px] text-cream/35">
-                            {e.clipes.length
-                              ? `${e.clipes.length} cortes${porVer ? ` · ${porVer} por ver` : ""}`
-                              : "sem cortes"}
-                          </span>
-                        </button>
-
-                        {abertoE && (
-                          <div className="mt-3">
-                            {e.youtube_video_id && (
-                              <a
-                                href={`https://www.youtube.com/watch?v=${e.youtube_video_id}`}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="inline-flex items-center gap-1 text-xs mb-3"
-                                style={{ color: "#FF4D4D" }}
-                              >
-                                <Youtube className="h-3.5 w-3.5" /> ver o encontro inteiro
-                              </a>
-                            )}
-
-                            {e.clipes.length > 0 && (
-                              <>
-                                <p className="text-[11px] text-cream/35 mb-2 leading-relaxed">
-                                  Ouça antes de aprovar: o que decide é o que está sendo dito, não
-                                  a imagem. Repare se o corte não começa no meio de uma ressalva
-                                  nem termina antes dela. O mesmo corte serve em pé e deitado,
-                                  então o formato não é motivo para reprovar.
-                                </p>
-
-                                <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
-                                  {e.clipes.map((c) => (
-                                    <div
-                                      key={c.id}
-                                      className="rounded-lg overflow-hidden"
-                                      style={{
-                                        border: `1px solid ${c.avaliacao === "gostei" ? "rgba(74,222,128,0.35)" : "rgba(255,255,255,0.06)"}`,
-                                        opacity: c.avaliacao === "rejeitado" ? 0.4 : 1,
-                                      }}
-                                    >
-                                      <button
-                                        onClick={() => {
-                                          setAnotacao(c.anotacao || "");
-                                          setAssistindo(c);
-                                        }}
-                                        className="relative block w-full group"
-                                        style={{ aspectRatio: "9/16", background: "rgba(0,0,0,0.3)" }}
-                                      >
-                                        {c.thumbnail_url && (
-                                          // eslint-disable-next-line @next/next/no-img-element
-                                          <img
-                                            src={c.thumbnail_url}
-                                            alt=""
-                                            className="w-full h-full object-cover"
-                                            loading="lazy"
-                                          />
-                                        )}
-                                        <span
-                                          className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                          style={{ background: "rgba(0,0,0,0.45)" }}
-                                        >
-                                          <Play className="h-7 w-7 text-white" fill="white" />
-                                        </span>
-                                        {c.duracao_seg && (
-                                          <span
-                                            className="absolute bottom-1 right-1 px-1 rounded text-[10px] text-white"
-                                            style={{ background: "rgba(0,0,0,0.65)" }}
-                                          >
-                                            {Math.round(c.duracao_seg)}s
-                                          </span>
-                                        )}
-                                      </button>
-                                      <p className="text-[10px] text-cream/70 px-1.5 pt-1.5 line-clamp-2">
-                                        {c.titulo}
-                                      </p>
-                                      <div className="flex items-center gap-1 p-1.5">
-                                        <button
-                                          onClick={() => avaliar(c, "gostei")}
-                                          className="p-1 rounded"
-                                          style={{
-                                            background:
-                                              c.avaliacao === "gostei"
-                                                ? "rgba(74,222,128,0.15)"
-                                                : "transparent",
-                                            color:
-                                              c.avaliacao === "gostei"
-                                                ? "#4ADE80"
-                                                : "rgba(253,251,247,0.3)",
-                                          }}
-                                        >
-                                          <ThumbsUp className="h-3 w-3" />
-                                        </button>
-                                        <button
-                                          onClick={() => avaliar(c, "rejeitado")}
-                                          className="p-1 rounded"
-                                          style={{
-                                            background:
-                                              c.avaliacao === "rejeitado"
-                                                ? "rgba(245,158,11,0.15)"
-                                                : "transparent",
-                                            color:
-                                              c.avaliacao === "rejeitado"
-                                                ? "#F59E0B"
-                                                : "rgba(253,251,247,0.3)",
-                                          }}
-                                        >
-                                          <ThumbsDown className="h-3 w-3" />
-                                        </button>
-                                        <a
-                                          href={c.url || c.preview_url || "#"}
-                                          download
-                                          target="_blank"
-                                          rel="noreferrer"
-                                          title="Baixar"
-                                          className="p-1 rounded text-cream/30 ml-auto"
-                                        >
-                                          <Download className="h-3 w-3" />
-                                        </a>
-                                      </div>
-                                    </div>
-                                  ))}
-                                </div>
-                              </>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
-                </div>
-              </>
-            )}
-          </Card>
-        );
-      })}
-
-      {/* Os cortes que vieram das aulas gravadas. Ficam depois dos encontros
-          porque o encontro da semana e o que a pessoa vem ver; o acervo e
-          trabalho de quando sobra tempo. */}
-      <CortesDosCursos
-        aoAssistir={(c) => {
-          setAnotacao(c.anotacao || "");
-          setAssistindo(c);
-        }}
-        aoAvaliar={avaliar}
-      />
+      {aba === "combinado" && <ComoFunciona inicialmenteAberto />}
 
       {assistindo && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center p-4"
-          style={{ background: "rgba(0,0,0,0.8)" }}
-          onClick={() => {
-            salvarAnotacao(assistindo);
-            setAssistindo(null);
-          }}
-        >
-          <div
-            className="rounded-2xl overflow-hidden max-w-[min(420px,90vw)] w-full"
-            style={{ background: "#111" }}
-            onClick={(ev) => ev.stopPropagation()}
-          >
-            <video
-              src={assistindo.preview_url || assistindo.url || undefined}
-              poster={assistindo.thumbnail_url || undefined}
-              controls
-              autoPlay
-              className="w-full"
-              style={{ aspectRatio: "9/16", background: "#000" }}
-            />
-            <div className="p-3">
-              <p className="text-sm text-cream">{assistindo.titulo}</p>
-              {assistindo.descricao && (
-                <p className="text-xs text-cream/45 mt-1">{assistindo.descricao}</p>
-              )}
-
-              <textarea
-                value={anotacao}
-                onChange={(ev) => setAnotacao(ev.target.value)}
-                onBlur={() => salvarAnotacao(assistindo)}
-                placeholder="Por que presta, ou por que não. Ex: cortou no meio da ressalva."
-                rows={2}
-                className="w-full mt-3 px-2.5 py-2 rounded-lg text-xs resize-none"
-                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#FDFBF7" }}
-              />
-
-              <div className="flex items-center gap-2 mt-3">
-                <button
-                  onClick={() => {
-                    salvarAnotacao(assistindo);
-                    avaliar(assistindo, "gostei");
-                    setAssistindo(null);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
-                  style={{ background: "rgba(74,222,128,0.12)", color: "#4ADE80", border: "1px solid rgba(74,222,128,0.3)" }}
-                >
-                  <ThumbsUp className="h-3.5 w-3.5" /> Publicável
-                </button>
-                <button
-                  onClick={() => {
-                    salvarAnotacao(assistindo);
-                    avaliar(assistindo, "rejeitado");
-                    setAssistindo(null);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
-                  style={{ background: "rgba(255,255,255,0.04)", color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
-                >
-                  <ThumbsDown className="h-3.5 w-3.5" /> Não publicar
-                </button>
-                <a
-                  href={assistindo.url || assistindo.preview_url || "#"}
-                  download
-                  target="_blank"
-                  rel="noreferrer"
-                  className="p-1.5 rounded-lg text-cream/40"
-                  title="Baixar"
-                >
-                  <Download className="h-4 w-4" />
-                </a>
-                <button
-                  onClick={() => {
-                    salvarAnotacao(assistindo);
-                    setAssistindo(null);
-                  }}
-                  className="ml-auto p-1.5 rounded-lg text-cream/40"
-                >
-                  <X className="h-4 w-4" />
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <Player
+          clipe={assistindo}
+          anotacao={anotacao}
+          aoMudarAnotacao={setAnotacao}
+          aoSalvarAnotacao={salvarAnotacao}
+          aoAvaliar={avaliar}
+          aoFechar={() => setAssistindo(null)}
+        />
       )}
     </div>
   );

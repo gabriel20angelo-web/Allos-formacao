@@ -25,22 +25,36 @@ export interface ClipeC {
   anotacao: string | null;
 }
 
+/**
+ * O combinado da curadoria.
+ *
+ * Separado da grade porque a fila de cortes mostra vários encontros seguidos, e
+ * repetir o mesmo parágrafo entre cada um deles ensina a pular o parágrafo.
+ */
+export function AvisoDeCuradoria() {
+  return (
+    <p className="text-[11px] text-cream/35 mb-2 leading-relaxed">
+      Ouça antes de aprovar: o que decide é o que está sendo dito, não a imagem. Repare se o corte
+      não começa no meio de uma ressalva nem termina antes dela. O mesmo corte serve em pé e
+      deitado, então o formato não é motivo para reprovar.
+    </p>
+  );
+}
+
 export default function ClipeGrade({
   clipes,
   aoAssistir,
   aoAvaliar,
+  mostrarAviso = true,
 }: {
   clipes: ClipeC[];
   aoAssistir: (c: ClipeC) => void;
   aoAvaliar: (c: ClipeC, v: "gostei" | "rejeitado") => void;
+  mostrarAviso?: boolean;
 }) {
   return (
     <>
-      <p className="text-[11px] text-cream/35 mb-2 leading-relaxed">
-        Ouça antes de aprovar: o que decide é o que está sendo dito, não a imagem. Repare se o
-        corte não começa no meio de uma ressalva nem termina antes dela. O mesmo corte serve em pé
-        e deitado, então o formato não é motivo para reprovar.
-      </p>
+      {mostrarAviso && <AvisoDeCuradoria />}
 
       <div className="grid gap-2 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
         {clipes.map((c) => (

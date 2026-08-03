@@ -27,8 +27,14 @@ allos.org.br/processoseletivopsi
 🔗 Conheça outros grupos da Associação Allos:
 https://chat.whatsapp.com/KP2z0vFRaSVBSXRjIyvR3R`;
 
-export default function ComoFunciona() {
-  const [aberto, setAberto] = useState(false);
+export default function ComoFunciona({
+  // Fechado quando divide a tela com o trabalho, aberto quando é a tela
+  // inteira: numa aba própria, exigir mais um clique para ler é gratuito.
+  inicialmenteAberto = false,
+}: {
+  inicialmenteAberto?: boolean;
+}) {
+  const [aberto, setAberto] = useState(inicialmenteAberto);
 
   return (
     <Card className="p-4">

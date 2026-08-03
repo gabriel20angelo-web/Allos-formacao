@@ -13,6 +13,7 @@ import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
 import { Search, Shield, AlertTriangle, Plus, UserPlus, BookOpen, Check, CalendarDays } from "lucide-react";
+import { NOME_DO_CARGO } from "@/lib/cargos";
 import type { Profile, UserRole } from "@/types";
 
 const CategoriasPage = dynamic(() => import("@/app/formacao/admin/categorias/page"), { ssr: false });
@@ -27,6 +28,32 @@ const roleLabels: Record<string, string> = {
   condutor: "Condutor",
   student: "Aluno",
 };
+
+/**
+ * Os cargos extras, ao lado do Badge do papel principal.
+ *
+ * Sem eles a lista mente por omissão: quem acumula cargo aparece igual a quem
+ * faz uma coisa só, e a única forma de descobrir era abrir o modal de cada
+ * pessoa. Ficam apagados de propósito — a permissão principal continua sendo o
+ * que se lê primeiro.
+ */
+function CargosExtras({ cargos }: { cargos?: UserRole[] | null }) {
+  if (!cargos?.length) return null;
+  return (
+    <>
+      {cargos.map((cargo) => (
+        <span
+          key={cargo}
+          title="Cargo adicional"
+          className="inline-flex items-center px-2 py-0.5 rounded-pill font-dm text-[10px] text-cream/40 whitespace-nowrap"
+          style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+        >
+          + {NOME_DO_CARGO[cargo] || cargo}
+        </span>
+      ))}
+    </>
+  );
+}
 
 // ─── Professors Tab ───
 function ProfessoresTab() {
@@ -363,9 +390,14 @@ export default function AdminConfiguracoesPage() {
       return;
     }
 
+    // A rota descarta dos extras o cargo que já é o papel principal. Repetir a
+    // mesma conta aqui é o que impede a tela de exibir um extra que o banco não
+    // guardou — a discordância só apareceria no F5 seguinte.
+    const extrasSalvos = Array.from(new Set(newCargos.filter((c) => c !== newRole)));
+
     setUsers((prev) =>
       prev.map((u) =>
-        u.id === editingUser.id ? { ...u, role: newRole } : u
+        u.id === editingUser.id ? { ...u, role: newRole, cargos: extrasSalvos } : u
       )
     );
     setEditingUser(null);
@@ -510,14 +542,16 @@ export default function AdminConfiguracoesPage() {
                   </td>
                   <td className="px-4 py-3 text-cream/40">{user.email}</td>
                   <td className="px-4 py-3">
-                    <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
+                    <div className="flex flex-wrap items-center gap-1.5">
+                      <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
+                      <CargosExtras cargos={user.cargos} />
+                    </div>
                   </td>
                   <td className="px-4 py-3 text-right">
                     <button
                       onClick={() => {
                         setEditingUser(user);
                         setNewRole(user.role);
-                  setNewCargos(user.cargos || []);
                         setNewCargos(user.cargos || []);
                       }}
                       className="text-xs text-accent hover:text-accent-light transition-colors"
@@ -562,7 +596,10 @@ export default function AdminConfiguracoesPage() {
                 </p>
                 <p className="font-dm text-[11px] text-cream/40 truncate mt-0.5">{user.email}</p>
               </div>
-              <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
+              <div className="flex flex-wrap items-center justify-end gap-1.5 flex-shrink-0">
+                <Badge variant={user.role}>{roleLabels[user.role]}</Badge>
+                <CargosExtras cargos={user.cargos} />
+              </div>
             </div>
             <div className="flex flex-wrap gap-2 mt-2.5">
               <button

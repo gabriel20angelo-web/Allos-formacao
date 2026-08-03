@@ -10,6 +10,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -39,10 +40,13 @@ export async function PATCH(req: NextRequest) {
 
   const { data: perfil } = await client
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
-  const ehAdmin = perfil?.role === "admin";
+  // Quem administra pode ter o cargo entre os extras — comparar `role` direto o
+  // mandaria para a checagem de posse abaixo e barraria a curadoria de qualquer
+  // corte que não fosse de uma sala dele.
+  const ehAdmin = temCargo(perfil, "admin");
 
   // O corte pertence a um encontro de uma sala que esta pessoa conduz?
   //

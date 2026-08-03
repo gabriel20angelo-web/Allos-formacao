@@ -1,6 +1,6 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { exigirAlgumCargo } from "@/lib/auth-servidor";
 import {
   listAprimoramentoExercicios,
   listAllTagsFrom,
@@ -37,27 +37,11 @@ export default async function TagPage({ params }: PageProps) {
   const found = findTagBySlugIn(allExercises, params.tag);
   if (!found) notFound();
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(
-      `/formacao/auth?next=/formacao/aprimoramento-dinamicas/tag/${params.tag}`,
-    );
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
-  if (!allowed) {
-    redirect("/formacao");
-  }
+  // O `next` leva a tag crua da URL, que é o que esta rota espera de volta.
+  await exigirAlgumCargo(
+    ["associado", "condutor"],
+    `/formacao/aprimoramento-dinamicas/tag/${params.tag}`,
+  );
 
   const { tag, exercises } = found;
   const allTags = listAllTagsFrom(allExercises);

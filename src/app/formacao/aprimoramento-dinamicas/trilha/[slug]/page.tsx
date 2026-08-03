@@ -1,6 +1,6 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { exigirAlgumCargo } from "@/lib/auth-servidor";
 import {
   TRILHAS,
   getTrilhaBySlug,
@@ -37,27 +37,10 @@ export default async function TrilhaPage({ params }: PageProps) {
   const trilha = getTrilhaBySlug(params.slug);
   if (!trilha) notFound();
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(
-      `/formacao/auth?next=/formacao/aprimoramento-dinamicas/trilha/${params.slug}`,
-    );
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
-  if (!allowed) {
-    redirect("/formacao");
-  }
+  await exigirAlgumCargo(
+    ["associado", "condutor"],
+    `/formacao/aprimoramento-dinamicas/trilha/${params.slug}`,
+  );
 
   const allExercises = await listAprimoramentoExercicios();
   const exercises = resolveTrilhaExercises(trilha, allExercises);

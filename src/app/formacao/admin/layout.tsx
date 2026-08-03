@@ -23,53 +23,49 @@ import {
   CalendarDays,
   Users,
   Video,
+  Compass,
+  Sparkles,
+  ArrowUpRight,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
+import { NOME_DO_CARGO } from "@/lib/cargos";
+import {
+  AREAS,
+  GRUPOS,
+  areasDoPainel,
+  caminhosDoPainel,
+  circulaLivre,
+  homeDoPainel,
+  type Area,
+} from "@/lib/areas";
 
-const navItems: {
-  href: string;
-  label: string;
-  icon: typeof LayoutDashboard;
-  badgeKey?: "sugestoes-pendentes";
-}[] = [
-  { href: "/formacao/admin", label: "Dashboard", icon: LayoutDashboard },
-  { href: "/formacao/admin/formacao-base", label: "Formação", icon: Calendar },
-  {
-    href: "/formacao/admin/associados",
-    label: "Associados",
-    icon: Users,
-    badgeKey: "sugestoes-pendentes",
-  },
-  { href: "/formacao/admin/certificados", label: "Certificados", icon: Award },
-  // Estas duas existiam e só apareciam para quem tinha o cargo — o
-  // administrador alcançava por URL e não tinha como saber que existiam.
-  { href: "/formacao/admin/eventos", label: "Eventos", icon: CalendarDays },
-  { href: "/formacao/admin/meu-grupo", label: "Visão do condutor", icon: Video },
-  { href: "/formacao/admin/moderacao", label: "Moderação", icon: MessageSquare },
-  { href: "/formacao/admin/configuracoes", label: "Configurações", icon: Settings },
-];
+/**
+ * O ícone de cada área.
+ *
+ * Mora aqui e não no catálogo porque o catálogo também é lido pelo middleware,
+ * que roda no edge e não deve arrastar a biblioteca de ícones junto.
+ */
+const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
+  conducao: Compass,
+  "meu-grupo": Video,
+  dinamicas: Sparkles,
+  eventos: CalendarDays,
+  associados: Users,
+  dashboard: LayoutDashboard,
+  "formacao-base": Calendar,
+  certificados: Award,
+  moderacao: MessageSquare,
+  configuracoes: Settings,
+};
 
-/** O cargo "eventos" enxerga só a própria área. */
-const eventosNavItems: typeof navItems = [
-  { href: "/formacao/admin/eventos", label: "Eventos", icon: CalendarDays },
-];
+/** Onde o contador de sugestões pendentes aparece. */
+const AREA_COM_PENDENCIAS = "associados";
 
-/** Quem conduz enxerga só o próprio grupo. */
-const condutorNavItems: typeof navItems = [
-  { href: "/formacao/admin/meu-grupo", label: "Meu grupo", icon: Video },
-];
-
-const pageTitles: Record<string, string> = {
-  "/formacao/admin": "Dashboard",
-  "/formacao/admin/formacao-base": "Formação",
-  "/formacao/admin/associados": "Associados",
+// Telas que não são áreas do catálogo, mas têm nome próprio na barra de cima.
+const TITULOS_EXTRAS: Record<string, string> = {
   "/formacao/admin/associados/aprimoramento": "Aprimoramento de Dinâmicas",
   "/formacao/admin/associados/sugestoes": "Sugestões",
-  "/formacao/admin/certificados": "Certificados",
-  "/formacao/admin/moderacao": "Moderação",
-  "/formacao/admin/configuracoes": "Configurações",
-  "/formacao/admin/eventos": "Eventos",
-  "/formacao/admin/meu-grupo": "Meu grupo",
+  "/formacao/admin/condutores": "Condutores",
 };
 
 export default function AdminLayout({
@@ -77,10 +73,26 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { profile, loading, signOut, isAdmin, isInstructor, isEventos, isCondutor } =
-    useAuth();
+  const { profile, loading, signOut, cargos, isAdmin } = useAuth();
   const pathname = usePathname();
-  const items = isEventos ? eventosNavItems : isCondutor ? condutorNavItems : navItems;
+
+  // A navegação sai do catálogo, agrupada em seções.
+  //
+  // Antes isto era um ternário — eventos, senão condutor, senão tudo — e ele
+  // apagava o menu de quem acumula cargo: quem cuida dos eventos E conduz um
+  // grupo via só Eventos, e um administrador com o cargo de eventos marcado
+  // perdia o painel inteiro. O erro nem aparecia como erro: a área continuava
+  // existindo, funcionando, e sem link nenhum apontando para ela.
+  const livre = circulaLivre(cargos);
+  const minhasAreas = areasDoPainel(cargos);
+  const secoes = GRUPOS.map((g) => ({
+    ...g,
+    itens: minhasAreas.filter((a) => a.grupo === g.id),
+  })).filter((s) => s.itens.length > 0);
+
+  /** O nome muda de dono: o grupo é "meu" para quem conduz e "do condutor" para quem administra. */
+  const nomeDaArea = (a: Area) => (livre && a.rotuloAdmin ? a.rotuloAdmin : a.rotulo);
+
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSugestoes, setPendingSugestoes] = useState(0);
   // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
@@ -126,10 +138,20 @@ export default function AdminLayout({
     return () => window.removeEventListener("keydown", onKey);
   }, [sidebarOpen]);
 
+  // O mais específico primeiro: /associados/sugestoes precisa vencer
+  // /associados, que também casa por prefixo.
+  const titulosPorCaminho: [string, string][] = [
+    ...Object.entries(TITULOS_EXTRAS),
+    ...AREAS.filter((a) => a.href.startsWith("/formacao/admin")).map(
+      (a) => [a.href, nomeDaArea(a)] as [string, string]
+    ),
+  ].sort((a, b) => b[0].length - a[0].length);
+
   const currentPageTitle =
-    Object.entries(pageTitles).find(([path]) =>
-      pathname === path || (path !== "/formacao/admin" && pathname.startsWith(path))
-    )?.[1] || "Admin";
+    titulosPorCaminho.find(
+      ([path]) =>
+        pathname === path || (path !== "/formacao/admin" && pathname.startsWith(`${path}/`))
+    )?.[1] || "Painel";
 
   if (loading) {
     return (
@@ -151,7 +173,7 @@ export default function AdminLayout({
     );
   }
 
-  if (!profile || (!isAdmin && !isInstructor && !isEventos && !isCondutor)) {
+  if (!profile || caminhosDoPainel(cargos).length === 0) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#111111" }}>
         <div className="max-w-md text-center space-y-4">
@@ -180,10 +202,7 @@ export default function AdminLayout({
     <div className="flex flex-col h-full">
       {/* Brand with logo */}
       <div className="p-6" style={{ borderBottom: "1px solid rgba(200,75,49,0.1)" }}>
-        <Link
-          href={isEventos ? "/formacao/admin/eventos" : isCondutor ? "/formacao/admin/meu-grupo" : "/formacao/admin"}
-          className="flex items-center gap-2.5"
-        >
+        <Link href={homeDoPainel(cargos)} className="flex items-center gap-2.5">
           <Image src="/Icone_Allos_Verde.png" alt="Allos" width={28} height={28} />
           <div>
             <span className="font-fraunces font-bold text-[16px] text-cream tracking-wide">Allos</span>
@@ -193,61 +212,82 @@ export default function AdminLayout({
       </div>
 
       {/* Nav */}
-      <nav className="flex-1 p-4 space-y-1">
-        {items.map((item) => {
-          const isActive =
-            pathname === item.href ||
-            (item.href !== "/formacao/admin" &&
-              pathname.startsWith(item.href));
+      <nav className="flex-1 p-4 space-y-5 overflow-y-auto">
+        {secoes.map((secao) => (
+          <div key={secao.id} className="space-y-1">
+            {/* O título nomeia o lugar. Para quem conduz, esta é a única seção
+                que existe, e sem ela o painel pareceria uma lista solta de
+                três links sem parentesco. */}
+            <p className="px-4 pb-1 font-dm text-[10px] font-semibold tracking-[0.22em] uppercase text-cream/25">
+              {secao.titulo}
+            </p>
 
-          return (
-            <Link
-              key={item.href}
-              href={item.href}
-              onClick={() => setSidebarOpen(false)}
-              className={`
-                flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-sm
-                transition-all duration-200
-                ${
-                  isActive
-                    ? "text-white font-semibold"
-                    : "text-cream/50 hover:text-cream hover:bg-white/5"
-                }
-              `}
-              style={
-                isActive
-                  ? {
-                      background: "linear-gradient(135deg, #C84B31, #A33D27)",
-                      boxShadow: "0 2px 12px rgba(200,75,49,0.3)",
+            {secao.itens.map((area) => {
+              const Icone = ICONE_DA_AREA[area.id] ?? LayoutDashboard;
+              const isActive =
+                pathname === area.href ||
+                (area.href !== "/formacao/admin" &&
+                  pathname.startsWith(`${area.href}/`));
+
+              return (
+                <Link
+                  key={area.id}
+                  href={area.href}
+                  onClick={() => setSidebarOpen(false)}
+                  className={`
+                    flex items-center gap-3 px-4 py-2.5 rounded-[10px] text-sm
+                    transition-all duration-200
+                    ${
+                      isActive
+                        ? "text-white font-semibold"
+                        : "text-cream/50 hover:text-cream hover:bg-white/5"
                     }
-                  : {}
-              }
-            >
-              <item.icon className="h-4 w-4" />
-              <span className="flex-1">{item.label}</span>
-              {item.badgeKey === "sugestoes-pendentes" &&
-                pendingSugestoes > 0 && (
-                  <span
-                    className="font-dm text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
-                    style={{
-                      color: isActive ? "#FDFBF7" : "#D4A857",
-                      background: isActive
-                        ? "rgba(255,255,255,0.18)"
-                        : "rgba(212,168,87,0.14)",
-                      border: `1px solid ${
-                        isActive
-                          ? "rgba(255,255,255,0.28)"
-                          : "rgba(212,168,87,0.32)"
-                      }`,
-                    }}
-                    aria-label={`${pendingSugestoes} sugestões pendentes`}
-                  >
-                    {pendingSugestoes}
-                  </span>
-                )}
-            </Link>
-          );
-        })}
+                  `}
+                  style={
+                    isActive
+                      ? {
+                          background: "linear-gradient(135deg, #C84B31, #A33D27)",
+                          boxShadow: "0 2px 12px rgba(200,75,49,0.3)",
+                        }
+                      : {}
+                  }
+                >
+                  <Icone className="h-4 w-4 flex-shrink-0" />
+                  <span className="flex-1">{nomeDaArea(area)}</span>
+
+                  {/* Este link sai do painel. Avisar é mais honesto do que
+                      deixar a pessoa descobrir pelo cabeçalho que mudou. */}
+                  {area.saiDoPainel && (
+                    <ArrowUpRight
+                      className="h-3 w-3 flex-shrink-0 opacity-45"
+                      aria-label="abre fora do painel"
+                    />
+                  )}
+
+                  {area.id === AREA_COM_PENDENCIAS && pendingSugestoes > 0 && (
+                    <span
+                      className="font-dm text-[10px] font-bold tracking-wide px-1.5 py-0.5 rounded-full min-w-[18px] text-center"
+                      style={{
+                        color: isActive ? "#FDFBF7" : "#D4A857",
+                        background: isActive
+                          ? "rgba(255,255,255,0.18)"
+                          : "rgba(212,168,87,0.14)",
+                        border: `1px solid ${
+                          isActive
+                            ? "rgba(255,255,255,0.28)"
+                            : "rgba(212,168,87,0.32)"
+                        }`,
+                      }}
+                      aria-label={`${pendingSugestoes} sugestões pendentes`}
+                    >
+                      {pendingSugestoes}
+                    </span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        ))}
       </nav>
 
       {/* Back to site */}
@@ -346,15 +386,25 @@ export default function AdminLayout({
               <p className="text-sm font-medium text-cream">
                 {profile.full_name}
               </p>
-              <Badge variant={profile.role}>
-                {profile.role === "admin"
-                  ? "Admin"
-                  : profile.role === "instructor"
-                    ? "Professor"
-                    : profile.role === "eventos"
-                      ? "Eventos"
-                      : "Aluno"}
-              </Badge>
+              {/* A cadeia de ternários que estava aqui não tinha caso para
+                  condutor, então quem conduz lia "Aluno" no próprio painel. E
+                  mostrava só o papel principal: quem acumula cargo não tinha
+                  como conferir na tela que os dois valem. */}
+              <div className="flex items-center justify-end gap-1.5 flex-wrap">
+                <Badge variant={profile.role}>
+                  {NOME_DO_CARGO[profile.role] ?? profile.role}
+                </Badge>
+                {(profile.cargos || []).map((cargo) => (
+                  <span
+                    key={cargo}
+                    title="Cargo adicional"
+                    className="font-dm text-[10px] px-1.5 py-0.5 rounded-full text-cream/40"
+                    style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+                  >
+                    + {NOME_DO_CARGO[cargo] ?? cargo}
+                  </span>
+                ))}
+              </div>
             </div>
             {/* Avatar */}
             <div

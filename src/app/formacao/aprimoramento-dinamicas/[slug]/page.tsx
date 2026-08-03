@@ -1,6 +1,6 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { exigirAlgumCargo } from "@/lib/auth-servidor";
 import { extractToc, isCurated } from "@/lib/aprimoramento-dinamicas";
 import {
   listAprimoramentoExercicios,
@@ -46,27 +46,12 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
   const exercise = await getAprimoramentoExercicioBySlug(params.slug);
   if (!exercise) notFound();
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(
-      `/formacao/auth?next=/formacao/aprimoramento-dinamicas/${params.slug}`,
-    );
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
-  if (!allowed) {
-    redirect("/formacao");
-  }
+  // Quem chegou sem sessão volta para este exercício depois do login, e não
+  // para a home.
+  await exigirAlgumCargo(
+    ["associado", "condutor"],
+    `/formacao/aprimoramento-dinamicas/${params.slug}`,
+  );
 
   const allExercises = await listAprimoramentoExercicios();
   const index = allExercises.findIndex((e) => e.slug === exercise.slug);

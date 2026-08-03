@@ -1,6 +1,6 @@
-import { redirect, notFound } from "next/navigation";
+import { notFound } from "next/navigation";
 import Link from "next/link";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { exigirAlgumCargo } from "@/lib/auth-servidor";
 import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercicios";
 import {
   CATEGORIES,
@@ -37,27 +37,10 @@ export default async function CategoriaPage({ params }: PageProps) {
     CATEGORIES[params.slug as CategorySlug];
   if (!cat) notFound();
 
-  const supabase = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect(
-      `/formacao/auth?next=/formacao/aprimoramento-dinamicas/categoria/${params.slug}`,
-    );
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
-  if (!allowed) {
-    redirect("/formacao");
-  }
+  await exigirAlgumCargo(
+    ["associado", "condutor"],
+    `/formacao/aprimoramento-dinamicas/categoria/${params.slug}`,
+  );
 
   const allExercises = await listAprimoramentoExercicios();
   const items = allExercises.filter((e) => e.category === cat.slug);

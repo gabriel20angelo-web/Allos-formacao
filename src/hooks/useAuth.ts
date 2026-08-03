@@ -25,27 +25,24 @@ import {
 import { createElement } from "react";
 import { createClient, resetClient } from "@/lib/supabase/client";
 import { logger } from "@/lib/logger";
-import type { Profile, UserRole } from "@/types";
+import { cargosDe, temCargo } from "@/lib/cargos";
+import type { Profile } from "@/types";
 import type { User } from "@supabase/supabase-js";
-
-
-/**
- * Esta pessoa tem tal cargo?
- *
- * Olha o papel principal E os cargos extras. Uma coluna só não bastava: quem
- * cuida dos eventos e conduz um grupo é as duas coisas, e escolher um cargo
- * apagava o outro.
- */
-function tem(perfil: Profile | null, cargo: UserRole): boolean {
-  if (!perfil) return false;
-  return perfil.role === cargo || (perfil.cargos || []).includes(cargo);
-}
 
 interface AuthContextValue {
   user: User | null;
   profile: Profile | null;
   loading: boolean;
   signOut: () => Promise<void>;
+  /**
+   * O papel principal e os cargos extras, juntos.
+   *
+   * É o que o catálogo de áreas (`@/lib/areas`) consome para decidir o menu.
+   * Os `isX` abaixo continuam existindo porque meia dúzia de telas pergunta
+   * por um cargo só, mas quem pergunta "que áreas cabem a esta pessoa?" usa
+   * este conjunto — a resposta passa a ser a mesma do middleware.
+   */
+  cargos: Set<string>;
   isAdmin: boolean;
   isInstructor: boolean;
   isStudent: boolean;
@@ -333,13 +330,14 @@ export function AuthProvider({
       profile,
       loading,
       signOut,
-      isAdmin: tem(profile, "admin"),
-      isInstructor: tem(profile, "instructor"),
-      isStudent: tem(profile, "student"),
-      isAssociado: tem(profile, "associado"),
-      isEventos: tem(profile, "eventos"),
-      isCondutor: tem(profile, "condutor"),
-      canManageEvents: tem(profile, "admin") || tem(profile, "eventos"),
+      cargos: cargosDe(profile),
+      isAdmin: temCargo(profile, "admin"),
+      isInstructor: temCargo(profile, "instructor"),
+      isStudent: temCargo(profile, "student"),
+      isAssociado: temCargo(profile, "associado"),
+      isEventos: temCargo(profile, "eventos"),
+      isCondutor: temCargo(profile, "condutor"),
+      canManageEvents: temCargo(profile, "admin") || temCargo(profile, "eventos"),
     }),
     [user, profile, loading, signOut]
   );

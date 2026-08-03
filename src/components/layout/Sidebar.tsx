@@ -18,18 +18,41 @@ import {
   CalendarDays,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
+import { areasDoSite, caminhosDoPainel, homeDoPainel } from "@/lib/areas";
 
 const STORAGE_KEY = "allos-sidebar-collapsed";
 
-const mainNav = [
+interface ItemDeMenu {
+  label: string;
+  href: string;
+  icon: typeof Home;
+  auth?: boolean;
+  external?: boolean;
+}
+
+/**
+ * O ícone de cada área.
+ *
+ * Fica aqui, e não no catálogo, para que o catálogo continue sendo importável
+ * pelo middleware — que roda no edge e não pode arrastar a biblioteca de
+ * ícones junto.
+ */
+const ICONE_DA_AREA: Record<string, typeof Home> = {
+  "meu-grupo": Video,
+  dinamicas: Sparkles,
+  eventos: CalendarDays,
+};
+
+// O que vale para todo mundo. No meio dos dois entram as áreas do catálogo que
+// couberem à pessoa — quem conduz um grupo, quem cuida dos eventos e quem é
+// associado veem coisas diferentes aqui, e é a mesma resposta que o painel e o
+// middleware dão, porque vem do mesmo lugar.
+const NAV_ABERTURA: ItemDeMenu[] = [
   { label: "Conteúdos", href: "/formacao", icon: Home },
   { label: "Meus cursos", href: "/formacao/meus-cursos", icon: BookOpen, auth: true },
-  { label: "Aprimoramento", href: "/formacao/aprimoramento-dinamicas", icon: Sparkles, associadoOnly: true },
-  // Trabalho de quem conduz. Fica junto do Aprimoramento porque é a mesma
-  // pessoa: quem conduz um grupo também usa as dinâmicas, e separar as duas
-  // coisas em menus diferentes obrigaria a lembrar em qual delas está o quê.
-  { label: "Meu grupo", href: "/formacao/admin/meu-grupo", icon: Video, condutorOnly: true },
-  { label: "Eventos", href: "/formacao/admin/eventos", icon: CalendarDays, eventosOnly: true },
+];
+
+const NAV_FECHAMENTO: ItemDeMenu[] = [
   { label: "Certificado", href: "https://allos.org.br/certificado", icon: Award, external: true },
 ];
 
@@ -41,31 +64,27 @@ const externalNav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, profile, isAdmin, isInstructor, isAssociado, isEventos, isCondutor, signOut } =
-    useAuth();
+  const { user, profile, cargos, signOut } = useAuth();
+
+  const mainNav: ItemDeMenu[] = [
+    ...NAV_ABERTURA,
+    ...areasDoSite(cargos).map((a) => ({
+      label: a.rotulo,
+      href: a.href,
+      icon: ICONE_DA_AREA[a.id] ?? Sparkles,
+    })),
+    ...NAV_FECHAMENTO,
+  ];
 
   // Quem tem cargo restrito precisa da MESMA porta: sem este link, a pessoa de
-  // eventos nao tinha como chegar na propria area — a porta so existia para
+  // eventos não tinha como chegar na própria área — a porta só existia para
   // admin e instrutor, e ela via um site sem nada dela dentro.
-  const temPainel = isAdmin || isInstructor || isEventos || isCondutor;
+  const temPainel = caminhosDoPainel(cargos).length > 0;
 
-  // Quem conduz um grupo e quem cuida dos eventos e associado na pratica, e o
-  // Aprimoramento e material de trabalho deles. Esconder por causa do rotulo do
-  // cargo seria escondê-lo justamente de quem usa.
-  const veAprimoramento = isAssociado || isAdmin || isCondutor || isEventos;
-  const veMeuGrupo = isCondutor || isAdmin;
-  const veEventos = isEventos || isAdmin;
-
-  /** Um item do menu vale para esta pessoa? */
-  const cabe = (i: { associadoOnly?: boolean; condutorOnly?: boolean; eventosOnly?: boolean }) =>
-    !(i.associadoOnly && !veAprimoramento) &&
-    !(i.condutorOnly && !veMeuGrupo) &&
-    !(i.eventosOnly && !veEventos);
-  const destinoPainel = isEventos
-    ? "/formacao/admin/eventos"
-    : isCondutor
-      ? "/formacao/admin/meu-grupo"
-      : "/formacao/admin";
+  // Onde o botão "Painel" cai. Antes isto perguntava por eventos primeiro, e
+  // um administrador que também cuidasse de eventos era despachado para lá em
+  // vez do dashboard.
+  const destinoPainel = homeDoPainel(cargos);
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -160,7 +179,6 @@ export default function Sidebar() {
         <nav className="flex-1 px-3 py-4 space-y-1 overflow-y-auto">
           {mainNav.map((item) => {
             if (item.auth && !user) return null;
-            if (!cabe(item)) return null;
             const active = isActive(item.href);
             const Icon = item.icon;
             const linkProps = item.external
@@ -357,7 +375,7 @@ export default function Sidebar() {
           paddingBottom: "calc(0.5rem + env(safe-area-inset-bottom))",
         }}
       >
-        {mainNav.filter((i) => !(i.auth && !user) && cabe(i)).map((item) => {
+        {mainNav.filter((i) => !(i.auth && !user)).map((item) => {
           const active = isActive(item.href);
           const Icon = item.icon;
           return (

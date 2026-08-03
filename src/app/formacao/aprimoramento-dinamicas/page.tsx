@@ -1,6 +1,5 @@
 import Link from "next/link";
-import { redirect } from "next/navigation";
-import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { exigirAlgumCargo } from "@/lib/auth-servidor";
 import { isCurated, type Exercise } from "@/lib/aprimoramento-dinamicas";
 import { listAprimoramentoExercicios } from "@/lib/queries/aprimoramento-exercicios";
 import { CATEGORIES, CATEGORY_ORDER } from "@/lib/aprimoramento-categories";
@@ -45,26 +44,14 @@ function computeStats(all: Exercise[]) {
 }
 
 export default async function AprimoramentoDinamicasPage() {
-  const supabase = await createServerSupabaseClient();
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
-  if (!user) {
-    redirect("/formacao/auth?next=/formacao/aprimoramento-dinamicas");
-  }
-
-  const { data: profile } = await supabase
-    .from("profiles")
-    .select("role")
-    .eq("id", user.id)
-    .single();
-
-  const allowed = ["associado", "admin", "condutor", "eventos"].includes(profile?.role || "");
-  if (!allowed) {
-    redirect("/formacao");
-  }
+  // O acervo é de associados e condutores — o administrador entra sempre, por
+  // isso não aparece na lista. A pergunta é pelos cargos, e não pelo papel
+  // principal: quem tem "condutor" como cargo extra via o link no menu e levava
+  // um redirect ao clicar.
+  await exigirAlgumCargo(
+    ["associado", "condutor"],
+    "/formacao/aprimoramento-dinamicas",
+  );
 
   const exercises = await listAprimoramentoExercicios();
   const featured = pickFeatured(exercises);

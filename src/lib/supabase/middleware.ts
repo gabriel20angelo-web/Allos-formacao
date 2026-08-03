@@ -7,6 +7,8 @@
 
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
+import { cargosDe } from "@/lib/cargos";
+import { caminhosDoPainel, circulaLivre, homeDoPainel } from "@/lib/areas";
 
 const BASE_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
@@ -141,11 +143,6 @@ export async function updateSession(request: NextRequest) {
     // supabase/functions/access-token-hook): zero round-trip. Cai pra query
     // em profiles so quando o claim nao existe (hook ainda nao habilitada).
     if (pathname.startsWith("/formacao/admin") && user) {
-      // "eventos" entra no painel, mas só na própria área (migration 041).
-      // "condutor" segue a mesma ideia: entra, e só na área do próprio grupo.
-      const allowedRoles = new Set(["admin", "instructor", "eventos", "condutor"]);
-      const EVENTOS_HOME = "/formacao/admin/eventos";
-      const CONDUTOR_HOME = "/formacao/admin/meu-grupo";
       let role: string | null = user.role ?? null;
       let cargos: string[] = user.cargos ?? [];
 
@@ -159,27 +156,27 @@ export async function updateSession(request: NextRequest) {
         cargos = profile?.cargos ?? [];
       }
 
-      // Basta UM cargo servir. Antes isto olhava só o papel principal, e como
-      // papel é uma coluna só, quem cuida dos eventos e conduz um grupo perdia
-      // uma das duas áreas ao ganhar a outra.
-      const meus = new Set([role, ...cargos].filter(Boolean) as string[]);
-      const tem = (c: string) => meus.has(c);
+      // Basta UM cargo servir, e a lista de quem-pode não mora aqui: vem do
+      // catálogo em @/lib/areas, o mesmo de onde o menu do site e a navegação
+      // do painel tiram a resposta. Enquanto essa lista estava escrita à mão
+      // em cada um dos três lugares, eles envelheciam separados — e a falha
+      // aparecia como área que existe, funciona, e some do menu.
+      const meus = cargosDe({ role, cargos });
+      const suas = caminhosDoPainel(meus);
 
-      if (!Array.from(meus).some((c) => allowedRoles.has(c))) {
+      // Nenhuma área no painel: esta pessoa não tem o que fazer aqui.
+      if (!suas.length) {
         return hardRedirect("/formacao", supabaseResponse);
       }
 
-      // Preso a uma área só quem não tem nenhum cargo amplo. Quem acumula
-      // eventos e condução circula entre as duas.
-      const amplo = tem("admin") || tem("instructor");
-      const areasProprias = [
-        tem("eventos") ? EVENTOS_HOME : null,
-        tem("condutor") ? CONDUTOR_HOME : null,
-      ].filter(Boolean) as string[];
-
-      if (!amplo && areasProprias.length) {
-        const estaEmAreaPropria = areasProprias.some((a) => pathname.startsWith(a));
-        if (!estaEmAreaPropria) return hardRedirect(areasProprias[0], supabaseResponse);
+      // Preso à própria área só quem não circula livre. Quem acumula eventos e
+      // condução anda entre as duas, e o hub é uma delas.
+      if (!circulaLivre(meus)) {
+        // A comparação respeita a fronteira do caminho de propósito: com
+        // `startsWith` cru, uma área que fosse `/formacao/admin` casaria com o
+        // painel inteiro e abriria tudo para um cargo restrito.
+        const dentro = suas.some((a) => pathname === a || pathname.startsWith(`${a}/`));
+        if (!dentro) return hardRedirect(homeDoPainel(meus), supabaseResponse);
       }
     }
 
