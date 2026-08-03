@@ -103,6 +103,20 @@ interface Encontro {
   participacoes: Participacao[];
 }
 
+interface ResultadoBusca {
+  id: string;
+  display_name: string;
+  texto: string;
+  inicio: string | null;
+  encontro: {
+    id: string;
+    atividade_nome: string | null;
+    condutor_nome: string | null;
+    data_reuniao: string;
+    transcricao_uri: string | null;
+  } | null;
+}
+
 type Aba = "salas" | "encontros" | "nomes" | "diagnostico";
 
 /**
@@ -158,6 +172,30 @@ export default function MeetAdminPage() {
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
   const [novaAvulsa, setNovaAvulsa] = useState("");
+  const [filtroGrupo, setFiltroGrupo] = useState("");
+  const [busca, setBusca] = useState("");
+  const [resultados, setResultados] = useState<ResultadoBusca[] | null>(null);
+
+  async function buscarNasFalas() {
+    const termo = busca.trim();
+    if (termo.length < 3) {
+      toast.error("Escreva ao menos três letras.");
+      return;
+    }
+    setTrabalhando("busca");
+    try {
+      const j = await pegarJson<{ resultados?: ResultadoBusca[]; error?: string }>(
+        `/formacao/api/admin/meet/buscar?q=${encodeURIComponent(termo)}`
+      );
+      if (!j || j.error) throw new Error(j?.error || "Falhou");
+      setResultados(j.resultados || []);
+      if (!j.resultados?.length) toast.info("Nada encontrado nas transcrições.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro na busca");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
 
   async function criarSalaAvulsa() {
     const nome = novaAvulsa.trim();
@@ -250,6 +288,20 @@ export default function MeetAdminPage() {
     [spaces]
   );
   const avulsas = useMemo(() => spaces.filter((s) => !s.slot_id), [spaces]);
+
+  // Catálogo por grupo: é isto que substitui arrumar pastas no Drive. O nome do
+  // grupo vem do próprio encontro, então sala avulsa entra pelo rótulo dela.
+  const gruposDosEncontros = useMemo(
+    () =>
+      Array.from(
+        new Set(encontros.map((e) => e.atividade_nome).filter((n): n is string => !!n))
+      ).sort(),
+    [encontros]
+  );
+  const encontrosFiltrados = useMemo(
+    () => (filtroGrupo ? encontros.filter((e) => e.atividade_nome === filtroGrupo) : encontros),
+    [encontros, filtroGrupo]
+  );
   const excecoesPorSlot = useMemo(() => {
     const m = new Map<string, Excecao[]>();
     for (const e of excecoes) {
@@ -782,13 +834,97 @@ export default function MeetAdminPage() {
             transcrição ficam no Drive da conta organizadora; os links abaixo levam direto a elas.
           </p>
 
-          {encontros.length === 0 ? (
+          {/* ── Busca dentro das transcrições ──
+              É o que justifica guardar o texto: achar em que encontro um tema
+              apareceu, sem abrir documento por documento. */}
+          <Card className="p-4">
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={busca}
+                onChange={(e) => setBusca(e.target.value)}
+                onKeyDown={(e) => e.key === "Enter" && buscarNasFalas()}
+                placeholder="Buscar palavra nas transcrições"
+                className="flex-1 min-w-[200px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+              />
+              <select
+                value={filtroGrupo}
+                onChange={(e) => setFiltroGrupo(e.target.value)}
+                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+              >
+                <option value="">Todos os grupos</option>
+                {gruposDosEncontros.map((g) => (
+                  <option key={g} value={g}>
+                    {g}
+                  </option>
+                ))}
+              </select>
+              <button
+                onClick={buscarNasFalas}
+                disabled={trabalhando === "busca"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                {trabalhando === "busca" ? "Buscando" : "Buscar"}
+              </button>
+              {resultados !== null && (
+                <button
+                  onClick={() => {
+                    setResultados(null);
+                    setBusca("");
+                  }}
+                  className="text-xs text-cream/40 hover:text-cream/70"
+                >
+                  limpar
+                </button>
+              )}
+            </div>
+
+            {resultados !== null && resultados.length > 0 && (
+              <div className="mt-3 pt-3 border-t border-white/5 space-y-2 max-h-[420px] overflow-y-auto">
+                <p className="text-xs text-cream/40">
+                  {resultados.length} trecho{resultados.length > 1 ? "s" : ""} encontrado
+                  {resultados.length > 1 ? "s" : ""}
+                </p>
+                {resultados.map((r) => (
+                  <div key={r.id} className="text-xs border-l-2 border-white/10 pl-2.5 py-1">
+                    <p className="text-cream/70">{r.texto}</p>
+                    <p className="text-cream/35 mt-0.5">
+                      {r.display_name}
+                      {r.encontro && (
+                        <>
+                          {" · "}
+                          {new Date(r.encontro.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}
+                          {r.encontro.atividade_nome ? ` · ${r.encontro.atividade_nome}` : ""}
+                        </>
+                      )}
+                      {r.encontro?.transcricao_uri && (
+                        <>
+                          {" · "}
+                          <a
+                            href={r.encontro.transcricao_uri}
+                            target="_blank"
+                            rel="noreferrer"
+                            style={{ color: ROXO }}
+                          >
+                            abrir transcrição
+                          </a>
+                        </>
+                      )}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+
+          {encontrosFiltrados.length === 0 ? (
             <Card className="p-6 text-center text-sm text-cream/40">
               Nenhum encontro capturado ainda. Depois que os grupos usarem as salas novas, eles
               aparecem aqui sozinhos.
             </Card>
           ) : (
-            encontros.map((e) => {
+            encontrosFiltrados.map((e) => {
               const aberto = encontroAberto === e.id;
               const presentes = e.participacoes.filter((p) => !p.eh_condutor);
               return (

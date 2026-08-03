@@ -271,6 +271,15 @@ export async function ingerir(opts?: {
         >();
         let transcricaoUri: string | null = null;
         let transcricaoPronta = false;
+        const falasParaGravar: {
+          participant_api_id: string | null;
+          display_name: string;
+          texto: string;
+          inicio: string | null;
+          fim: string | null;
+          segundos: number | null;
+          ordem: number;
+        }[] = [];
 
         try {
           const transcricoes = await listarTranscricoes(conf.name);
@@ -278,6 +287,7 @@ export async function ingerir(opts?: {
           if (pronta) {
             transcricaoUri = pronta.docsDestination?.exportUri || null;
             const entradas = await listarEntradasTranscricao(pronta.name);
+            let ordem = 0;
             for (const e of entradas) {
               if (!e.participant || !e.startTime || !e.endTime) continue;
               const dur =
@@ -287,11 +297,24 @@ export async function ingerir(opts?: {
                 minutos: 0,
                 turnos: 0,
               };
-              // O texto da fala fica fora daqui de propósito.
               falaPorParticipante.set(e.participant, {
                 minutos: atual.minutos + Math.max(0, dur),
                 turnos: atual.turnos + 1,
               });
+
+              // O nome real entra depois, quando as participações estiverem
+              // calculadas; aqui só guardamos o ponteiro do participante.
+              if (e.text) {
+                falasParaGravar.push({
+                  participant_api_id: e.participant,
+                  display_name: "",
+                  texto: e.text,
+                  inicio: e.startTime,
+                  fim: e.endTime,
+                  segundos: Math.round(dur * 60 * 100) / 100,
+                  ordem: ordem++,
+                });
+              }
             }
             transcricaoPronta = true;
           } else if (transcricoes.length === 0) {
@@ -475,6 +498,56 @@ export async function ingerir(opts?: {
             res.erros.push(`Participações de ${conf.name}: ${errPart.message}`);
           } else {
             res.participacoes_gravadas += calculadas.length;
+          }
+        }
+
+        // ── texto da transcrição ──
+        // Só depois das participações, para cada fala já sair com o nome e a
+        // pessoa resolvidos. Reescreve tudo do encontro pelo mesmo motivo das
+        // participações: reconciliar linha a linha não vale o risco.
+        if (falasParaGravar.length) {
+          const nomePorParticipante = new Map(
+            calculadas.map((c) => [c.participant_api_id, c])
+          );
+
+          await sb.from("formacao_meet_falas").delete().eq("encontro_id", encontroSalvo.id);
+
+          const linhas = falasParaGravar.map((f) => {
+            const dono = f.participant_api_id
+              ? nomePorParticipante.get(f.participant_api_id)
+              : undefined;
+            return {
+              encontro_id: encontroSalvo.id,
+              participant_api_id: f.participant_api_id,
+              display_name: dono?.display_name || "Desconhecido",
+              aluno_id: dono?.aluno_id || null,
+              texto: f.texto,
+              inicio: f.inicio,
+              fim: f.fim,
+              segundos: f.segundos,
+              ordem: f.ordem,
+            };
+          });
+
+          // Em lotes: um encontro de noventa minutos passa de mil falas, e
+          // mandar tudo de uma vez estoura o limite de payload.
+          let gravadas = 0;
+          for (let i = 0; i < linhas.length; i += 400) {
+            const { error: errFala } = await sb
+              .from("formacao_meet_falas")
+              .insert(linhas.slice(i, i + 400));
+            if (errFala) {
+              res.erros.push(`Falas de ${conf.name}: ${errFala.message}`);
+              break;
+            }
+            gravadas += Math.min(400, linhas.length - i);
+          }
+
+          if (gravadas) {
+            await sb
+              .from("formacao_meet_encontros")
+              .update({ falas_gravadas: gravadas })
+              .eq("id", encontroSalvo.id);
           }
         }
 
