@@ -51,32 +51,38 @@ describe("detectarSinais", () => {
       feedback("1", "01:52", "Construção de caso clínico"),
       feedback("2", "01:55", "Tipos psicológicos"),
       feedback("3", "01:57", "Introdução à ACP"),
-      feedback("4", "14:10", "Psicologia e Marketing", "Sabrina Sales"),
+      feedback("4", "01:59", "Grupo de prática clínica"),
+      feedback("5", "02:02", "Estudos clássicos"),
+      feedback("6", "14:10", "Psicologia e Marketing", "Sabrina Sales"),
     ];
     const sinais = detectarSinais(eventos);
     const rajada = sinais.find((s) => s.tipo === "feedback-rajada");
     expect(rajada).toBeDefined();
-    expect(rajada!.titulo).toContain("4 feedbacks");
-    expect(rajada!.detalhe).toContain("4 atividades diferentes");
+    expect(rajada!.titulo).toContain("6 feedbacks");
+    expect(rajada!.detalhe).toContain("6 atividades diferentes");
     // usa o nome mais completo entre os dois que a pessoa digitou
     expect(rajada!.pessoa).toBe("Sabrina Sales Bezerra");
   });
 
-  it("não flagra três feedbacks no mesmo dia: acontece de boa-fé", () => {
+  it("não flagra cinco feedbacks no mesmo dia: ainda cabe em uso honesto", () => {
     const eventos = [
       feedback("1", "10:00", "Grupo de prática clínica"),
       feedback("2", "11:00", "Tipos psicológicos"),
       feedback("3", "12:00", "Introdução à ACP"),
+      feedback("4", "13:00", "Estudos clássicos"),
+      feedback("5", "14:00", "Recursos criativos"),
     ];
     expect(detectarSinais(eventos)).toHaveLength(0);
   });
 
-  it("flagra a partir do quarto feedback no mesmo dia", () => {
+  it("flagra a partir do sexto feedback no mesmo dia", () => {
     const eventos = [
       feedback("1", "10:00", "A"),
       feedback("2", "10:05", "B"),
       feedback("3", "10:09", "C"),
       feedback("4", "10:12", "D"),
+      feedback("5", "10:15", "E"),
+      feedback("6", "10:19", "F"),
     ];
     const sinais = detectarSinais(eventos);
     expect(sinais.filter((s) => s.tipo === "feedback-rajada")).toHaveLength(1);
@@ -132,10 +138,56 @@ describe("detectarSinais", () => {
       feedback("3", "01:57", "C"),
       feedback("4", "01:59", "D"),
       feedback("5", "02:02", "E"),
+      feedback("6", "02:05", "F"),
       ...Array.from({ length: 9 }, (_, i) => aula(String(i + 1), `11:57:${String(i).padStart(2, "0")}`)),
     ];
     const sinais = detectarSinais(eventos);
     expect(sinais.length).toBeGreaterThanOrEqual(2);
     expect(sinais[0].peso).toBeGreaterThanOrEqual(sinais[1].peso);
+  });
+
+  it("flagra permanência incompatível com o conteúdo concluído", () => {
+    const tempoPorPessoa = new Map([
+      [
+        "otavio@example.com",
+        [
+          {
+            courseId: "c1",
+            titulo: "Introdução à C.G. Jung",
+            segundos: 120,
+            minutosConteudoConcluido: 600,
+            aulasConcluidas: 19,
+          },
+        ],
+      ],
+    ]);
+    const sinal = detectarSinais([aula("1", "11:57:00")], { tempoPorPessoa }).find(
+      (s) => s.tipo === "tempo-incompativel"
+    );
+    expect(sinal).toBeDefined();
+    expect(sinal!.titulo).toContain("19 aulas");
+    expect(sinal!.detalhe).toContain("600 min");
+  });
+
+  it("não flagra tempo quando não há sessão registrada", () => {
+    const tempoPorPessoa = new Map([
+      [
+        "otavio@example.com",
+        [
+          {
+            courseId: "c1",
+            titulo: "Curso",
+            segundos: 0,
+            minutosConteudoConcluido: 600,
+            aulasConcluidas: 19,
+          },
+        ],
+      ],
+    ]);
+    expect(
+      detectarSinais([aula("1", "11:57:00")], { tempoPorPessoa }).filter(
+        (s) => s.tipo === "tempo-incompativel"
+      )
+    ).toHaveLength(0);
   });
 });
