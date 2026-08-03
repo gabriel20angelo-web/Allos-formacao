@@ -15,7 +15,7 @@
 // vídeo, e mandar dez de uma vez transforma um erro de configuração numa conta
 // alta antes de alguém perceber.
 
-import { consultarProjeto, criarProjeto, OpusError } from "./opusclip";
+import { consultarProjeto, criarProjeto, ehCedoDemais, OpusError } from "./opusclip";
 import { abrirSessaoUpload, consultarProgresso, enviarAte, tamanhoDoArquivo } from "./youtube";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -24,6 +24,18 @@ type Sb = SupabaseClient<any, "public", any>;
 
 const MAX_TENTATIVAS = 3;
 const MAX_TENTATIVAS_YT = 5;
+
+/** Quanto esperar quando o YouTube ainda está processando o vídeo. */
+const ESPERA_MIN = 15;
+
+/**
+ * Teto da paciência: doze horas de espera em fatias de quinze minutos.
+ *
+ * Vídeo de uma hora e meia leva um bom tempo processando, mas se passar disso
+ * é outra coisa acontecendo, e ficar tentando para sempre esconderia o
+ * problema.
+ */
+const MAX_ESPERAS = 48;
 
 /** Quinze minutos sem tocar no trabalho: quem estava com ele morreu no meio. */
 const LOCK_MIN = 15;
@@ -43,6 +55,8 @@ export function idDoDrive(url: string): string | null {
 
 export interface ResultadoClipes {
   subindo?: { titulo: string; pct: number; concluido: boolean };
+  /** Vídeos que o YouTube ainda está processando. Volta sozinho. */
+  aguardando?: number;
   enviados: number;
   concluidos: number;
   clipes_novos: number;
@@ -143,6 +157,10 @@ async function subirParaYoutube(
 
     // Pronto no YouTube: agora existe um endereço que o OpusClip lê, e o job
     // volta para a fila de envio.
+    //
+    // Mas não já: terminar de enviar não é estar disponível. O YouTube ainda
+    // processa o arquivo, e nessa janela o OpusClip recusa. Sair batendo na
+    // porta só gastaria tentativa.
     await sb
       .from("formacao_clip_jobs")
       .update({
@@ -151,6 +169,7 @@ async function subirParaYoutube(
         youtube_bytes_enviados: total,
         youtube_erro: null,
         status: "pendente",
+        tentar_apos: new Date(Date.now() + ESPERA_MIN * 60_000).toISOString(),
         trabalhando_desde: null,
       })
       .eq("id", job.id);
@@ -195,12 +214,14 @@ export async function processarClipes(
   }
 
   // ── 2. manda um que já tem endereço aceito ──
+  const agora = new Date().toISOString();
   const { data: pendentes } = await sb
     .from("formacao_clip_jobs")
-    .select("id, titulo, video_url, video_url_envio, tentativas")
+    .select("id, titulo, video_url, video_url_envio, tentativas, esperas")
     .eq("status", "pendente")
     .not("video_url_envio", "is", null)
     .lt("tentativas", MAX_TENTATIVAS)
+    .or(`tentar_apos.is.null,tentar_apos.lte.${agora}`)
     .order("created_at", { ascending: true })
     .limit(1);
 
@@ -225,15 +246,31 @@ export async function processarClipes(
       res.enviados++;
     } catch (e) {
       const msg = e instanceof OpusError ? e.message : String(e);
-      await sb
-        .from("formacao_clip_jobs")
-        .update({
-          tentativas: job.tentativas + 1,
-          erro: msg.slice(0, 400),
-          status: job.tentativas + 1 >= MAX_TENTATIVAS ? "erro" : "pendente",
-        })
-        .eq("id", job.id);
-      res.erros.push(`${job.titulo}: ${msg}`);
+
+      // Cedo demais não é falha: o vídeo está lá, o YouTube é que ainda não
+      // terminou de processá-lo. Adia sem gastar tentativa, senão três rodadas
+      // matam um vídeo que só precisava de meia hora.
+      if (ehCedoDemais(e) && job.esperas < MAX_ESPERAS) {
+        await sb
+          .from("formacao_clip_jobs")
+          .update({
+            esperas: job.esperas + 1,
+            tentar_apos: new Date(Date.now() + ESPERA_MIN * 60_000).toISOString(),
+            erro: null,
+          })
+          .eq("id", job.id);
+        res.aguardando = (res.aguardando || 0) + 1;
+      } else {
+        await sb
+          .from("formacao_clip_jobs")
+          .update({
+            tentativas: job.tentativas + 1,
+            erro: msg.slice(0, 400),
+            status: job.tentativas + 1 >= MAX_TENTATIVAS ? "erro" : "pendente",
+          })
+          .eq("id", job.id);
+        res.erros.push(`${job.titulo}: ${msg}`);
+      }
     }
   }
 

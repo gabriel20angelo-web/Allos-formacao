@@ -176,6 +176,7 @@ interface ClipJob {
   youtube_bytes_enviados: number | null;
   youtube_bytes_total: number | null;
   youtube_erro: string | null;
+  tentar_apos: string | null;
   clipes: Clipe[];
 }
 interface AulaParaClipe {
@@ -1964,7 +1965,13 @@ export default function MeetAdminPage() {
                       <div className="min-w-[200px] flex-1">
                         <p className="text-sm text-cream">{j.titulo}</p>
                         <p className="text-xs text-cream/40 mt-0.5">
-                          {j.status === "pendente" && "na fila"}
+                          {/* Depois de enviado, o YouTube ainda processa o
+                              arquivo, e nessa janela o corte não pode começar.
+                              Dizer "na fila" aqui pareceria travado. */}
+                          {j.status === "pendente" &&
+                            (j.youtube_video_id
+                              ? "o YouTube está processando o vídeo · o corte começa sozinho quando terminar"
+                              : "na fila")}
                           {j.status === "subindo" && "subindo para o YouTube"}
                           {j.status === "processando" && "cortando"}
                           {j.status === "pronto" && `${j.clipes.length} clipes`}

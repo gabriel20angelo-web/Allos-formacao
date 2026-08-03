@@ -33,10 +33,33 @@ function chave(): string {
   return k;
 }
 
+/**
+ * O vídeo existe mas ainda não está pronto do outro lado.
+ *
+ * Acontece com vídeo grande recém-enviado ao YouTube: o envio fechou, o
+ * processamento não. Não é erro, é cedo — e a diferença importa, porque erro
+ * gasta tentativa e cedo só pede paciência.
+ */
+export function ehCedoDemais(erro: unknown): boolean {
+  if (!(erro instanceof OpusError)) return false;
+  const t = `${erro.body || ""} ${erro.message}`.toLowerCase();
+  return (
+    t.includes("still ongoing") ||
+    t.includes("processing youtube") ||
+    t.includes("try again after")
+  );
+}
+
 function traduzir(status: number, corpo: string): string {
   const t = corpo.toLowerCase();
   if (status === 401 || status === 403) {
     return "O OpusClip recusou a chave. Confira se ela continua válida na conta.";
+  }
+  if (t.includes("still ongoing") || t.includes("processing youtube")) {
+    return "O YouTube ainda está processando o vídeo. O corte começa sozinho quando terminar.";
+  }
+  if (t.includes("unsupported video link")) {
+    return "O OpusClip não aceita essa origem de vídeo. Ele lê YouTube, Vimeo, Zoom, Rumble, Twitch, Facebook, LinkedIn, Twitter e StreamYard.";
   }
   if (t.includes("credit") || t.includes("quota") || status === 402) {
     return "Os créditos do OpusClip acabaram. O corte volta a funcionar quando a conta for recarregada.";
