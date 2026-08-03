@@ -536,16 +536,23 @@ export async function ingerir(opts?: {
           .delete()
           .eq("encontro_id", encontroSalvo.id);
 
-        if (calculadas.length) {
+        // O Google às vezes devolve o mesmo participante mais de uma vez na
+        // listagem, e o banco recusa a segunda linha por chave duplicada,
+        // derrubando a gravação do encontro inteiro. Ficar com a primeira
+        // ocorrência é seguro: os minutos vêm das sessões, que já foram
+        // somadas por participante antes daqui.
+        const unicas = Array.from(
+          new Map(calculadas.map((c) => [c.participant_api_id, c])).values()
+        );
+
+        if (unicas.length) {
           const { error: errPart } = await sb
             .from("formacao_meet_participacoes")
-            .insert(
-              calculadas.map((c) => ({ ...c, encontro_id: encontroSalvo.id }))
-            );
+            .insert(unicas.map((c) => ({ ...c, encontro_id: encontroSalvo.id })));
           if (errPart) {
             res.erros.push(`Participações de ${conf.name}: ${errPart.message}`);
           } else {
-            res.participacoes_gravadas += calculadas.length;
+            res.participacoes_gravadas += unicas.length;
           }
         }
 
