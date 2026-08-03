@@ -78,9 +78,58 @@ export async function GET() {
     };
   };
 
+  // Gravações que existem e NÃO viraram sugestão, com o motivo. É o que faltava
+  // para a tela parar de dizer "nada esperando" quando na verdade há uma
+  // gravação bloqueada por falta de configuração: sem isto, o vazio é
+  // indistinguível de "está tudo certo, não houve encontro".
+  const { data: comGravacao } = await sb
+    .from("formacao_meet_encontros")
+    .select("id, space_name, atividade_nome, data_reuniao, gravacao_uri, youtube_status")
+    .eq("descartado", false)
+    .not("gravacao_uri", "is", null)
+    .order("data_reuniao", { ascending: false })
+    .limit(30);
+
+  const idsComSugestao = new Set(
+    [...(fila || []), ...(publicadas || [])].map((s: { encontro_id: string }) => s.encontro_id)
+  );
+
+  const { data: spaces } = await sb
+    .from("formacao_meet_spaces")
+    .select("space_name, curso_id, rotulo, slot_id");
+  const spacePorNome = new Map(
+    (spaces || []).map((s: { space_name: string; curso_id: string | null }) => [
+      s.space_name,
+      s,
+    ])
+  );
+
+  const bloqueadas = ((comGravacao || []) as {
+    id: string;
+    space_name: string;
+    atividade_nome: string | null;
+    data_reuniao: string;
+    youtube_status: string | null;
+  }[])
+    .filter((e) => !idsComSugestao.has(e.id))
+    .map((e) => {
+      const space = spacePorNome.get(e.space_name);
+      return {
+        id: e.id,
+        titulo: e.atividade_nome || "Encontro",
+        data_reuniao: e.data_reuniao,
+        motivo: !space
+          ? "A sala deste encontro não existe mais no painel."
+          : !space.curso_id
+            ? "Este grupo não tem curso vinculado. Escolha o curso na aba Salas, em 'Gravações viram aulas de'."
+            : "Motivo desconhecido: a gravação existe e o grupo tem curso, mas a sugestão não foi criada.",
+      };
+    });
+
   return NextResponse.json({
     fila: (fila || []).map(enriquecer),
     publicadas: (publicadas || []).map(enriquecer),
+    bloqueadas,
   });
 }
 

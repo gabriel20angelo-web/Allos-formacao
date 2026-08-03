@@ -61,6 +61,12 @@ interface AulaSugerida {
   curso_slug: string | null;
   curso_publicado: boolean;
 }
+interface AulaBloqueada {
+  id: string;
+  titulo: string;
+  data_reuniao: string;
+  motivo: string;
+}
 interface Excecao {
   id: string;
   slot_id: string;
@@ -206,17 +212,20 @@ export default function MeetAdminPage() {
   const [cursos, setCursos] = useState<CursoOpcao[]>([]);
   const [aulas, setAulas] = useState<AulaSugerida[]>([]);
   const [aulasPublicadas, setAulasPublicadas] = useState<AulaSugerida[]>([]);
+  const [aulasBloqueadas, setAulasBloqueadas] = useState<AulaBloqueada[]>([]);
   const [tituloEditado, setTituloEditado] = useState<Record<string, string>>({});
 
   const carregarAulas = useCallback(async () => {
     const j = await pegarJson<{
       fila?: AulaSugerida[];
       publicadas?: AulaSugerida[];
+      bloqueadas?: AulaBloqueada[];
       error?: string;
     }>("/formacao/api/admin/meet/aulas");
     if (j && !j.error) {
       setAulas(j.fila || []);
       setAulasPublicadas(j.publicadas || []);
+      setAulasBloqueadas(j.bloqueadas || []);
     }
   }, []);
 
@@ -1568,10 +1577,39 @@ export default function MeetAdminPage() {
             </Card>
           )}
 
+          {/* Gravação que existe mas não chegou na fila. Sem isto, o vazio da
+              tela é indistinguível de "não houve encontro", e foi exatamente
+              nisso que o Gabriel se perdeu. */}
+          {aulasBloqueadas.length > 0 && (
+            <Card className="p-4 border border-amber-400/30">
+              <div className="flex items-start gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+                <div className="flex-1">
+                  <p className="text-sm text-cream font-semibold">
+                    {aulasBloqueadas.length} gravação
+                    {aulasBloqueadas.length > 1 ? "ões" : ""} sem virar aula
+                  </p>
+                  <div className="mt-2 space-y-1.5">
+                    {aulasBloqueadas.map((b) => (
+                      <p key={b.id} className="text-xs text-cream/50">
+                        <span className="text-cream/70">
+                          {new Date(b.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}{" "}
+                          {b.titulo}
+                        </span>
+                        {": "}
+                        {b.motivo}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </Card>
+          )}
+
           {aulas.length === 0 ? (
             <Card className="p-6 text-center text-sm text-cream/40">
-              Nada esperando. Aparecem aqui as gravações dos grupos que você vincular a um curso,
-              na aba Salas.
+              Nada esperando aprovação. As gravações aparecem aqui quando o grupo tem um curso
+              escolhido na aba Salas.
             </Card>
           ) : (
             aulas.map((a) => (
