@@ -43,6 +43,11 @@ export const MEET_SCOPES = [
   // Subir a gravação como não listada. Escopo sensível, não restrito, e app
   // interno não passa por verificação.
   "https://www.googleapis.com/auth/youtube.upload",
+  // Enviar não basta. Sem este, nada do que já subiu pode ser mexido: não dá
+  // para apagar um vídeo de teste (403, escopo insuficiente) nem para escrever
+  // a descrição depois — e a descrição só existe depois, porque vem da
+  // transcrição, que fica pronta bem depois do envio terminar.
+  "https://www.googleapis.com/auth/youtube",
 ];
 
 /** E-mail da conta que autorizou, para o painel mostrar de quem é o acesso. */
