@@ -54,32 +54,29 @@ export default function TermosPage() {
     <LegalPage
       title="Termos de uso"
       version="1.0"
-      effectiveFrom={<Placeholder>[DATA DE PUBLICAÇÃO]</Placeholder>}
+      effectiveFrom="3 de agosto de 2026"
       toc={toc}
     >
       <LegalSection id="quem-somos" title="1. Quem somos">
         <LegalP>
-          A Associação Allos é uma associação civil sem fins lucrativos, inscrita no CNPJ sob o nº{" "}
-          <Placeholder>[CNPJ]</Placeholder>, com sede em{" "}
-          <Placeholder>[ENDEREÇO COMPLETO]</Placeholder>, Belo Horizonte, Minas Gerais, qualificada
-          como Instituição Científica, Tecnológica e de Inovação (ICT) privada nos termos da Lei nº
-          10.973/2004.
+          A Associação Allos é uma associação civil sem fins lucrativos, inscrita no CNPJ sob o nº
+          50.990.346/0001-52, com sede na Rua Rio Negro, 1048, bairro Barroca, CEP 30.431-058, Belo
+          Horizonte, Minas Gerais, qualificada como Instituição Científica, Tecnológica e de Inovação
+          (ICT) privada nos termos da Lei nº 10.973/2004.
         </LegalP>
         <LegalP>
           Neste documento, &quot;Allos&quot; ou &quot;nós&quot; se refere à Associação Allos.
           &quot;Você&quot; ou &quot;Usuário&quot; se refere a quem acessa o site ou a plataforma.
         </LegalP>
         <LegalP>
-          Contato para qualquer assunto tratado aqui:{" "}
-          <Placeholder>[EMAIL INSTITUCIONAL]</Placeholder>.
+          Contato para qualquer assunto tratado aqui: suporte@allos.org.br.
         </LegalP>
       </LegalSection>
 
       <LegalSection id="o-que-regulam" title="2. O que estes termos regulam">
         <LegalP>
-          Estes termos regulam o uso do site <Placeholder>[DOMÍNIO]</Placeholder>, da plataforma de
-          formação da Allos, dos cursos e trilhas nela publicados e dos grupos de comunicação
-          mantidos pela Allos.
+          Estes termos regulam o uso do site allos.org.br, da plataforma de formação da Allos, dos
+          cursos e trilhas nela publicados e dos grupos de comunicação mantidos pela Allos.
         </LegalP>
         <LegalP>
           Estes termos não regulam a prestação de serviços psicológicos pela Allos, incluindo
@@ -410,8 +407,8 @@ export default function TermosPage() {
           necessário para apuração de descumprimento destes termos ou por determinação judicial.
         </LegalP>
         <LegalP>
-          14.5. Para exercer seus direitos previstos na Lei nº 13.709/2018, escreva para{" "}
-          <Placeholder>[EMAIL DO ENCARREGADO]</Placeholder>.
+          14.5. Para exercer seus direitos previstos na Lei nº 13.709/2018, escreva para
+          suporte@allos.org.br.
         </LegalP>
       </LegalSection>
 
@@ -497,15 +494,15 @@ export default function TermosPage() {
 
       <LegalSection id="contato" title="21. Contato">
         <LegalP>
-          Dúvidas, pedidos e manifestações previstas nestes termos devem ser enviados para{" "}
-          <Placeholder>[EMAIL INSTITUCIONAL]</Placeholder>.
+          Dúvidas, pedidos e manifestações previstas nestes termos devem ser enviados para
+          suporte@allos.org.br.
         </LegalP>
         <LegalAddress>
           Associação Allos
           <br />
-          CNPJ <Placeholder>[CNPJ]</Placeholder>
+          CNPJ 50.990.346/0001-52
           <br />
-          <Placeholder>[ENDEREÇO COMPLETO]</Placeholder>
+          Rua Rio Negro, 1048, Barroca, Belo Horizonte/MG, CEP 30.431-058
         </LegalAddress>
       </LegalSection>
 
@@ -515,7 +512,7 @@ export default function TermosPage() {
         <LegalTable
           caption="Histórico de versões dos termos de uso"
           head={["Versão", "Vigência", "Alterações"]}
-          rows={[["1.0", <Placeholder key="data">[DATA]</Placeholder>, "Versão inicial"]]}
+          rows={[["1.0", "3 de agosto de 2026", "Versão inicial"]]}
         />
       </LegalSection>
     </LegalPage>

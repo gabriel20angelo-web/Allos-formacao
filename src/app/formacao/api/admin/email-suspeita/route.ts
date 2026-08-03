@@ -244,10 +244,30 @@ export async function GET(req: NextRequest) {
   if (guarda.erro) return guarda.erro;
 
   const alvo = req.nextUrl.searchParams.get("email");
-  const nivel = (req.nextUrl.searchParams.get("nivel") || "aviso") as NivelEmail;
+  const nivelBruto = req.nextUrl.searchParams.get("nivel") || "aviso";
   if (!alvo) {
     return NextResponse.json({ error: "email obrigatório" }, { status: 400 });
   }
+
+  // Retratação não depende de sinal nenhum: o texto é fixo e não cita o caso.
+  if (nivelBruto === "retratacao") {
+    const { data: perfil } = await (await createServiceRoleClient())
+      .from("profiles")
+      .select("full_name")
+      .eq("email", alvo)
+      .maybeSingle();
+    const retratacao = montarEmailRetratacao(
+      (perfil?.full_name as string | undefined) || ""
+    );
+    return NextResponse.json({
+      configurado: workspaceConfigurado(),
+      sinais: 0,
+      assunto: retratacao.assunto,
+      texto: retratacao.texto,
+    });
+  }
+
+  const nivel = nivelBruto as NivelEmail;
 
   const montado = await montar(alvo, nivel);
   if (!montado) {

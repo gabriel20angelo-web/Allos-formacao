@@ -51,13 +51,13 @@ export default function CookiesPage() {
     <LegalPage
       title="Política de cookies"
       version="1.0"
-      effectiveFrom={<Placeholder>[DATA DE PUBLICAÇÃO]</Placeholder>}
+      effectiveFrom="3 de agosto de 2026"
       toc={toc}
     >
       <LegalLead>
-        Esta política explica quais cookies o site <Placeholder>[DOMÍNIO]</Placeholder> e a
-        plataforma de formação da Associação Allos utilizam, para que servem e como você controla o
-        uso deles. Ela integra a nossa Política de Privacidade, disponível em{" "}
+        Esta política explica quais cookies o site allos.org.br e a plataforma de formação da
+        Associação Allos utilizam, para que servem e como você controla o uso deles. Ela integra a
+        nossa Política de Privacidade, disponível em{" "}
         <Placeholder>[URL DA POLÍTICA DE PRIVACIDADE]</Placeholder>.
       </LegalLead>
 
@@ -95,13 +95,13 @@ export default function CookiesPage() {
             head={COOKIE_TABLE_HEAD}
             rows={[
               [
-                <Placeholder key="sessao">[NOME DO COOKIE DE SESSÃO]</Placeholder>,
+                "sb-auth-cookies",
                 "Allos",
-                "Mantém você conectado à plataforma",
-                "Sessão",
+                "Mantém você conectado à plataforma, inclusive em navegadores que bloqueiam cookies",
+                "Até você sair da conta ou limpar o navegador",
               ],
               [
-                <Placeholder key="token">[NOME DO TOKEN DE AUTENTICAÇÃO]</Placeholder>,
+                "sb-syiaushvzhgyhvsmoegt-auth-token",
                 "Allos",
                 "Identifica sua conta entre visitas",
                 "30 dias",
@@ -128,10 +128,10 @@ export default function CookiesPage() {
             head={COOKIE_TABLE_HEAD}
             rows={[
               [
-                <Placeholder key="nome">[NOME]</Placeholder>,
+                "allos_last_lesson_<id do curso>",
                 "Allos",
-                "Guarda o ponto em que você parou a aula",
-                "12 meses",
+                "Guarda a última aula aberta em cada curso, para você retomar de onde parou",
+                "Até você limpar o navegador",
               ],
             ]}
           />
@@ -283,8 +283,8 @@ export default function CookiesPage() {
           termos do art. 18 da Lei nº 13.709/2018.
         </LegalP>
         <LegalP>
-          Os pedidos devem ser enviados para <Placeholder>[EMAIL DO ENCARREGADO]</Placeholder>.
-          Responderemos em até 15 (quinze) dias.
+          Os pedidos devem ser enviados para suporte@allos.org.br. Responderemos em até 15 (quinze)
+          dias.
         </LegalP>
         <LegalP>
           Encarregado pelo tratamento de dados pessoais:{" "}
@@ -308,11 +308,11 @@ export default function CookiesPage() {
         <LegalAddress>
           Associação Allos
           <br />
-          CNPJ <Placeholder>[CNPJ]</Placeholder>
+          CNPJ 50.990.346/0001-52
           <br />
-          <Placeholder>[ENDEREÇO COMPLETO]</Placeholder>
+          Rua Rio Negro, 1048, Barroca, Belo Horizonte/MG, CEP 30.431-058
           <br />
-          <Placeholder>[EMAIL INSTITUCIONAL]</Placeholder>
+          suporte@allos.org.br
         </LegalAddress>
       </LegalSection>
 
@@ -322,7 +322,7 @@ export default function CookiesPage() {
         <LegalTable
           caption="Histórico de versões da política de cookies"
           head={["Versão", "Vigência", "Alterações"]}
-          rows={[["1.0", <Placeholder key="data">[DATA]</Placeholder>, "Versão inicial"]]}
+          rows={[["1.0", "3 de agosto de 2026", "Versão inicial"]]}
         />
       </LegalSection>
     </LegalPage>

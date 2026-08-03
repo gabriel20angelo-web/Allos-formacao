@@ -15,6 +15,7 @@ import { createClient } from "@/lib/supabase/client";
 import { motion, AnimatePresence } from "framer-motion";
 import { toast } from "sonner";
 import { Check, ChevronDown, Mail, Undo2 } from "lucide-react";
+import Modal from "@/components/ui/Modal";
 
 interface Envio {
   id: string;
@@ -29,6 +30,12 @@ export default function EmailsEnviados() {
   const [open, setOpen] = useState(false);
   const [disponivel, setDisponivel] = useState(true);
   const [enviando, setEnviando] = useState<string | null>(null);
+  // A retratação também passa por prévia: é o e-mail mais delicado de todos,
+  // e mandar sem ler é como o problema começou.
+  const [alvo, setAlvo] = useState<string | null>(null);
+  const [assunto, setAssunto] = useState("");
+  const [texto, setTexto] = useState("");
+  const [carregando, setCarregando] = useState(false);
 
   const carregar = useCallback(async () => {
     const sb = createClient();
@@ -57,6 +64,31 @@ export default function EmailsEnviados() {
   const avisos = envios.filter((e) => e.tipo !== "retratacao");
   const pendentes = avisos.filter((e) => !retratados.has(e.destinatario));
 
+  async function abrirPrevia(destinatario: string) {
+    setAlvo(destinatario);
+    setCarregando(true);
+    setTexto("");
+    try {
+      const res = await fetch(
+        `/formacao/api/admin/email-suspeita?email=${encodeURIComponent(destinatario)}&nivel=retratacao`,
+        { credentials: "include" }
+      );
+      const payload = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        toast.error(payload?.error || "Não foi possível montar a retratação.");
+        setAlvo(null);
+        return;
+      }
+      setAssunto(payload.assunto);
+      setTexto(payload.texto);
+    } catch {
+      toast.error("Erro de rede.");
+      setAlvo(null);
+    } finally {
+      setCarregando(false);
+    }
+  }
+
   async function retratar(destinatario: string) {
     setEnviando(destinatario);
     try {
@@ -64,7 +96,12 @@ export default function EmailsEnviados() {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email: destinatario, nivel: "retratacao" }),
+        body: JSON.stringify({
+          email: destinatario,
+          nivel: "retratacao",
+          assunto,
+          texto,
+        }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -72,6 +109,7 @@ export default function EmailsEnviados() {
         return;
       }
       toast.success(`Retratação enviada para ${destinatario}.`);
+      setAlvo(null);
       carregar();
     } catch {
       toast.error("Erro de rede.");
@@ -163,7 +201,7 @@ export default function EmailsEnviados() {
                       </span>
                     ) : (
                       <button
-                        onClick={() => retratar(email)}
+                        onClick={() => abrirPrevia(email)}
                         disabled={enviando === email}
                         className="font-dm text-[10px] px-2.5 py-1 rounded-full flex items-center gap-1 transition-all hover:bg-white/[.05] disabled:opacity-40"
                         style={{ color: "#38BDF8", border: "1px solid rgba(56,189,248,0.3)" }}
@@ -185,6 +223,68 @@ export default function EmailsEnviados() {
           </motion.div>
         )}
       </AnimatePresence>
+      <Modal
+        open={!!alvo}
+        onClose={() => setAlvo(null)}
+        title="Retratação"
+        maxWidth="max-w-2xl"
+      >
+        {carregando || !texto ? (
+          <p className="font-dm text-sm text-cream/40 py-8 text-center">
+            Montando o texto...
+          </p>
+        ) : (
+          <div className="space-y-4">
+            <p className="font-dm text-[11px] text-cream/40 leading-relaxed">
+              Este texto não repete o assunto da mensagem anterior, assume o
+              erro como nosso e não pede nada em troca. Dá para ajustar antes de
+              enviar.
+            </p>
+            <div>
+              <p className="font-dm text-[10px] text-cream/35 mb-1">Para</p>
+              <p className="font-dm text-[13px] text-cream/70">{alvo}</p>
+            </div>
+            <div>
+              <p className="font-dm text-[10px] text-cream/35 mb-1">Assunto</p>
+              <input
+                type="text"
+                value={assunto}
+                onChange={(e) => setAssunto(e.target.value)}
+                className="w-full dark-input rounded-[8px] px-3 py-2 text-[13px] font-dm"
+              />
+            </div>
+            <div>
+              <p className="font-dm text-[10px] text-cream/35 mb-1">Mensagem</p>
+              <textarea
+                value={texto}
+                onChange={(e) => setTexto(e.target.value)}
+                rows={14}
+                className="w-full dark-input rounded-[10px] px-3 py-2.5 text-[12px] font-dm leading-relaxed resize-y"
+              />
+            </div>
+            <div className="flex flex-col-reverse sm:flex-row justify-end gap-2.5">
+              <button
+                onClick={() => setAlvo(null)}
+                className="px-4 py-2 rounded-[10px] text-sm font-dm text-cream/50 hover:text-cream transition-colors"
+                style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={() => alvo && retratar(alvo)}
+                disabled={enviando === alvo}
+                className="px-4 py-2 rounded-[10px] text-sm font-medium text-cream disabled:opacity-40"
+                style={{
+                  background: "linear-gradient(135deg, #C84B31, #A33D27)",
+                  boxShadow: "0 2px 12px rgba(200,75,49,0.3)",
+                }}
+              >
+                {enviando === alvo ? "Enviando..." : "Enviar retratação"}
+              </button>
+            </div>
+          </div>
+        )}
+      </Modal>
     </div>
   );
 }
