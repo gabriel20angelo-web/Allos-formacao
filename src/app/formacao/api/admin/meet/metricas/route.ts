@@ -63,6 +63,12 @@ export async function GET(req: NextRequest) {
 
   const sb = await createServiceRoleClient();
 
+  const { data: cronograma } = await sb
+    .from("formacao_cronograma")
+    .select("duracao_minutos, tolerancia_atraso_min")
+    .maybeSingle();
+  const tolerancia = cronograma?.tolerancia_atraso_min ?? 7;
+
   const { data: encontros, error: errEnc } = await sb
     .from("formacao_meet_encontros")
     .select(
@@ -99,13 +105,26 @@ export async function GET(req: NextRequest) {
   const quoruns = lista.map((e) => (porEncontro.get(e.id) || []).length);
   const comTranscricao = lista.filter((e) => e.vozes_ativas_pct !== null);
 
+  // Tolerância aplicada aqui, na leitura, e não gravada na ingestão: mudar o
+  // número reescreve o passado inteiro em vez de deixar a série com duas
+  // réguas diferentes.
+  const comAtraso = participacoes.filter((p) => p.atraso_min !== null);
+  const pontuais = comAtraso.filter((p) => (p.atraso_min ?? 0) <= tolerancia);
+
   const geral = {
     encontros: lista.length,
     quorum_medio: media(quoruns),
     quorum_maximo: Math.max(...quoruns, 0),
     minutos_medios_por_pessoa: media(participacoes.map((p) => p.minutos_presentes)),
     permanencia_media_pct: media(participacoes.map((p) => p.permanencia_pct ?? NaN)),
-    atraso_medio_min: media(participacoes.map((p) => p.atraso_min ?? NaN)),
+    tolerancia_min: tolerancia,
+    pontualidade_pct: comAtraso.length
+      ? Math.round((pontuais.length / comAtraso.length) * 1000) / 10
+      : null,
+    // Atraso já descontada a tolerância: quem chegou dentro dela conta zero.
+    atraso_medio_min: media(
+      comAtraso.map((p) => Math.max(0, (p.atraso_min ?? 0) - tolerancia))
+    ),
     vozes_ativas_pct: media(comTranscricao.map((e) => e.vozes_ativas_pct ?? NaN)),
     fala_condutor_pct: media(comTranscricao.map((e) => e.fala_condutor_pct ?? NaN)),
     encontros_com_transcricao: comTranscricao.length,

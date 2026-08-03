@@ -29,7 +29,27 @@ export const MEET_SCOPES = [
   "https://www.googleapis.com/auth/meetings.space.created",
   "https://www.googleapis.com/auth/meetings.space.settings",
   "https://www.googleapis.com/auth/meetings.space.readonly",
+  // Sem estes dois o Google não diz de quem é o acesso, e o painel exibiria
+  // "conta desconhecido". Saber qual conta autorizou não é enfeite: é ela que
+  // vira dona das salas e do Drive onde as gravações vão parar.
+  "openid",
+  "https://www.googleapis.com/auth/userinfo.email",
 ];
+
+/** E-mail da conta que autorizou, para o painel mostrar de quem é o acesso. */
+export async function emailDoToken(accessToken: string): Promise<string | null> {
+  try {
+    const resp = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", {
+      headers: { Authorization: `Bearer ${accessToken}` },
+      cache: "no-store",
+    });
+    if (!resp.ok) return null;
+    const json = (await resp.json()) as { email?: string };
+    return json.email || null;
+  } catch {
+    return null;
+  }
+}
 
 export class MeetApiError extends Error {
   constructor(

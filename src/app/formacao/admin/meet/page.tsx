@@ -88,21 +88,42 @@ export default function MeetAdminPage() {
   const [fila, setFila] = useState<ItemFila[]>([]);
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
+  const [tolerancia, setTolerancia] = useState(7);
+
+  async function salvarTolerancia() {
+    setTrabalhando("tolerancia");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ tolerancia_atraso_min: tolerancia }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Falhou");
+      toast.success(`Tolerância de ${tolerancia} minutos salva.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
 
   const carregar = useCallback(async () => {
     const sb = createClient();
-    const [st, sl, hr, sp, ex] = await Promise.all([
+    const [st, sl, hr, sp, ex, cfg] = await Promise.all([
       fetch("/formacao/api/admin/meet/status").then((r) => r.json()),
       sb.from("formacao_slots").select("*").eq("ativo", true),
       sb.from("formacao_horarios").select("*").order("ordem"),
       sb.from("formacao_meet_spaces").select("*"),
       sb.from("formacao_meet_excecoes").select("*").is("revertida_em", null),
+      fetch("/formacao/api/admin/meet/config").then((r) => r.json()),
     ]);
     setStatus(st?.error ? null : st);
     setSlots((sl.data as Slot[]) || []);
     setHorarios((hr.data as Horario[]) || []);
     setSpaces((sp.data as SpaceRow[]) || []);
     setExcecoes((ex.data as Excecao[]) || []);
+    if (cfg && !cfg.error) setTolerancia(cfg.tolerancia_atraso_min ?? 7);
     setLoading(false);
   }, []);
 
@@ -608,6 +629,33 @@ export default function MeetAdminPage() {
 
       {aba === "diagnostico" && (
         <div className="space-y-3">
+          <Card className="p-4">
+            <p className="text-sm text-cream font-semibold mb-1">Tolerância de atraso</p>
+            <p className="text-xs text-cream/40 mb-3">
+              Quem chega dentro desse prazo não conta como atrasado. Vale para o histórico
+              inteiro: mudar o número aqui recalcula também os encontros já capturados.
+            </p>
+            <div className="flex items-center gap-2">
+              <input
+                type="number"
+                min={0}
+                max={60}
+                value={tolerancia}
+                onChange={(e) => setTolerancia(Number(e.target.value))}
+                className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+              />
+              <span className="text-xs text-cream/40">minutos</span>
+              <button
+                onClick={salvarTolerancia}
+                disabled={trabalhando === "tolerancia"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                Salvar
+              </button>
+            </div>
+          </Card>
+
           <Card className="p-4 space-y-2">
             <Linha
               ok={!!status?.credenciais_app_configuradas}

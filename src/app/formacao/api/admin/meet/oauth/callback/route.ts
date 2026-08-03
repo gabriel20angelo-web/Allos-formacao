@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { baseUrlPublica, exigirAdmin, redirectUri } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { MEET_SCOPES } from "@/lib/meet/client";
+import { emailDoToken, MEET_SCOPES } from "@/lib/meet/client";
 
 export const dynamic = "force-dynamic";
 
@@ -69,18 +69,28 @@ export async function GET(req: NextRequest) {
     });
   }
 
-  // O e-mail sai do id_token, que é assinado pelo Google: mais confiável do
-  // que confiar no que foi digitado na configuração.
-  let email = process.env.GOOGLE_MEET_ORGANIZER_EMAIL || "desconhecido";
+  // Descobrir de quem é a conta, em três tentativas do mais confiável para o
+  // menos: o id_token assinado pelo Google, o endpoint userinfo, e por último
+  // o que estiver configurado à mão.
+  let email: string | null = null;
+
   if (json.id_token) {
     try {
       const payload = JSON.parse(
         Buffer.from(json.id_token.split(".")[1], "base64").toString("utf8")
       ) as { email?: string };
-      if (payload.email) email = payload.email;
+      email = payload.email || null;
     } catch {
       // id_token malformado não impede o resto: o token de acesso é o que importa.
     }
+  }
+
+  if (!email && json.access_token) {
+    email = await emailDoToken(json.access_token);
+  }
+
+  if (!email) {
+    email = process.env.GOOGLE_MEET_ORGANIZER_EMAIL || "desconhecido";
   }
 
   const sb = await createServiceRoleClient();

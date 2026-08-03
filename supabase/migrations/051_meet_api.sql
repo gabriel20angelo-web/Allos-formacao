@@ -160,6 +160,18 @@ CREATE TABLE IF NOT EXISTS formacao_meet_ingest_logs (
   erro TEXT
 );
 
+-- ── Tolerância de atraso ─────────────────────────────────────
+-- Chegar 5 minutos depois do horário combinado não é atraso, é vida. O número
+-- fica em formacao_cronograma, junto de duracao_minutos, porque é da mesma
+-- natureza: regra do encontro, não do módulo.
+--
+-- A tolerância NÃO é aplicada na ingestão. formacao_meet_participacoes guarda
+-- o atraso real, e o desconto acontece na leitura. Assim mudar de 7 para 10
+-- reescreve o passado inteiro na hora, em vez de valer só para os encontros
+-- seguintes e deixar a série com duas réguas diferentes.
+ALTER TABLE formacao_cronograma
+  ADD COLUMN IF NOT EXISTS tolerancia_atraso_min INTEGER NOT NULL DEFAULT 7;
+
 -- ── Ponte com a tabela antiga ────────────────────────────────
 -- A ingestão deriva uma linha em formacao_meet_presencas para cada encontro,
 -- pra não quebrar as cinco telas que já leem de lá. A coluna abaixo é o que
