@@ -17,6 +17,21 @@ export function normalizarNome(nome: string): string {
     .trim();
 }
 
+/**
+ * Contas da própria instituição, que entram nos encontros mas nunca são aluno.
+ *
+ * A conta da associação é a dona das salas e é por ela que os condutores
+ * entram. Sem isso ela apareceria toda semana na fila de conciliação, e o pior:
+ * alguém acabaria ligando ela a uma pessoa, e aí a associação inteira viraria
+ * um aluno com presença perfeita.
+ */
+const NOMES_DA_CASA = ["associacao allos", "allos", "diretoria allos", "diretoria"];
+
+export function ehContaDaCasa(displayName: string): boolean {
+  const norm = normalizarNome(displayName);
+  return NOMES_DA_CASA.some((n) => norm === n || norm.startsWith(n + " "));
+}
+
 /** Partículas que não ajudam a distinguir ninguém. */
 const IRRELEVANTES = new Set([
   "de", "da", "do", "das", "dos", "e", "di", "du",

@@ -16,7 +16,7 @@ import {
   listarSessoes,
   listarTranscricoes,
 } from "./client";
-import { dataLocal, diaSemanaLocal, normalizarNome, sugerirAluno } from "./nomes";
+import { dataLocal, diaSemanaLocal, ehContaDaCasa, normalizarNome, sugerirAluno } from "./nomes";
 import type { CandidatoAluno } from "./nomes";
 import type { MeetParticipant, MeetParticipantSession } from "./types";
 
@@ -375,8 +375,12 @@ export async function ingerir(opts?: {
             });
           }
 
-          let alunoId = aliases.get(norm) || null;
-          if (!alunoId) {
+          // A conta da associação hospeda os encontros e nunca é aluno. Sai da
+          // conciliação e não entra na contagem de participantes.
+          const daCasa = ehContaDaCasa(nome);
+
+          let alunoId = daCasa ? null : aliases.get(norm) || null;
+          if (!alunoId && !daCasa) {
             const { automatico } = sugerirAluno(nome, candidatos);
             alunoId = automatico;
             if (automatico) {
@@ -405,7 +409,7 @@ export async function ingerir(opts?: {
             tipo,
             google_user_id: userId,
             aluno_id: alunoId,
-            eh_condutor: condutoresNorm.includes(norm),
+            eh_condutor: daCasa || condutoresNorm.includes(norm),
             primeira_entrada: m.entrada?.toISOString() || null,
             ultima_saida: m.saida?.toISOString() || null,
             minutos_presentes: m.minutos,

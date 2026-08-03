@@ -45,7 +45,21 @@ export async function GET() {
     .select("id", { count: "exact", head: true })
     .is("aluno_id", null);
 
+  // A configuração vem junto de propósito. Cada rota administrativa valida a
+  // sessão com o Supabase, e várias chamadas simultâneas disputam a renovação
+  // do token, o que devolve 409 e derruba a sessão. Menos requisições no
+  // carregamento da tela é menos disputa.
+  const { data: cronograma } = await sb
+    .from("formacao_cronograma")
+    .select("tolerancia_atraso_min, limite_encerramento_min, pasta_drive_url")
+    .maybeSingle();
+
   return NextResponse.json({
+    config: {
+      tolerancia_atraso_min: cronograma?.tolerancia_atraso_min ?? 7,
+      limite_encerramento_min: cronograma?.limite_encerramento_min ?? 120,
+      pasta_drive_url: cronograma?.pasta_drive_url ?? null,
+    },
     autorizado: !!cred,
     organizer_email: cred?.organizer_email || null,
     autorizado_em: cred?.atualizado_em || null,

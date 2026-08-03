@@ -76,7 +76,10 @@ export async function GET(req: NextRequest) {
     )
     .gte("data_reuniao", desde)
     .eq("descartado", false) // teste de link não é encontro e não entra em média
-    .order("data_reuniao", { ascending: true });
+    .order("data_reuniao", { ascending: true })
+    // Teto de segurança: sem ele, "Tudo" (dois anos) cresce sem limite e um dia
+    // o dashboard trava por causa de uma consulta que ninguém revisou.
+    .limit(1500);
 
   if (errEnc) {
     return NextResponse.json({ error: errEnc.message }, { status: 500 });
@@ -93,7 +96,8 @@ export async function GET(req: NextRequest) {
     .select(
       "encontro_id, aluno_id, display_name, minutos_presentes, permanencia_pct, atraso_min, minutos_fala, eh_condutor"
     )
-    .in("encontro_id", ids);
+    .in("encontro_id", ids)
+    .limit(30000);
 
   const participacoes = ((parts || []) as ParticipacaoRow[]).filter((p) => !p.eh_condutor);
 

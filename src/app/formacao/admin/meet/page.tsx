@@ -115,6 +115,12 @@ interface Vinculo {
   ignorado: boolean;
 }
 
+interface Config {
+  tolerancia_atraso_min?: number;
+  limite_encerramento_min?: number;
+  pasta_drive_url?: string | null;
+}
+
 interface ResultadoBusca {
   id: string;
   display_name: string;
@@ -278,25 +284,27 @@ export default function MeetAdminPage() {
 
   const carregar = useCallback(async () => {
     const sb = createClient();
-    const [st, sl, hr, sp, ex, cfg] = await Promise.all([
-      pegarJson<Status & { error?: string }>("/formacao/api/admin/meet/status"),
+
+    // Uma chamada de API só, e depois as consultas do browser. Duas rotas
+    // administrativas ao mesmo tempo disputam a renovação do token de sessão no
+    // servidor, o Supabase devolve 409 e a sessão fica instável.
+    const st = await pegarJson<Status & { config?: Config; error?: string }>(
+      "/formacao/api/admin/meet/status"
+    );
+
+    const [sl, hr, sp, ex] = await Promise.all([
       sb.from("formacao_slots").select("*").eq("ativo", true),
       sb.from("formacao_horarios").select("*").order("ordem"),
       sb.from("formacao_meet_spaces").select("*"),
       sb.from("formacao_meet_excecoes").select("*").is("revertida_em", null),
-      pegarJson<{
-        tolerancia_atraso_min?: number;
-        limite_encerramento_min?: number;
-        pasta_drive_url?: string | null;
-        error?: string;
-      }>("/formacao/api/admin/meet/config"),
     ]);
+    const cfg = st?.config;
     setStatus(st && !st.error ? st : null);
     setSlots((sl.data as Slot[]) || []);
     setHorarios((hr.data as Horario[]) || []);
     setSpaces((sp.data as SpaceRow[]) || []);
     setExcecoes((ex.data as Excecao[]) || []);
-    if (cfg && !cfg.error) {
+    if (cfg) {
       setTolerancia(cfg.tolerancia_atraso_min ?? 7);
       setLimiteEncerramento(cfg.limite_encerramento_min ?? 120);
       setPastaDrive(cfg.pasta_drive_url ?? "");
@@ -371,39 +379,16 @@ export default function MeetAdminPage() {
     carregar();
   }, [carregar]);
 
-  // Rede de segurança enquanto não há agendador externo: abrir o painel dispara
-  // a captura se ela não roda há mais de duas horas. Não substitui um cron de
-  // verdade (se ninguém abrir o painel na segunda, a semana não fecha sozinha),
-  // mas garante que o sistema não fique parado esperando um clique em "Buscar
-  // encontros agora".
-  useEffect(() => {
-    if (!status?.autorizado) return;
-    const ultima = status.ultima_ingestao?.executado_em;
-    const horas = ultima
-      ? (Date.now() - new Date(ultima).getTime()) / 3_600_000
-      : Infinity;
-    if (horas < 2) return;
-
-    let cancelado = false;
-    (async () => {
-      try {
-        const r = await fetch("/formacao/api/admin/meet/ingerir", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ dias: 15 }),
-        });
-        if (!r.ok || cancelado) return;
-        await carregar();
-      } catch {
-        // Silencioso de propósito: é pano de fundo, e o botão manual continua ali.
-      }
-    })();
-    return () => {
-      cancelado = true;
-    };
-    // Roda uma vez por abertura, quando o status inicial chega.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [status?.autorizado]);
+  // A captura NÃO é mais disparada ao abrir o painel.
+  //
+  // Ela era a chamada mais pesada do sistema e saía junto com as outras na
+  // abertura da tela. Várias requisições administrativas ao mesmo tempo disputam
+  // a renovação do token de sessão no servidor, e o Supabase responde a isso com
+  // 409, o que deixava o painel lento e fazia telas anunciarem que a integração
+  // tinha sumido quando ela estava intacta.
+  //
+  // Quem chama a captura é o agendador, de quinze em quinze minutos, e o botão
+  // "Buscar encontros agora" quando alguém quiser na hora.
 
   useEffect(() => {
     if (aba === "nomes") {
@@ -699,7 +684,10 @@ export default function MeetAdminPage() {
     );
   }
 
-  const precisaAutorizar = !status?.autorizado;
+  // Não conseguir verificar é diferente de não estar configurado, e confundir os
+  // dois faz a tela anunciar que o acesso sumiu quando ele está intacto.
+  const naoVerificado = status === null;
+  const precisaAutorizar = !naoVerificado && !status?.autorizado;
 
   return (
     <div className="space-y-6">
@@ -726,7 +714,29 @@ export default function MeetAdminPage() {
       </div>
 
       {/* Estado da conexão */}
-      {precisaAutorizar ? (
+      {naoVerificado ? (
+        <Card className="p-4 border border-amber-400/30">
+          <div className="flex items-start gap-3">
+            <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
+            <div className="flex-1">
+              <p className="text-sm text-cream font-semibold">
+                Não consegui verificar o estado da integração.
+              </p>
+              <p className="text-xs text-cream/50 mt-1">
+                Isso não quer dizer que algo foi perdido: a conexão com o Google costuma estar
+                intacta. Recarregue a página. Se persistir, saia e entre de novo na plataforma.
+              </p>
+              <button
+                onClick={() => carregar()}
+                className="inline-flex items-center gap-1.5 mt-3 px-3 py-2 rounded-lg text-xs font-semibold"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                <RefreshCw className="h-3.5 w-3.5" /> Tentar de novo
+              </button>
+            </div>
+          </div>
+        </Card>
+      ) : precisaAutorizar ? (
         <Card className="p-4 border border-amber-400/30">
           <div className="flex items-start gap-3">
             <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />

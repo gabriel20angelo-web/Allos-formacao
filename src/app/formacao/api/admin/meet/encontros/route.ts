@@ -103,16 +103,16 @@ export async function GET(req: NextRequest) {
     .maybeSingle();
   const tolerancia = cronograma?.tolerancia_atraso_min ?? 7;
 
-  // Descartados só aparecem quando pedidos: eles existem para sumir da vista,
-  // mas precisam de um lugar onde dê para conferir e restaurar.
-  const incluirDescartados = req.nextUrl.searchParams.get("descartados") === "1";
+  // Ou os normais, ou os descartados. Misturar os dois esconde justamente o que
+  // se foi procurar: quem pede para ver o descartado quer ver o descartado.
+  const soDescartados = req.nextUrl.searchParams.get("descartados") === "1";
 
-  let q = sb
+  const q = sb
     .from("formacao_meet_encontros")
     .select("*")
+    .eq("descartado", soDescartados)
     .order("inicio", { ascending: false })
     .limit(limite);
-  if (!incluirDescartados) q = q.eq("descartado", false);
 
   const { data: encontros, error } = await q;
 
