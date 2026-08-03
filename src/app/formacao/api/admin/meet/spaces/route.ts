@@ -99,8 +99,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, space: data });
   } catch (e) {
     const msg = e instanceof MeetApiError ? e.message : String(e);
-    console.error("[meet/spaces] criar", e);
-    return NextResponse.json({ error: msg }, { status: 502 });
+    const detalhe = e instanceof MeetApiError ? e.body : undefined;
+    console.error("[meet/spaces] criar", msg, detalhe);
+    return NextResponse.json({ error: msg, detalhe }, { status: 502 });
   }
 }
 

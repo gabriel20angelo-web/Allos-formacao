@@ -50,8 +50,16 @@ export async function exigirAdmin(): Promise<AdminOk | AdminNegado> {
  * Localhost continua valendo pelo request, senão não dá para testar local.
  */
 export function baseUrlPublica(req: Request): string {
-  const origin = new URL(req.url).origin;
-  if (origin.includes("localhost") || origin.includes("127.0.0.1")) return origin;
+  // Só em desenvolvimento o request diz a verdade sobre o endereço público.
+  //
+  // No Railway o Next escuta em localhost:8080 dentro do contêiner, então
+  // `req.url` chega como http://localhost:8080 mesmo quando o usuário está em
+  // allos.org.br. Uma checagem de "contém localhost" para separar dev de
+  // produção acerta na máquina do desenvolvedor e erra no servidor, mandando
+  // o admin para um endereço que só existe dentro do contêiner.
+  if (process.env.NODE_ENV === "development") {
+    return new URL(req.url).origin;
+  }
   return process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 }
 
