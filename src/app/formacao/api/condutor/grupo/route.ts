@@ -82,11 +82,26 @@ async function identificar(): Promise<Quem | Barrado> {
   return { ok: true, userId: user.id, condutorId: ficha?.id || null, ehAdmin };
 }
 
-/** As salas que esta pessoa conduz. */
+/**
+ * As salas que esta pessoa conduz.
+ *
+ * Administrador vê todas: é a única forma de conferir o que o condutor está
+ * vendo, e sem isso a tela responderia "você não conduz nada" para quem
+ * mantém o sistema.
+ */
 async function salasDele(
   sb: Awaited<ReturnType<typeof createServiceRoleClient>>,
-  condutorId: string | null
+  condutorId: string | null,
+  ehAdmin = false
 ): Promise<string[]> {
+  if (ehAdmin && !condutorId) {
+    const { data } = await sb
+      .from("formacao_meet_spaces")
+      .select("space_name")
+      .eq("ativo", true);
+    return (data || []).map((s: { space_name: string }) => s.space_name);
+  }
+
   if (!condutorId) return [];
 
   const { data: alocacoes } = await sb
@@ -111,7 +126,7 @@ export async function GET() {
   if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
 
   const sb = await createServiceRoleClient();
-  const nomes = await salasDele(sb, quem.condutorId);
+  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
 
   if (!nomes.length) {
     return NextResponse.json({
@@ -233,7 +248,7 @@ export async function PATCH(req: NextRequest) {
 
   // A sala é dele? Sem esta checagem, saber o nome de uma sala qualquer
   // bastaria para reconfigurá-la.
-  const nomes = await salasDele(sb, quem.condutorId);
+  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
   if (!quem.ehAdmin && !nomes.includes(spaceName)) {
     return NextResponse.json({ error: "Esta sala não é sua." }, { status: 403 });
   }

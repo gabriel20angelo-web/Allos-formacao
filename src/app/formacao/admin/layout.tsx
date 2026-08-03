@@ -41,6 +41,10 @@ const navItems: {
     badgeKey: "sugestoes-pendentes",
   },
   { href: "/formacao/admin/certificados", label: "Certificados", icon: Award },
+  // Estas duas existiam e só apareciam para quem tinha o cargo — o
+  // administrador alcançava por URL e não tinha como saber que existiam.
+  { href: "/formacao/admin/eventos", label: "Eventos", icon: CalendarDays },
+  { href: "/formacao/admin/meu-grupo", label: "Visão do condutor", icon: Video },
   { href: "/formacao/admin/moderacao", label: "Moderação", icon: MessageSquare },
   { href: "/formacao/admin/configuracoes", label: "Configurações", icon: Settings },
 ];
