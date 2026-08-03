@@ -12,6 +12,7 @@
 import type {
   AccessType,
   ArtefatosDesejados,
+  MeetArtifactConfig,
   MeetConferenceRecord,
   MeetParticipant,
   MeetParticipantSession,
@@ -234,6 +235,13 @@ function montarArtifactConfig(a: ArtefatosDesejados): MeetSpaceConfig {
   };
 }
 
+/** Caminho de cada chave até a folha, que é o que o updateMask aceita. */
+const CAMINHO_ARTEFATO = {
+  gravar: "config.artifactConfig.recordingConfig.autoRecordingGeneration",
+  transcrever: "config.artifactConfig.transcriptionConfig.autoTranscriptionGeneration",
+  notas: "config.artifactConfig.smartNotesConfig.autoSmartNotesGeneration",
+} as const;
+
 /**
  * Cria a sala permanente de um slot.
  *
@@ -257,15 +265,47 @@ export async function lerSpace(spaceName: string): Promise<MeetSpace> {
   return meetFetch<MeetSpace>(`/${spaceName}`);
 }
 
-/** Troca o que é gravado numa sala existente. Usado pelo padrão do slot e pelas exceções por data. */
+/**
+ * Troca o que é gravado numa sala existente.
+ *
+ * A máscara aponta para a folha de cada chave, e não para `config.artifactConfig`
+ * inteiro: o exemplo oficial usa `config.accessType`, que também é folha, e o nó
+ * intermediário é recusado com 400.
+ *
+ * Recebe parcial de propósito. Mexer só no campo que o admin clicou evita
+ * esbarrar em recurso que a licença não cobre (notas de IA, por exemplo) ao
+ * alterar algo que não tem nada a ver.
+ */
 export async function atualizarArtefatos(
   spaceName: string,
-  a: ArtefatosDesejados
+  a: Partial<ArtefatosDesejados>
 ): Promise<MeetSpace> {
-  const mask = encodeURIComponent("config.artifactConfig");
+  const artifactConfig: MeetArtifactConfig = {};
+  const campos: string[] = [];
+
+  if (a.gravar !== undefined) {
+    artifactConfig.recordingConfig = { autoRecordingGeneration: a.gravar ? "ON" : "OFF" };
+    campos.push(CAMINHO_ARTEFATO.gravar);
+  }
+  if (a.transcrever !== undefined) {
+    artifactConfig.transcriptionConfig = {
+      autoTranscriptionGeneration: a.transcrever ? "ON" : "OFF",
+    };
+    campos.push(CAMINHO_ARTEFATO.transcrever);
+  }
+  if (a.notas !== undefined) {
+    artifactConfig.smartNotesConfig = {
+      autoSmartNotesGeneration: a.notas ? "ON" : "OFF",
+    };
+    campos.push(CAMINHO_ARTEFATO.notas);
+  }
+
+  if (!campos.length) return lerSpace(spaceName);
+
+  const mask = encodeURIComponent(campos.join(","));
   return meetFetch<MeetSpace>(`/${spaceName}?updateMask=${mask}`, {
     method: "PATCH",
-    body: JSON.stringify({ config: montarArtifactConfig(a) }),
+    body: JSON.stringify({ config: { artifactConfig } }),
   });
 }
 

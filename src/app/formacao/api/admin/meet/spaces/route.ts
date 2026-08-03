@@ -149,7 +149,9 @@ export async function PATCH(req: NextRequest) {
       await atualizarAcesso(body.space_name, body.access_type);
     } catch (e) {
       const msg = e instanceof MeetApiError ? e.message : String(e);
-      return NextResponse.json({ error: msg }, { status: 400 });
+      const detalhe = e instanceof MeetApiError ? e.body : undefined;
+      console.error("[meet/spaces] patch", msg, detalhe);
+      return NextResponse.json({ error: msg, detalhe }, { status: 400 });
     }
   }
 
@@ -159,15 +161,22 @@ export async function PATCH(req: NextRequest) {
     notas: body.notas ?? atual.notas,
   };
 
-  const mexeuEmArtefato =
-    body.gravar !== undefined || body.transcrever !== undefined || body.notas !== undefined;
+  // Só o que veio no pedido vai para o Google, para não tocar em recurso que a
+  // licença talvez não cubra sem que ninguém tenha pedido.
+  const alteracao = {
+    ...(body.gravar !== undefined ? { gravar: body.gravar } : {}),
+    ...(body.transcrever !== undefined ? { transcrever: body.transcrever } : {}),
+    ...(body.notas !== undefined ? { notas: body.notas } : {}),
+  };
 
-  if (mexeuEmArtefato) {
+  if (Object.keys(alteracao).length > 0) {
     try {
-      await atualizarArtefatos(body.space_name, artefatos);
+      await atualizarArtefatos(body.space_name, alteracao);
     } catch (e) {
       const msg = e instanceof MeetApiError ? e.message : String(e);
-      return NextResponse.json({ error: msg }, { status: 400 });
+      const detalhe = e instanceof MeetApiError ? e.body : undefined;
+      console.error("[meet/spaces] patch", msg, detalhe);
+      return NextResponse.json({ error: msg, detalhe }, { status: 400 });
     }
   }
 
