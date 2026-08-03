@@ -35,7 +35,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "userId e role são obrigatórios" }, { status: 400 });
   }
 
-  const ALLOWED_ROLES = ["student", "instructor", "admin", "associado", "eventos"] as const;
+  const ALLOWED_ROLES = ["student", "instructor", "admin", "associado", "eventos", "condutor"] as const;
   if (!ALLOWED_ROLES.includes(role)) {
     return Response.json({ error: "Role inválido" }, { status: 400 });
   }

@@ -39,6 +39,8 @@ interface AuthContextValue {
   isAssociado: boolean;
   /** Cargo dedicado a eventos do calendário — vê só essa área. */
   isEventos: boolean;
+  /** Conduz um grupo: vê e ajusta só o próprio encontro. */
+  isCondutor: boolean;
   /** Admin ou cargo de eventos. */
   canManageEvents: boolean;
 }
@@ -323,6 +325,7 @@ export function AuthProvider({
       isStudent: profile?.role === "student",
       isAssociado: profile?.role === "associado",
       isEventos: profile?.role === "eventos",
+      isCondutor: profile?.role === "condutor",
       canManageEvents:
         profile?.role === "admin" || profile?.role === "eventos",
     }),

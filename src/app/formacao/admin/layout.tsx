@@ -22,6 +22,7 @@ import {
   Calendar,
   CalendarDays,
   Users,
+  Video,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
 
@@ -49,6 +50,11 @@ const eventosNavItems: typeof navItems = [
   { href: "/formacao/admin/eventos", label: "Eventos", icon: CalendarDays },
 ];
 
+/** Quem conduz enxerga só o próprio grupo. */
+const condutorNavItems: typeof navItems = [
+  { href: "/formacao/admin/meu-grupo", label: "Meu grupo", icon: Video },
+];
+
 const pageTitles: Record<string, string> = {
   "/formacao/admin": "Dashboard",
   "/formacao/admin/formacao-base": "Formação",
@@ -59,6 +65,7 @@ const pageTitles: Record<string, string> = {
   "/formacao/admin/moderacao": "Moderação",
   "/formacao/admin/configuracoes": "Configurações",
   "/formacao/admin/eventos": "Eventos",
+  "/formacao/admin/meu-grupo": "Meu grupo",
 };
 
 export default function AdminLayout({
@@ -66,10 +73,10 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { profile, loading, signOut, isAdmin, isInstructor, isEventos } =
+  const { profile, loading, signOut, isAdmin, isInstructor, isEventos, isCondutor } =
     useAuth();
   const pathname = usePathname();
-  const items = isEventos ? eventosNavItems : navItems;
+  const items = isEventos ? eventosNavItems : isCondutor ? condutorNavItems : navItems;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSugestoes, setPendingSugestoes] = useState(0);
   // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
@@ -140,7 +147,7 @@ export default function AdminLayout({
     );
   }
 
-  if (!profile || (!isAdmin && !isInstructor && !isEventos)) {
+  if (!profile || (!isAdmin && !isInstructor && !isEventos && !isCondutor)) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#111111" }}>
         <div className="max-w-md text-center space-y-4">
@@ -148,7 +155,7 @@ export default function AdminLayout({
             Acesso restrito
           </h1>
           <p className="text-cream/50 text-sm">
-            Você precisa de uma conta de administrador, instrutor ou de eventos pra acessar esta área.
+            Você precisa de uma conta de administrador, instrutor, de eventos ou de condutor pra acessar esta área.
           </p>
           <Link
             href="/formacao"
@@ -170,7 +177,7 @@ export default function AdminLayout({
       {/* Brand with logo */}
       <div className="p-6" style={{ borderBottom: "1px solid rgba(200,75,49,0.1)" }}>
         <Link
-          href={isEventos ? "/formacao/admin/eventos" : "/formacao/admin"}
+          href={isEventos ? "/formacao/admin/eventos" : isCondutor ? "/formacao/admin/meu-grupo" : "/formacao/admin"}
           className="flex items-center gap-2.5"
         >
           <Image src="/Icone_Allos_Verde.png" alt="Allos" width={28} height={28} />

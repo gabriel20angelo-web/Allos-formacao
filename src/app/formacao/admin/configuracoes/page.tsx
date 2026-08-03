@@ -24,6 +24,7 @@ const roleLabels: Record<string, string> = {
   instructor: "Professor",
   associado: "Associado",
   eventos: "Eventos",
+  condutor: "Condutor",
   student: "Aluno",
 };
 
@@ -622,6 +623,7 @@ export default function AdminConfiguracoesPage() {
                 { value: "associado", label: "Associado" },
                 { value: "instructor", label: "Professor" },
                 { value: "eventos", label: "Eventos (só o calendário de eventos)" },
+                { value: "condutor", label: "Condutor (só o próprio grupo no Meet)" },
                 { value: "admin", label: "Administrador" },
               ]}
             />

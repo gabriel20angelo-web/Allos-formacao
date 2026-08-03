@@ -47,6 +47,8 @@ export default function CondutoresPage() {
   const [editNome, setEditNome] = useState("");
   const [editTelefone, setEditTelefone] = useState("");
   const [editObservacoes, setEditObservacoes] = useState("");
+  const [editUserId, setEditUserId] = useState("");
+  const [contas, setContas] = useState<{ id: string; full_name: string | null; email: string | null }[]>([]);
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoCondutor | null>(null);
   const [submissions, setSubmissions] = useState<CertificadoSubmission[]>([]);
@@ -82,6 +84,15 @@ export default function CondutoresPage() {
         result[nome] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
       });
       setQuorumByCondutor(result);
+
+      // As contas que podem ser ligadas a uma ficha. Sem o vínculo, o cargo de
+      // condutor não abre nada: a área do grupo procura a ficha por user_id.
+      const { data: perfis } = await client
+        .from("profiles")
+        .select("id, full_name, email")
+        .order("full_name", { ascending: true })
+        .limit(2000);
+      if (perfis) setContas(perfis);
 
       setExtrasLoading(false);
     }
@@ -205,6 +216,7 @@ export default function CondutoresPage() {
     setEditNome(item.nome);
     setEditTelefone(item.telefone || "");
     setEditObservacoes(item.observacoes || "");
+    setEditUserId((item as { user_id?: string | null }).user_id || "");
   }
 
   async function handleEditSave() {
@@ -222,6 +234,7 @@ export default function CondutoresPage() {
         nome,
         telefone: editTelefone.trim() || null,
         observacoes: editObservacoes.trim() || null,
+        user_id: editUserId || null,
       })
       .eq("id", editTarget.id);
 
@@ -239,6 +252,7 @@ export default function CondutoresPage() {
                 nome,
                 telefone: editTelefone.trim() || null,
                 observacoes: editObservacoes.trim() || null,
+        user_id: editUserId || null,
               }
             : c
         )
@@ -567,6 +581,41 @@ export default function CondutoresPage() {
                 rows={3}
                 className="w-full px-4 py-2.5 dark-input rounded-[10px] text-sm font-dm resize-none"
               />
+            </div>
+
+            {/* O elo que faltava.
+                Todo o resto do sistema casa condutor por semelhança de nome, o
+                que serve para estatística e não para permissão: dois nomes
+                iguais, ou um apelido diferente no Meet, já bastariam para
+                alguém abrir o grupo de outra pessoa. Aqui a ligação é
+                explícita, e é ela que abre a área "Meu grupo". */}
+            <div>
+              <label className="text-xs text-cream/40 font-dm mb-1 block">
+                Conta desta pessoa
+              </label>
+              <select
+                value={editUserId}
+                onChange={(e) => setEditUserId(e.target.value)}
+                className="w-full px-4 py-2.5 dark-input rounded-[10px] text-sm font-dm"
+                style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+              >
+                <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                  sem conta ligada
+                </option>
+                {contas.map((c) => (
+                  <option
+                    key={c.id}
+                    value={c.id}
+                    style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                  >
+                    {c.full_name || c.email} {c.email ? `· ${c.email}` : ""}
+                  </option>
+                ))}
+              </select>
+              <p className="text-[11px] text-cream/30 mt-1.5">
+                Sem isso a pessoa não consegue abrir a área do próprio grupo. O cargo
+                &quot;Condutor&quot; também precisa estar marcado em Configurações.
+              </p>
             </div>
             <div className="flex flex-col-reverse sm:flex-row justify-end gap-3">
               <Button variant="ghost" onClick={() => setEditTarget(null)}>

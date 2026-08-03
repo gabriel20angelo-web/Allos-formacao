@@ -4,7 +4,9 @@ export type UserRole =
   | "instructor"
   | "admin"
   | "associado"
-  | "eventos";
+  | "eventos"
+  /** Conduz um grupo: vê e ajusta só o próprio encontro. */
+  | "condutor";
 
 export type CourseStatus = "draft" | "published" | "archived";
 

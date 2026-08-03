@@ -137,8 +137,10 @@ export async function updateSession(request: NextRequest) {
     // em profiles so quando o claim nao existe (hook ainda nao habilitada).
     if (pathname.startsWith("/formacao/admin") && user) {
       // "eventos" entra no painel, mas só na própria área (migration 041).
-      const allowedRoles = new Set(["admin", "instructor", "eventos"]);
+      // "condutor" segue a mesma ideia: entra, e só na área do próprio grupo.
+      const allowedRoles = new Set(["admin", "instructor", "eventos", "condutor"]);
       const EVENTOS_HOME = "/formacao/admin/eventos";
+      const CONDUTOR_HOME = "/formacao/admin/meu-grupo";
       let role: string | null = user.role ?? null;
 
       if (!role) {
@@ -156,6 +158,10 @@ export async function updateSession(request: NextRequest) {
 
       if (role === "eventos" && !pathname.startsWith(EVENTOS_HOME)) {
         return hardRedirect(EVENTOS_HOME, supabaseResponse);
+      }
+
+      if (role === "condutor" && !pathname.startsWith(CONDUTOR_HOME)) {
+        return hardRedirect(CONDUTOR_HOME, supabaseResponse);
       }
     }
 
