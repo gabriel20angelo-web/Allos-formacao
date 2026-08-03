@@ -43,7 +43,20 @@ interface SpaceRow {
   janela_automatica: boolean;
   duracao_min: number | null;
   pasta_drive_url: string | null;
+  curso_id: string | null;
   ativo: boolean;
+}
+interface CursoOpcao {
+  id: string;
+  title: string;
+}
+interface AulaSugerida {
+  id: string;
+  titulo: string;
+  video_url: string;
+  duracao_min: number | null;
+  data_reuniao: string;
+  curso_titulo: string;
 }
 interface Excecao {
   id: string;
@@ -135,7 +148,7 @@ interface ResultadoBusca {
   } | null;
 }
 
-type Aba = "salas" | "encontros" | "nomes" | "diagnostico";
+type Aba = "salas" | "encontros" | "aulas" | "nomes" | "diagnostico";
 
 /**
  * Fetch que nunca explode a tela.
@@ -187,6 +200,67 @@ export default function MeetAdminPage() {
   const [encontros, setEncontros] = useState<Encontro[]>([]);
   const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
   const [verDescartados, setVerDescartados] = useState(false);
+  const [cursos, setCursos] = useState<CursoOpcao[]>([]);
+  const [aulas, setAulas] = useState<AulaSugerida[]>([]);
+  const [tituloEditado, setTituloEditado] = useState<Record<string, string>>({});
+
+  const carregarAulas = useCallback(async () => {
+    const j = await pegarJson<{ fila?: AulaSugerida[]; error?: string }>(
+      "/formacao/api/admin/meet/aulas"
+    );
+    if (j && !j.error) setAulas(j.fila || []);
+  }, []);
+
+  async function decidirAula(a: AulaSugerida, acao: "aprovar" | "descartar") {
+    setTrabalhando(a.id);
+    try {
+      const r = await fetch("/formacao/api/admin/meet/aulas", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: a.id,
+          acao,
+          titulo: tituloEditado[a.id] ?? a.titulo,
+        }),
+      });
+      const j = await lerResposta(r);
+      toast.success(
+        acao === "aprovar" ? "Aula publicada no curso." : "Gravação descartada."
+      );
+      if (j.aviso) toast.warning(j.aviso as string);
+      setAulas((f) => f.filter((x) => x.id !== a.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function vincularCurso(space: SpaceRow, cursoId: string) {
+    setTrabalhando(space.space_name + "curso");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name, curso_id: cursoId || null }),
+      });
+      await lerResposta(r);
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name ? { ...s, curso_id: cursoId || null } : s
+        )
+      );
+      toast.success(
+        cursoId
+          ? "As gravações deste grupo passam a virar aulas deste curso, para você aprovar."
+          : "Desvinculado do curso."
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
   const [vinculos, setVinculos] = useState<Vinculo[]>([]);
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
@@ -249,7 +323,7 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rotulo: nome, gravar: true, transcrever: true, notas: false }),
+        body: JSON.stringify({ rotulo: nome, gravar: false, transcrever: true, notas: true }),
       });
       await lerResposta(r);
       toast.success(`Sala "${nome}" criada.`);
@@ -292,12 +366,14 @@ export default function MeetAdminPage() {
       "/formacao/api/admin/meet/status"
     );
 
-    const [sl, hr, sp, ex] = await Promise.all([
+    const [sl, hr, sp, ex, cs] = await Promise.all([
       sb.from("formacao_slots").select("*").eq("ativo", true),
       sb.from("formacao_horarios").select("*").order("ordem"),
       sb.from("formacao_meet_spaces").select("*"),
       sb.from("formacao_meet_excecoes").select("*").is("revertida_em", null),
+      sb.from("courses").select("id, title").order("title").limit(200),
     ]);
+    setCursos((cs.data as CursoOpcao[]) || []);
     const cfg = st?.config;
     setStatus(st && !st.error ? st : null);
     setSlots((sl.data as Slot[]) || []);
@@ -396,7 +472,8 @@ export default function MeetAdminPage() {
       carregarVinculos();
     }
     if (aba === "encontros") carregarEncontros();
-  }, [aba, carregarFila, carregarVinculos, carregarEncontros]);
+    if (aba === "aulas") carregarAulas();
+  }, [aba, carregarFila, carregarVinculos, carregarEncontros, carregarAulas]);
 
   const horarioPorId = useMemo(
     () => new Map(horarios.map((h) => [h.id, h])),
@@ -444,10 +521,9 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Grava e transcreve desde o começo, por escolha do Gabriel. O vídeo é
-        // o que ocupa Drive; a chave no painel desliga por grupo quando algum
-        // encontro não deve ser gravado.
-        body: JSON.stringify({ slot_id: slot.id, gravar: true, transcrever: true, notas: false }),
+        // Transcrição e notas sim, vídeo não. Gravar é decisão consciente por
+        // grupo, tomada na chave do painel, não um padrão que ninguém escolheu.
+        body: JSON.stringify({ slot_id: slot.id, gravar: false, transcrever: true, notas: true }),
       });
       await lerResposta(r);
       toast.success("Sala criada. O link do grupo já aponta para ela.");
@@ -791,6 +867,7 @@ export default function MeetAdminPage() {
         {([
           ["salas", "Salas dos grupos"],
           ["encontros", `Encontros${status?.total_encontros ? ` (${status.total_encontros})` : ""}`],
+          ["aulas", `Aulas a publicar${aulas.length ? ` (${aulas.length})` : ""}`],
           ["nomes", `Nomes a resolver${status?.nomes_pendentes ? ` (${fila.length || status.nomes_pendentes})` : ""}`],
           ["diagnostico", "Diagnóstico"],
         ] as [Aba, string][]).map(([id, label]) => (
@@ -1067,6 +1144,25 @@ export default function MeetAdminPage() {
                     </button>
                   )}
                 </div>
+
+                {space && cursos.length > 0 && (
+                  <div className="mt-3 pt-3 border-t border-white/5 flex items-center gap-2 flex-wrap">
+                    <span className="text-xs text-cream/40">Gravações viram aulas de:</span>
+                    <select
+                      value={space.curso_id || ""}
+                      onChange={(e) => vincularCurso(space, e.target.value)}
+                      disabled={trabalhando === space.space_name + "curso"}
+                      className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream max-w-[280px]"
+                    >
+                      <option value="">nenhum curso</option>
+                      {cursos.map((c) => (
+                        <option key={c.id} value={c.id}>
+                          {c.title}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                )}
 
                 {duracaoAberta === slot.id && space && (
                   <FormDuracao
@@ -1359,6 +1455,73 @@ export default function MeetAdminPage() {
                 </Card>
               );
             })
+          )}
+        </div>
+      )}
+
+      {aba === "aulas" && (
+        <div className="space-y-3">
+          <p className="text-xs text-cream/40">
+            Gravações de grupos vinculados a um curso. Aprovar cria a aula no curso e libera o
+            vídeo para quem tiver o link, que é o que permite o aluno assistir. Antes de aprovar,
+            vale abrir e conferir o começo da gravação, que costuma pegar a chegada das pessoas.
+          </p>
+
+          {aulas.length === 0 ? (
+            <Card className="p-6 text-center text-sm text-cream/40">
+              Nada esperando. Aparecem aqui as gravações dos grupos que você vincular a um curso,
+              na aba Salas.
+            </Card>
+          ) : (
+            aulas.map((a) => (
+              <Card key={a.id} className="p-4">
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex-1 min-w-[220px]">
+                    <input
+                      type="text"
+                      value={tituloEditado[a.id] ?? a.titulo}
+                      onChange={(e) =>
+                        setTituloEditado((t) => ({ ...t, [a.id]: e.target.value }))
+                      }
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-cream"
+                    />
+                    <p className="text-xs text-cream/40 mt-1.5">
+                      {a.curso_titulo}
+                      {" · "}
+                      {new Date(a.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}
+                      {a.duracao_min ? ` · ${a.duracao_min} min` : ""}
+                      {" · "}
+                      <a
+                        href={a.video_url}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: ROXO }}
+                      >
+                        ver gravação
+                      </a>
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => decidirAula(a, "aprovar")}
+                      disabled={trabalhando === a.id}
+                      className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                      style={{ background: "rgba(34,197,94,0.12)", color: "#22C55E", border: "1px solid rgba(34,197,94,0.3)" }}
+                    >
+                      Publicar
+                    </button>
+                    <button
+                      onClick={() => decidirAula(a, "descartar")}
+                      disabled={trabalhando === a.id}
+                      className="px-2.5 py-1.5 rounded-lg text-xs text-cream/40 hover:text-red-400 disabled:opacity-40"
+                      style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                    >
+                      Descartar
+                    </button>
+                  </div>
+                </div>
+              </Card>
+            ))
           )}
         </div>
       )}

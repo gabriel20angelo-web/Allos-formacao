@@ -10,6 +10,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { arquivarGravacoes } from "@/lib/meet/arquivar";
+import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
@@ -63,6 +64,9 @@ export async function GET(req: NextRequest) {
     // falha não pode derrubar a captura de presença, que é o que importa.
     const arquivos = await arquivarGravacoes(sb);
 
+    // Sugere, não publica. A aula só existe quando alguém aprovar.
+    const aulas = await sugerirAulasDeGravacoes(sb);
+
     return NextResponse.json({
       ok: true,
       encerramento,
@@ -72,6 +76,7 @@ export async function GET(req: NextRequest) {
       status,
       semana,
       arquivos,
+      aulas,
     });
   } catch (e) {
     console.error("[meet/cron]", e);

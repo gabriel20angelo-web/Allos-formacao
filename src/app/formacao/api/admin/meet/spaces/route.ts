@@ -48,10 +48,14 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // Gravação de vídeo fica DESLIGADA por padrão, por decisão do Gabriel: o
+  // encontro de formação toca em material clínico, e um vídeo existe para
+  // sempre e vaza com um link. Transcrição e notas ficam ligadas porque geram
+  // os indicadores e não guardam imagem de ninguém.
   const artefatos = {
-    gravar: body.gravar !== false, // grava por padrão; a chave do painel desliga
-    transcrever: body.transcrever !== false, // é ela que gera os indicadores
-    notas: body.notas === true,
+    gravar: body.gravar === true,
+    transcrever: body.transcrever !== false,
+    notas: body.notas !== false,
   };
 
   const sb = await createServiceRoleClient();
@@ -145,6 +149,7 @@ export async function PATCH(req: NextRequest) {
     access_type?: AccessType;
     janela_automatica?: boolean;
     duracao_min?: number | null;
+    curso_id?: string | null;
   };
   try {
     body = await req.json();
@@ -164,6 +169,22 @@ export async function PATCH(req: NextRequest) {
 
   if (!atual) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
+  }
+
+  // Curso que recebe as gravações deste grupo. null desliga a sugestão.
+  if (body.curso_id !== undefined) {
+    const { error } = await sb
+      .from("formacao_meet_spaces")
+      .update({ curso_id: body.curso_id || null })
+      .eq("space_name", body.space_name);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    if (
+      body.access_type === undefined &&
+      body.janela_automatica === undefined &&
+      body.duracao_min === undefined
+    ) {
+      return NextResponse.json({ ok: true, curso_id: body.curso_id || null });
+    }
   }
 
   // Duração própria desta sala. null volta ao padrão da Formação.

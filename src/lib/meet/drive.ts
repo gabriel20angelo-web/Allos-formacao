@@ -109,6 +109,23 @@ export async function moverArquivo(
   });
 }
 
+/**
+ * Libera o arquivo para quem tiver o link.
+ *
+ * É o que faz o vídeo tocar dentro do curso: o player embute o arquivo do
+ * Drive, e sem isso o aluno vê "solicitar acesso" no lugar da aula.
+ *
+ * Tem peso: a partir daqui, quem tiver o endereço assiste, aluno ou não. Por
+ * isso só é chamado no momento em que uma pessoa aprova a aula, nunca pela
+ * captura automática.
+ */
+export async function liberarPorLink(fileId: string): Promise<void> {
+  await driveFetch(`/files/${fileId}/permissions?supportsAllDrives=true`, {
+    method: "POST",
+    body: JSON.stringify({ role: "reader", type: "anyone" }),
+  });
+}
+
 const MIME_PASTA = "application/vnd.google-apps.folder";
 
 /**
