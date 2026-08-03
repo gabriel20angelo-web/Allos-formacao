@@ -40,6 +40,9 @@ export const MEET_SCOPES = [
   // Se a organização barrar, tudo o mais continua funcionando e os arquivos só
   // ficam onde o Google os pôs.
   "https://www.googleapis.com/auth/drive",
+  // Subir a gravação como não listada. Escopo sensível, não restrito, e app
+  // interno não passa por verificação.
+  "https://www.googleapis.com/auth/youtube.upload",
 ];
 
 /** E-mail da conta que autorizou, para o painel mostrar de quem é o acesso. */

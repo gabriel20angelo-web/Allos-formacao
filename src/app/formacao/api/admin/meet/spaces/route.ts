@@ -150,6 +150,7 @@ export async function PATCH(req: NextRequest) {
     janela_automatica?: boolean;
     duracao_min?: number | null;
     curso_id?: string | null;
+    subir_youtube?: boolean;
   };
   try {
     body = await req.json();
@@ -169,6 +170,16 @@ export async function PATCH(req: NextRequest) {
 
   if (!atual) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
+  }
+
+  // Envio para o YouTube desta sala.
+  if (body.subir_youtube !== undefined) {
+    const { error } = await sb
+      .from("formacao_meet_spaces")
+      .update({ subir_youtube: body.subir_youtube === true })
+      .eq("space_name", body.space_name);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, subir_youtube: body.subir_youtube === true });
   }
 
   // Curso que recebe as gravações deste grupo. null desliga a sugestão.

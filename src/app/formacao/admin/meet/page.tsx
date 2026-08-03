@@ -14,7 +14,7 @@ import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
-  UserSearch, Video, FileText, X,
+  UserSearch, Video, FileText, X, Youtube,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -44,6 +44,7 @@ interface SpaceRow {
   duracao_min: number | null;
   pasta_drive_url: string | null;
   curso_id: string | null;
+  subir_youtube: boolean;
   ativo: boolean;
 }
 interface CursoOpcao {
@@ -229,6 +230,33 @@ export default function MeetAdminPage() {
       );
       if (j.aviso) toast.warning(j.aviso as string);
       setAulas((f) => f.filter((x) => x.id !== a.id));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function alternarYoutube(space: SpaceRow) {
+    const novo = !space.subir_youtube;
+    setTrabalhando(space.space_name + "yt");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name, subir_youtube: novo }),
+      });
+      await lerResposta(r);
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name ? { ...s, subir_youtube: novo } : s
+        )
+      );
+      toast.success(
+        novo
+          ? "As gravações deste grupo passam a subir para o YouTube como não listadas."
+          : "As gravações deste grupo ficam só no Drive."
+      );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
     } finally {
@@ -1030,6 +1058,21 @@ export default function MeetAdminPage() {
 
                   {space ? (
                     <div className="flex items-center gap-2 flex-wrap">
+                      <button
+                        onClick={() => alternarYoutube(space)}
+                        disabled={trabalhando === space.space_name + "yt"}
+                        title="Envia a gravação para o YouTube como não listada e usa esse vídeo na aula do curso, começando no ponto em que o encontro de fato começou."
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
+                        style={{
+                          background: space.subir_youtube
+                            ? "rgba(255,0,0,0.10)"
+                            : "rgba(255,255,255,0.03)",
+                          color: space.subir_youtube ? "#FF4D4D" : "rgba(253,251,247,0.35)",
+                          border: `1px solid ${space.subir_youtube ? "rgba(255,0,0,0.3)" : "rgba(255,255,255,0.06)"}`,
+                        }}
+                      >
+                        <Youtube className="h-3 w-3" /> YouTube
+                      </button>
                       {([
                         ["transcrever", "Transcrever", Mic],
                         ["gravar", "Gravar", Video],
@@ -1152,11 +1195,22 @@ export default function MeetAdminPage() {
                       value={space.curso_id || ""}
                       onChange={(e) => vincularCurso(space, e.target.value)}
                       disabled={trabalhando === space.space_name + "curso"}
-                      className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream max-w-[280px]"
+                      // O dropdown nativo é desenhado pelo sistema, não pela
+                      // página: sem cor explícita nas opções, o Windows abre
+                      // com fundo branco e herda o texto claro do tema escuro,
+                      // deixando a lista ilegível.
+                      className="border border-white/10 rounded-lg px-2.5 py-1.5 text-xs max-w-[280px]"
+                      style={{ background: "#1A1A1A", color: "#FDFBF7" }}
                     >
-                      <option value="">nenhum curso</option>
+                      <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                        nenhum curso
+                      </option>
                       {cursos.map((c) => (
-                        <option key={c.id} value={c.id}>
+                        <option
+                          key={c.id}
+                          value={c.id}
+                          style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                        >
                           {c.title}
                         </option>
                       ))}
@@ -1236,11 +1290,14 @@ export default function MeetAdminPage() {
               <select
                 value={filtroGrupo}
                 onChange={(e) => setFiltroGrupo(e.target.value)}
-                className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+                className="border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
+                style={{ background: "#1A1A1A", color: "#FDFBF7" }}
               >
-                <option value="">Todos os grupos</option>
+                <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                  Todos os grupos
+                </option>
                 {gruposDosEncontros.map((g) => (
-                  <option key={g} value={g}>
+                  <option key={g} value={g} style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
                     {g}
                   </option>
                 ))}

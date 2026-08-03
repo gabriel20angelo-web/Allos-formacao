@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { extrairIdDaPasta, liberarPorLink } from "@/lib/meet/drive";
+import { detectVideoSource } from "@/lib/utils/video";
 
 export const dynamic = "force-dynamic";
 
@@ -134,16 +135,22 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Sem isso, o aluno abre a aula e vê "solicitar acesso" no lugar do vídeo.
+  // Vídeo no YouTube já é não listado e não precisa de nada: quem tem o link
+  // assiste. Só o do Drive precisa ser liberado, e sem isso o aluno abre a aula
+  // e vê "solicitar acesso" no lugar do vídeo.
+  const fonte = detectVideoSource(sug.video_url);
   let avisoDrive: string | null = null;
-  const fileId = extrairIdDaPasta(sug.video_url);
-  if (fileId) {
-    try {
-      await liberarPorLink(fileId);
-    } catch (e) {
-      avisoDrive =
-        "A aula foi criada, mas não consegui liberar o vídeo no Drive. Abra o arquivo e compartilhe como 'qualquer pessoa com o link', senão o aluno não consegue assistir.";
-      console.error("[meet/aulas] liberar", e);
+
+  if (fonte === "google_drive") {
+    const fileId = extrairIdDaPasta(sug.video_url);
+    if (fileId) {
+      try {
+        await liberarPorLink(fileId);
+      } catch (e) {
+        avisoDrive =
+          "A aula foi criada, mas não consegui liberar o vídeo no Drive. Abra o arquivo e compartilhe como 'qualquer pessoa com o link', senão o aluno não consegue assistir.";
+        console.error("[meet/aulas] liberar", e);
+      }
     }
   }
 
@@ -161,9 +168,9 @@ export async function POST(req: NextRequest) {
       section_id: secaoId,
       title: titulo,
       video_url: sug.video_url,
-      // O player decide o embed por esta coluna; a URL da gravação do Meet já
-      // vem no formato que ele reconhece.
-      video_source: "google_drive",
+      // O player decide o embed por esta coluna, e a mesma função que o admin
+      // usa ao cadastrar aula à mão decide aqui.
+      video_source: fonte,
       duration_minutes: sug.duracao_min,
       position: (ultima?.position ?? -1) + 1,
     })

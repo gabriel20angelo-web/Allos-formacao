@@ -31,9 +31,14 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
   // Só encontro com gravação pronta e que ainda não gerou sugestão.
   const { data: encontros } = await sb
     .from("formacao_meet_encontros")
-    .select("id, space_name, data_reuniao, duracao_min, gravacao_uri, atividade_nome")
+    .select(
+      "id, space_name, data_reuniao, duracao_min, gravacao_uri, atividade_nome, youtube_video_id, inicio_efetivo_seg"
+    )
     .eq("descartado", false)
     .not("gravacao_uri", "is", null)
+    // Onde o YouTube está ligado, espera o envio terminar: sugerir agora criaria
+    // a aula apontando para o Drive, e o vídeo bom chegaria depois.
+    .or("youtube_status.is.null,youtube_status.eq.pronto,youtube_status.eq.erro")
     .order("data_reuniao", { ascending: true })
     .limit(50);
 
@@ -61,6 +66,8 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     duracao_min: number | null;
     gravacao_uri: string;
     atividade_nome: string | null;
+    youtube_video_id: string | null;
+    inicio_efetivo_seg: number | null;
   }[]) {
     if (vistos.has(e.id)) {
       res.ja_existiam++;
@@ -82,12 +89,20 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
       .eq("curso_id", space.curso_id)
       .eq("status", "aprovada");
 
+    // Se o vídeo já subiu para o YouTube, a aula aponta para lá: player melhor,
+    // sem depender de compartilhamento do Drive, e com o `start` pulando a
+    // espera antes do encontro começar.
+    const url = e.youtube_video_id
+      ? `https://www.youtube.com/watch?v=${e.youtube_video_id}` +
+        (e.inicio_efetivo_seg ? `&t=${e.inicio_efetivo_seg}` : "")
+      : e.gravacao_uri;
+
     const { error } = await sb.from("formacao_meet_aulas_sugeridas").insert({
       encontro_id: e.id,
       curso_id: space.curso_id,
       secao_id: space.secao_id,
       titulo: montarTitulo((count ?? 0) + 1, e.data_reuniao),
-      video_url: e.gravacao_uri,
+      video_url: url,
       duracao_min: e.duracao_min,
       data_reuniao: e.data_reuniao,
     });

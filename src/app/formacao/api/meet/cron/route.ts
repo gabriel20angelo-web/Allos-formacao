@@ -11,6 +11,7 @@ import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { arquivarGravacoes } from "@/lib/meet/arquivar";
 import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
+import { publicarProximoVideo } from "@/lib/meet/publicar-video";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
@@ -64,6 +65,10 @@ export async function GET(req: NextRequest) {
     // falha não pode derrubar a captura de presença, que é o que importa.
     const arquivos = await arquivarGravacoes(sb);
 
+    // Um pedaço de vídeo por rodada. Vídeo grande sobe ao longo de várias
+    // batidas, sem estourar o tempo desta requisição.
+    const youtube = await publicarProximoVideo(sb);
+
     // Sugere, não publica. A aula só existe quando alguém aprovar.
     const aulas = await sugerirAulasDeGravacoes(sb);
 
@@ -76,6 +81,7 @@ export async function GET(req: NextRequest) {
       status,
       semana,
       arquivos,
+      youtube,
       aulas,
     });
   } catch (e) {
