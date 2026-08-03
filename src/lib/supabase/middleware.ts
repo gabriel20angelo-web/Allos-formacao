@@ -117,6 +117,20 @@ export async function updateSession(request: NextRequest) {
       return hardRedirect(`/formacao/auth?redirect=${encodeURIComponent(pathname)}`, supabaseResponse);
     }
 
+    // Conta bloqueada (migration 045): o gate é aqui, não na interface, senão
+    // bastaria digitar a URL. A consulta só roda em rota protegida, e a tela de
+    // acesso suspenso fica de fora para não virar laço de redirecionamento.
+    if (isProtected && user && !pathname.startsWith("/formacao/acesso-suspenso")) {
+      const { data: perfilBloqueio } = await supabase
+        .from("profiles")
+        .select("bloqueado")
+        .eq("id", user.id)
+        .maybeSingle();
+      if (perfilBloqueio?.bloqueado) {
+        return hardRedirect("/formacao/acesso-suspenso", supabaseResponse);
+      }
+    }
+
     // Admin routes — check role (admin or instructor required).
     // Prefere claim `user_role` no JWT (custom claim da Auth Hook em
     // supabase/functions/access-token-hook): zero round-trip. Cai pra query

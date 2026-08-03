@@ -15,9 +15,10 @@ import ActivityTimeline from "./ActivityTimeline";
 import { detectarSinais, type Sinal } from "@/lib/utils/suspeita";
 import { formatDuration, getUsageTotals } from "@/lib/queries/usage";
 import type { ActivityRange, TimelineEvent } from "@/lib/utils/activity";
-import { AlertTriangle, Download, Mail, UserCircle } from "lucide-react";
+import { AlertTriangle, Download, Lock, Mail, UserCircle } from "lucide-react";
 import { hourLabel } from "@/lib/utils/activity";
 import { TYPE_META } from "./ActivityTimeline";
+import AcoesPessoa from "./AcoesPessoa";
 
 export interface PessoaRef {
   nome: string;
@@ -25,9 +26,13 @@ export interface PessoaRef {
 }
 
 interface Dossie {
+  /** id da conta — null quando a pessoa só existe nos feedbacks, sem cadastro. */
+  userId: string | null;
   nome: string;
   email: string | null;
   papel: string | null;
+  bloqueado: boolean;
+  bloqueadoMotivo: string | null;
   membroDesde: string | null;
   aliases: string[];
   eventos: TimelineEvent[];
@@ -63,11 +68,19 @@ export default function PessoaModal({
 
     // 1. Encontrar a conta. Por e-mail quando temos; senão pelo nome.
     const perfilQuery = ref.email
-      ? sb.from("profiles").select("id, full_name, email, role, created_at").eq("email", ref.email)
-      : sb.from("profiles").select("id, full_name, email, role, created_at").ilike("full_name", ref.nome);
+      ? sb.from("profiles").select("id, full_name, email, role, created_at, bloqueado, bloqueado_motivo").eq("email", ref.email)
+      : sb.from("profiles").select("id, full_name, email, role, created_at, bloqueado, bloqueado_motivo").ilike("full_name", ref.nome);
     const { data: perfis } = await perfilQuery.limit(1);
     const perfil = perfis?.[0] as
-      | { id: string; full_name: string; email: string; role: string; created_at: string }
+      | {
+          id: string;
+          full_name: string;
+          email: string;
+          role: string;
+          created_at: string;
+          bloqueado?: boolean;
+          bloqueado_motivo?: string | null;
+        }
       | undefined;
 
     const email = ref.email || perfil?.email || null;
@@ -273,6 +286,9 @@ export default function PessoaModal({
     );
 
     setDossie({
+      userId: perfil?.id ?? null,
+      bloqueado: !!perfil?.bloqueado,
+      bloqueadoMotivo: perfil?.bloqueado_motivo ?? null,
       nome: perfil?.full_name || ref.nome,
       email,
       papel: perfil?.role ?? null,
@@ -442,6 +458,14 @@ export default function PessoaModal({
               </span>
             )}
             <div className="flex-1" />
+            <AcoesPessoa
+              userId={dossie.userId}
+              nome={dossie.nome}
+              email={dossie.email}
+              bloqueado={dossie.bloqueado}
+              temSinais={dossie.sinais.length > 0}
+              onMudou={() => pessoa && carregar(pessoa)}
+            />
             <button
               onClick={baixarDossie}
               className="font-dm text-[11px] px-2.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all hover:bg-white/[.05]"
@@ -455,6 +479,21 @@ export default function PessoaModal({
               Baixar dossiê (CSV)
             </button>
           </div>
+
+          {dossie.bloqueado && (
+            <div
+              className="flex items-start gap-2 px-3 py-2 rounded-[10px]"
+              style={{ background: "rgba(239,68,68,0.07)", border: "1px solid rgba(239,68,68,0.2)" }}
+            >
+              <Lock className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" style={{ color: "#EF4444" }} />
+              <div className="min-w-0">
+                <p className="font-dm text-[11px] font-semibold text-red-300/90">Acesso bloqueado</p>
+                {dossie.bloqueadoMotivo && (
+                  <p className="font-dm text-[11px] text-cream/45 leading-snug">{dossie.bloqueadoMotivo}</p>
+                )}
+              </div>
+            </div>
+          )}
 
           {dossie.aliases.length > 0 && (
             <p className="font-dm text-[11px] text-cream/35">
