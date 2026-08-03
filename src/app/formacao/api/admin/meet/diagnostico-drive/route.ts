@@ -63,12 +63,22 @@ export async function GET() {
 
   const temEscopo = diagnostico.tem_escopo_drive === true;
   const driveOk = diagnostico.drive_status === 200;
+  const resposta = String(diagnostico.drive_resposta || "");
+
+  // A recusa mais comum não é permissão: é a API do Drive simplesmente não ter
+  // sido ativada no projeto do Cloud. O Google diz isso na resposta, e mandar o
+  // admin mexer em controle de acesso do domínio por causa disso seria afrouxar
+  // uma trava de segurança para resolver um problema que ela não causou.
+  const apiDesativada = resposta.includes("has not been used in project");
+  const projeto = resposta.match(/project (\d+)/)?.[1];
 
   diagnostico.conclusao = !temEscopo
     ? "A autorização saiu SEM a permissão de Drive. Ou a tela do Google não mostrou o pedido, ou ele foi recusado. Refaça a autorização e confira se aparece o item sobre arquivos do Drive."
-    : !driveOk
-      ? "A permissão foi concedida, mas o Google está bloqueando a chamada. Isso costuma ser controle de acesso a apps no Admin do Workspace: o app precisa ser marcado como confiável."
-      : "Acesso ao Drive funcionando. Se a pasta continua falhando, o problema é o link da pasta ou a permissão dela.";
+    : apiDesativada
+      ? `A permissão está concedida, mas a API do Drive não está ativada no projeto${projeto ? ` ${projeto}` : ""}. Ative em console.developers.google.com/apis/api/drive.googleapis.com/overview?project=${projeto || ""} e tente de novo em um minuto.`
+      : !driveOk
+        ? "A permissão foi concedida e a API está ativa, mas o Google recusou mesmo assim. Aí sim costuma ser controle de acesso a apps no Admin do Workspace: o app precisa ser marcado como confiável."
+        : "Acesso ao Drive funcionando. Se a pasta continua falhando, o problema é o link da pasta ou a permissão dela.";
 
   return NextResponse.json(diagnostico);
 }
