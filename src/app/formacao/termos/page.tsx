@@ -224,7 +224,13 @@ export default function TermosPage() {
         </LegalP>
         <LegalP>
           8.3. Cada certificado recebe um código de autenticidade, verificável publicamente em{" "}
-          <Placeholder>[URL DO VERIFICADOR]</Placeholder>. A verificação informa se o documento é
+          <a
+            href="/formacao/certificado/verificar"
+            className="text-accent hover:underline"
+          >
+            allos.org.br/formacao/certificado/verificar
+          </a>
+          . A verificação informa se o documento é
           autêntico, se está válido e se foi anulado.
         </LegalP>
         <LegalP>

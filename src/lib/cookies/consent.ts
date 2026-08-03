@@ -9,6 +9,13 @@
  *
  * Este módulo não depende de React e pode ser importado por qualquer script.
  * Todas as funções têm guarda de SSR.
+ *
+ * Atenção: hoje NÃO existe ferramenta de análise de audiência nem de marketing
+ * no site (sem Google Analytics, sem pixel da Meta). As categorias
+ * `estatisticos` e `marketing` ficam reservadas aqui para o dia em que houver.
+ * Quem for instalar uma dessas ferramentas precisa, antes, atualizar a
+ * Política de Cookies (cláusulas 2.3, 2.4 e 4), os textos do banner e a
+ * CONSENT_VERSION, para que o consentimento seja pedido de novo.
  */
 
 export const CONSENT_STORAGE_KEY = "allos_consent";

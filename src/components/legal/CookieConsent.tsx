@@ -40,14 +40,14 @@ const OPTIONAL_COPY: CategoryCopy[] = [
     key: "estatisticos",
     label: "Estatísticos",
     description:
-      "Medem, de forma agregada, quantas pessoas acessam as páginas e quais conteúdos são mais procurados.",
+      "Mediriam, de forma agregada, quantas pessoas acessam as páginas e quais conteúdos são mais procurados. Nenhuma ferramenta desse tipo está ativa no momento, então nada é gravado nesta categoria.",
     anchor: "/formacao/cookies#estatisticos",
   },
   {
     key: "marketing",
     label: "Marketing",
     description:
-      "Medem o resultado das nossas divulgações e permitem exibir conteúdo da Allos para quem já visitou o site.",
+      "Mediriam o resultado das nossas divulgações e permitiriam exibir conteúdo da Allos para quem já visitou o site. Nenhuma ferramenta desse tipo está ativa no momento, então nada é gravado nesta categoria.",
     anchor: "/formacao/cookies#marketing",
   },
 ];
@@ -358,13 +358,15 @@ export default function CookieConsent() {
           ))}
 
           <p className="pt-1 font-dm text-[11px] leading-relaxed text-[rgba(253,251,247,0.4)]">
-            Estatísticos e marketing são operados por empresas com sede fora do
-            Brasil. Aceitar essas categorias autoriza a transferência
-            internacional descrita na{" "}
+            Estatísticos e marketing continuam aqui para o caso de passarmos a
+            usar alguma ferramenta desse tipo. Se isso acontecer, a política
+            será atualizada e o seu consentimento pedido de novo, inclusive
+            quanto à transferência internacional descrita na{" "}
             <a href="/formacao/cookies" className={policyLink}>
               política de cookies
             </a>
-            .
+            . Os vídeos das aulas são incorporados de serviços do Google e
+            seguem valendo.
           </p>
         </div>
 

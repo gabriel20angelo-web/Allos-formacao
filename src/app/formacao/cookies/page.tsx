@@ -82,9 +82,10 @@ export default function CookiesPage() {
       <LegalSection id="categorias" title="2. Categorias que utilizamos">
         <LegalSub id="necessarios" title="2.1. Necessários">
           <LegalP>
-            Fazem o site e a plataforma funcionarem. Mantêm sua sessão aberta, protegem formulários
-            contra fraude e guardam a sua escolha sobre esta política. Sem eles não é possível fazer
-            login nem acessar as aulas.
+            Fazem o site e a plataforma funcionarem. Mantêm sua sessão aberta e guardam a sua
+            escolha sobre esta política. Sem eles não é possível fazer login nem acessar as aulas.
+            A proteção dos formulários contra requisição forjada não usa cookie: ela é feita por
+            um cabeçalho enviado a cada requisição.
           </LegalP>
           <LegalP>
             Esses cookies não dependem de consentimento. Eles são tratados com base no art. 7º,
@@ -105,12 +106,6 @@ export default function CookiesPage() {
                 "Allos",
                 "Identifica sua conta entre visitas",
                 "30 dias",
-              ],
-              [
-                <Placeholder key="csrf">[NOME DO COOKIE CSRF]</Placeholder>,
-                "Allos",
-                "Protege formulários contra requisição forjada",
-                "Sessão",
               ],
               ["allos_consent", "Allos", "Guarda suas escolhas nesta política", "6 meses"],
             ]}
@@ -139,53 +134,58 @@ export default function CookiesPage() {
 
         <LegalSub id="estatisticos" title="2.3. Estatísticos">
           <LegalP>
-            Medem quantas pessoas acessam as páginas, de onde vêm e quais conteúdos são mais
-            procurados. Usamos esses dados de forma agregada para decidir o que produzir.
+            Cookies desta categoria mediriam quantas pessoas acessam as páginas, de onde vêm e
+            quais conteúdos são mais procurados, sempre de forma agregada. Dependem do seu
+            consentimento.
           </LegalP>
-          <LegalP>Dependem do seu consentimento.</LegalP>
-          <LegalTable
-            caption="Cookies estatísticos"
-            head={COOKIE_TABLE_HEAD}
-            rows={[
-              ["_ga", "Google Analytics", "Distingue visitantes", "2 anos"],
-              [
-                <span key="ga4">
-                  _ga_<Placeholder>[ID]</Placeholder>
-                </span>,
-                "Google Analytics",
-                "Mantém o estado da sessão de medição",
-                "2 anos",
-              ],
-            ]}
-          />
+          <LegalP>
+            Hoje a Associação Allos não utiliza nenhuma ferramenta de análise de audiência no
+            site. Não há Google Analytics nem serviço equivalente instalado, e por isso nenhum
+            cookie estatístico é gravado no seu navegador, mesmo que você aceite esta categoria.
+          </LegalP>
+          <LegalP>
+            A categoria continua aparecendo na tela de escolha porque a estrutura de
+            consentimento já está pronta para o caso de isso mudar. Se passarmos a utilizar
+            alguma ferramenta de análise de audiência, esta política será atualizada com o nome,
+            a origem, a finalidade e a duração de cada cookie, e o seu consentimento será pedido
+            de novo antes de qualquer gravação, na forma da cláusula 8.
+          </LegalP>
+          <LegalP>
+            O acompanhamento de progresso e de tempo de estudo dentro da plataforma não usa
+            cookies desta categoria. Ele depende apenas da sua sessão de login, descrita na
+            cláusula 2.1.
+          </LegalP>
         </LegalSub>
 
         <LegalSub id="marketing" title="2.4. Marketing">
           <LegalP>
-            Medem o resultado das nossas divulgações e permitem exibir conteúdo da Allos para quem já
-            visitou o site.
+            Cookies desta categoria mediriam o resultado das nossas divulgações e permitiriam
+            exibir conteúdo da Allos para quem já visitou o site. Dependem do seu consentimento.
           </LegalP>
-          <LegalP>Dependem do seu consentimento.</LegalP>
-          <LegalTable
-            caption="Cookies de marketing"
-            head={COOKIE_TABLE_HEAD}
-            rows={[
-              [
-                "_fbp",
-                "Meta",
-                "Identifica o navegador para atribuição de campanhas",
-                "3 meses",
-              ],
-              ["_fbc", "Meta", "Registra o clique no anúncio que trouxe você ao site", "3 meses"],
-            ]}
-          />
+          <LegalP>
+            Hoje a Associação Allos não utiliza nenhuma ferramenta de marketing, publicidade ou
+            remarketing no site. Não há pixel da Meta nem serviço equivalente instalado, e por
+            isso nenhum cookie de marketing é gravado no seu navegador, mesmo que você aceite
+            esta categoria.
+          </LegalP>
+          <LegalP>
+            A categoria continua aparecendo na tela de escolha porque a estrutura de
+            consentimento já está pronta para o caso de isso mudar. Se passarmos a utilizar
+            alguma ferramenta de marketing, esta política será atualizada com o nome, a origem, a
+            finalidade e a duração de cada cookie, e o seu consentimento será pedido de novo
+            antes de qualquer gravação, na forma da cláusula 8.
+          </LegalP>
         </LegalSub>
 
         <LegalSub id="terceiros-incorporados" title="2.5. Terceiros incorporados">
           <LegalP>
-            Algumas páginas exibem vídeos hospedados no YouTube. Ao carregar esses vídeos, o Google
-            pode gravar cookies próprios, sobre os quais não temos controle. O tratamento desses
-            dados segue a política do Google, disponível em{" "}
+            As aulas exibem o vídeo dentro de um quadro incorporado de outro serviço. Quando o
+            vídeo está hospedado no YouTube, nós o carregamos pelo domínio de privacidade
+            reforçada youtube-nocookie.com, que adia a gravação de cookies até que você comece a
+            assistir. Quando o vídeo está hospedado no Google Drive, o quadro vem de
+            drive.google.com. Nos dois casos o fornecedor é o Google, que pode gravar cookies
+            próprios, sobre os quais não temos controle. O tratamento desses dados segue a
+            política do Google, disponível em{" "}
             <a
               href="https://policies.google.com/privacy"
               target="_blank"
@@ -202,13 +202,24 @@ export default function CookiesPage() {
             rows={[
               [
                 "VISITOR_INFO1_LIVE",
-                "YouTube",
+                "YouTube (youtube-nocookie.com)",
                 "Mede a largura de banda e a interface do player",
                 "6 meses",
               ],
-              ["YSC", "YouTube", "Registra visualizações do vídeo incorporado", "Sessão"],
+              [
+                "YSC",
+                "YouTube (youtube-nocookie.com)",
+                "Registra visualizações do vídeo incorporado",
+                "Sessão",
+              ],
             ]}
           />
+          <LegalP>
+            Os vídeos hospedados no Google Drive são exibidos pelo visualizador do próprio Drive,
+            que pode gravar cookies de sessão e de segurança do Google no seu navegador. Esses
+            cookies são definidos pelo Google, não pela Allos, e podem mudar sem aviso, por isso
+            não os listamos individualmente aqui.
+          </LegalP>
         </LegalSub>
       </LegalSection>
 
@@ -249,14 +260,21 @@ export default function CookiesPage() {
 
       <LegalSection id="transferencia-internacional" title="4. Transferência internacional">
         <LegalP>
-          Os cookies estatísticos e de marketing descritos nas cláusulas 2.3 e 2.4 são operados por
-          empresas com sede fora do Brasil, e os dados por eles coletados podem ser tratados em
-          outros países. Essa transferência ocorre nos termos do art. 33 da Lei nº 13.709/2018 e
-          depende do seu consentimento.
+          Como explicam as cláusulas 2.3 e 2.4, hoje não há ferramenta de análise de audiência nem
+          de marketing no site. Enquanto for assim, nenhum dado da sua navegação é enviado a
+          fornecedores dessas duas categorias, aceite você ou não as categorias correspondentes.
         </LegalP>
         <LegalP>
-          Se você recusar essas categorias, nenhum dado é enviado a esses fornecedores por meio do
-          nosso site.
+          Ferramentas desse tipo costumam ser operadas por empresas com sede fora do Brasil, e os
+          dados por elas coletados podem ser tratados em outros países. Se passarmos a utilizar
+          alguma, a transferência ocorrerá nos termos do art. 33 da Lei nº 13.709/2018 e dependerá
+          do seu consentimento, pedido de novo na forma da cláusula 8. Recusar a categoria impede
+          o envio.
+        </LegalP>
+        <LegalP>
+          Isso não vale para os vídeos incorporados descritos na cláusula 2.5. Eles existem hoje e
+          são carregados de servidores do Google, empresa com sede fora do Brasil, de modo que
+          assistir a uma aula implica comunicação do seu navegador com esses servidores.
         </LegalP>
       </LegalSection>
 
