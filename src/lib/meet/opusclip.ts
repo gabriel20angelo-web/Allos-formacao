@@ -150,7 +150,8 @@ export interface ClipeRetornado {
   description?: string;
   /** O que é falado no clipe. Serve de legenda pronta. */
   text?: string;
-  hashtags?: string[];
+  /** Chega como texto único ("#a #b #c"), apesar do nome no plural. */
+  hashtags?: string[] | string;
   uriForExport?: string;
   uriForPreview?: string;
   uriForThumbnail?: string;

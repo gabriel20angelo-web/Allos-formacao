@@ -326,6 +326,24 @@ export async function processarClipes(
 const TERMINOU = ["complete", "completed", "done", "finished", "success"];
 
 /**
+ * As hashtags chegam como texto único, não como lista.
+ *
+ * O que veio de verdade: "#TerapiaCentradaNaPessoa #ACP #CarlRogers ...", uma
+ * string só. Passar isso para uma coluna de lista faz o Postgres recusar a
+ * linha inteira com "malformed array literal", e o clipe se perde por causa da
+ * legenda. `.length` de uma string é verdadeiro, então nem a checagem óbvia
+ * pegava.
+ */
+function normalizarHashtags(valor: unknown): string[] | null {
+  if (Array.isArray(valor)) return valor.length ? valor.map(String) : null;
+  if (typeof valor === "string") {
+    const partes = valor.split(/[\s,]+/).filter(Boolean);
+    return partes.length ? partes : null;
+  }
+  return null;
+}
+
+/**
  * Guarda o que o corte produziu: os clipes e a transcrição do vídeo inteiro.
  *
  * Devolve quantos clipes entraram, ou `null` se ainda não terminou. Usado tanto
@@ -374,7 +392,7 @@ export async function recolherProjeto(
     titulo: c.title || null,
     descricao: c.description || null,
     texto: c.text || null,
-    hashtags: c.hashtags?.length ? c.hashtags : null,
+    hashtags: normalizarHashtags(c.hashtags),
     url: c.uriForExport || c.uriForPreview || null,
     preview_url: c.uriForPreview || null,
     thumbnail_url: c.uriForThumbnail || null,
