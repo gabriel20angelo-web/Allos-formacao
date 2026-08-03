@@ -245,11 +245,21 @@ export async function ingerir(opts?: {
 
         const { data: existente } = await sb
           .from("formacao_meet_encontros")
-          .select("id, transcricao_ingerida")
+          .select(
+            "id, transcricao_ingerida, gravacao_uri, gravacao_file_id, transcricao_uri, transcricao_file_id"
+          )
           .eq("conference_record_id", conf.name)
           .maybeSingle();
 
-        if (existente?.transcricao_ingerida) continue;
+        // Encontro capturado antes de existir a organização no Drive tem o link
+        // do arquivo mas não o identificador dele, e sem identificador não há
+        // como mover. Vale reprocessar uma vez para preencher, senão só as
+        // gravações futuras seriam organizadas e o histórico ficaria de fora.
+        const faltaIdentificador =
+          (!!existente?.gravacao_uri && !existente?.gravacao_file_id) ||
+          (!!existente?.transcricao_uri && !existente?.transcricao_file_id);
+
+        if (existente?.transcricao_ingerida && !faltaIdentificador) continue;
 
         const inicio = new Date(conf.startTime);
         const fim = new Date(conf.endTime);
