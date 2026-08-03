@@ -154,7 +154,7 @@ export default function CertificadoRetido({
 
         <p className="text-[12px] text-cream/35">
           Vale lembrar que o uso da plataforma está sujeito aos nossos{" "}
-          <Link href="/termos" className="text-accent hover:underline">
+          <Link href="/formacao/termos" className="text-accent hover:underline">
             Termos de Uso
           </Link>{" "}
           e ao dever de boa-fé previsto no art. 422 do Código Civil.

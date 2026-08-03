@@ -125,7 +125,7 @@ function AuthContent() {
         {/* Footer link */}
         <p className="text-center text-xs text-cream/30 mt-6">
           Ao continuar, você concorda com os{" "}
-          <a href="/termos" className="text-accent hover:underline">
+          <a href="/formacao/termos" className="text-accent hover:underline">
             termos de uso
           </a>{" "}
           da Associação Allos.

@@ -25,7 +25,7 @@ const NECESSARIOS_COPY = {
   label: "Necessários",
   description:
     "Mantêm sua sessão aberta, protegem os formulários e guardam a sua escolha sobre esta política. Sem eles não é possível fazer login nem acessar as aulas.",
-  anchor: "/cookies#necessarios",
+  anchor: "/formacao/cookies#necessarios",
 };
 
 const OPTIONAL_COPY: CategoryCopy[] = [
@@ -34,21 +34,21 @@ const OPTIONAL_COPY: CategoryCopy[] = [
     label: "Preferências",
     description:
       "Guardam ajustes que você faz na interface, como o ponto em que parou a aula. Sem eles o site esquece essas escolhas.",
-    anchor: "/cookies#preferencias",
+    anchor: "/formacao/cookies#preferencias",
   },
   {
     key: "estatisticos",
     label: "Estatísticos",
     description:
       "Medem, de forma agregada, quantas pessoas acessam as páginas e quais conteúdos são mais procurados.",
-    anchor: "/cookies#estatisticos",
+    anchor: "/formacao/cookies#estatisticos",
   },
   {
     key: "marketing",
     label: "Marketing",
     description:
       "Medem o resultado das nossas divulgações e permitem exibir conteúdo da Allos para quem já visitou o site.",
-    anchor: "/cookies#marketing",
+    anchor: "/formacao/cookies#marketing",
   },
 ];
 
@@ -238,7 +238,7 @@ export default function CookieConsent() {
               Usamos cookies necessários para manter sua sessão e o site
               funcionando. Preferências, estatísticas e marketing só com a sua
               autorização, e nada vem marcado por padrão. Detalhes na{" "}
-              <a href="/cookies" className={`text-cream ${policyLink}`}>
+              <a href="/formacao/cookies" className={`text-cream ${policyLink}`}>
                 política de cookies
               </a>
               .
@@ -361,7 +361,7 @@ export default function CookieConsent() {
             Estatísticos e marketing são operados por empresas com sede fora do
             Brasil. Aceitar essas categorias autoriza a transferência
             internacional descrita na{" "}
-            <a href="/cookies" className={policyLink}>
+            <a href="/formacao/cookies" className={policyLink}>
               política de cookies
             </a>
             .
