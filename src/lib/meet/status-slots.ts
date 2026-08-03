@@ -106,7 +106,18 @@ async function registrarLog(
  * repetição é justamente o que permite corrigir um "não conduzido" quando o
  * registro chega atrasado.
  */
-export async function atualizarStatusSlots(sb: Sb): Promise<ResultadoStatus> {
+export async function atualizarStatusSlots(
+  sb: Sb,
+  /**
+   * Semana a considerar. Omitir significa a semana corrente.
+   *
+   * O fechamento de segunda passa a semana ANTERIOR aqui antes de arquivar:
+   * na segunda-feira a "semana corrente" já é a nova, e sem isso os encontros
+   * de sexta ficariam fora da janela e o snapshot seria salvo com slots ainda
+   * pendentes, congelando para sempre um retrato incompleto.
+   */
+  semanaRef?: Date
+): Promise<ResultadoStatus> {
   const res: ResultadoStatus = {
     conduzidos: 0,
     nao_conduzidos: 0,
@@ -116,8 +127,9 @@ export async function atualizarStatusSlots(sb: Sb): Promise<ResultadoStatus> {
   };
 
   const agora = new Date();
-  const segunda = segundaDaSemana(agora);
+  const segunda = segundaDaSemana(semanaRef || agora);
   const inicioSemana = dataLocal(segunda);
+  const fimSemana = dataLocal(new Date(segunda.getTime() + 6 * 24 * 3_600_000));
 
   const { data: slots } = await sb
     .from("formacao_slots")
@@ -136,6 +148,7 @@ export async function atualizarStatusSlots(sb: Sb): Promise<ResultadoStatus> {
     .from("formacao_meet_encontros")
     .select("slot_id, data_reuniao, total_participantes")
     .gte("data_reuniao", inicioSemana)
+    .lte("data_reuniao", fimSemana)
     .not("slot_id", "is", null);
 
   const encontroPorSlot = new Map<string, { data_reuniao: string; total_participantes: number }>();
@@ -258,6 +271,10 @@ export async function fecharSemanaSePreciso(
     .eq("semana_inicio", inicio)
     .maybeSingle();
   if (existente) return { fechou: false, motivo: "Semana já foi fechada." };
+
+  // Marca o que a captura sabe sobre a semana que terminou ANTES de congelar o
+  // retrato: depois do snapshot não há como corrigir, o histórico já foi.
+  await atualizarStatusSlots(sb, segundaAnterior);
 
   const { data: slots } = await sb
     .from("formacao_slots")

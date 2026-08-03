@@ -39,11 +39,12 @@ export async function GET(req: NextRequest) {
     const excecoes = await sincronizarExcecoes(sb);
     const ingestao = await ingerir({ origem: "cron", diasAtras: 15 });
 
-    // Nesta ordem, de propósito: capturar, marcar o que a captura revelou, e só
-    // então fechar a semana. Fechar antes de marcar arquivaria um retrato com
-    // status desatualizado, e o snapshot é o que vira histórico.
-    const status = await atualizarStatusSlots(sb);
+    // Fechar a semana ANTES de marcar a semana corrente, porque o fechamento
+    // zera todos os status: na ordem inversa ele apagaria a marcação recém-feita.
+    // O fechamento cuida sozinho de marcar a semana que terminou antes de
+    // arquivá-la.
     const semana = await fecharSemanaSePreciso(sb);
+    const status = await atualizarStatusSlots(sb);
 
     return NextResponse.json({
       ok: true,
