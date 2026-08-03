@@ -48,12 +48,11 @@ export async function POST(req: NextRequest) {
     );
   }
 
-  // Gravação de vídeo fica DESLIGADA por padrão, por decisão do Gabriel: o
-  // encontro de formação toca em material clínico, e um vídeo existe para
-  // sempre e vaza com um link. Transcrição e notas ficam ligadas porque geram
-  // os indicadores e não guardam imagem de ninguém.
+  // Tudo ligado por padrão. Gravar deixou de incomodar quando o vídeo publicado
+  // passou a começar no ponto em que o encontro de fato começou: os quinze
+  // minutos de sala vazia continuam no arquivo, mas ninguém assiste a eles.
   const artefatos = {
-    gravar: body.gravar === true,
+    gravar: body.gravar !== false,
     transcrever: body.transcrever !== false,
     notas: body.notas !== false,
   };

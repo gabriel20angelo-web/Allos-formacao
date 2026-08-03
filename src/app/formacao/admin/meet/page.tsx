@@ -351,7 +351,7 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ rotulo: nome, gravar: false, transcrever: true, notas: true }),
+        body: JSON.stringify({ rotulo: nome, gravar: true, transcrever: true, notas: true }),
       });
       await lerResposta(r);
       toast.success(`Sala "${nome}" criada.`);
@@ -549,9 +549,9 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        // Transcrição e notas sim, vídeo não. Gravar é decisão consciente por
-        // grupo, tomada na chave do painel, não um padrão que ninguém escolheu.
-        body: JSON.stringify({ slot_id: slot.id, gravar: false, transcrever: true, notas: true }),
+        // Tudo ligado. Gravar deixou de incomodar quando o vídeo publicado
+        // passou a começar no minuto em que o encontro de fato começou.
+        body: JSON.stringify({ slot_id: slot.id, gravar: true, transcrever: true, notas: true }),
       });
       await lerResposta(r);
       toast.success("Sala criada. O link do grupo já aponta para ela.");
