@@ -25,8 +25,21 @@ import {
 import { createElement } from "react";
 import { createClient, resetClient } from "@/lib/supabase/client";
 import { logger } from "@/lib/logger";
-import type { Profile } from "@/types";
+import type { Profile, UserRole } from "@/types";
 import type { User } from "@supabase/supabase-js";
+
+
+/**
+ * Esta pessoa tem tal cargo?
+ *
+ * Olha o papel principal E os cargos extras. Uma coluna só não bastava: quem
+ * cuida dos eventos e conduz um grupo é as duas coisas, e escolher um cargo
+ * apagava o outro.
+ */
+function tem(perfil: Profile | null, cargo: UserRole): boolean {
+  if (!perfil) return false;
+  return perfil.role === cargo || (perfil.cargos || []).includes(cargo);
+}
 
 interface AuthContextValue {
   user: User | null;
@@ -199,7 +212,7 @@ export function AuthProvider({
       try {
         const { data } = await supabase
           .from("profiles")
-          .select("id, full_name, email, avatar_url, role, certificate_name, created_at, updated_at")
+          .select("id, full_name, email, avatar_url, role, cargos, certificate_name, created_at, updated_at")
           .eq("id", userId)
           .single();
         if (data) {
@@ -320,14 +333,13 @@ export function AuthProvider({
       profile,
       loading,
       signOut,
-      isAdmin: profile?.role === "admin",
-      isInstructor: profile?.role === "instructor",
-      isStudent: profile?.role === "student",
-      isAssociado: profile?.role === "associado",
-      isEventos: profile?.role === "eventos",
-      isCondutor: profile?.role === "condutor",
-      canManageEvents:
-        profile?.role === "admin" || profile?.role === "eventos",
+      isAdmin: tem(profile, "admin"),
+      isInstructor: tem(profile, "instructor"),
+      isStudent: tem(profile, "student"),
+      isAssociado: tem(profile, "associado"),
+      isEventos: tem(profile, "eventos"),
+      isCondutor: tem(profile, "condutor"),
+      canManageEvents: tem(profile, "admin") || tem(profile, "eventos"),
     }),
     [user, profile, loading, signOut]
   );

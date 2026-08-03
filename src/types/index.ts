@@ -27,6 +27,8 @@ export interface Profile {
   email: string;
   avatar_url: string | null;
   role: UserRole;
+  /** Cargos ADICIONAIS ao papel principal. Uma pessoa pode ser as duas coisas. */
+  cargos?: UserRole[] | null;
   created_at: string;
   updated_at: string;
 }

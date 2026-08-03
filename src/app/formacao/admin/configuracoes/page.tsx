@@ -320,6 +320,7 @@ export default function AdminConfiguracoesPage() {
   const [roleFilter, setRoleFilter] = useState<string>("all");
   const [editingUser, setEditingUser] = useState<Profile | null>(null);
   const [newRole, setNewRole] = useState<UserRole>("student");
+  const [newCargos, setNewCargos] = useState<UserRole[]>([]);
   const [visibleCount, setVisibleCount] = useState(ROLES_PER_PAGE);
 
   useEffect(() => {
@@ -353,7 +354,7 @@ export default function AdminConfiguracoesPage() {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       credentials: "include",
-      body: JSON.stringify({ userId: editingUser.id, role: newRole }),
+      body: JSON.stringify({ userId: editingUser.id, role: newRole, cargos: newCargos }),
     });
 
     if (!res.ok) {
@@ -516,6 +517,8 @@ export default function AdminConfiguracoesPage() {
                       onClick={() => {
                         setEditingUser(user);
                         setNewRole(user.role);
+                  setNewCargos(user.cargos || []);
+                        setNewCargos(user.cargos || []);
                       }}
                       className="text-xs text-accent hover:text-accent-light transition-colors"
                     >
@@ -566,6 +569,7 @@ export default function AdminConfiguracoesPage() {
                 onClick={() => {
                   setEditingUser(user);
                   setNewRole(user.role);
+                  setNewCargos(user.cargos || []);
                 }}
                 className="px-3 py-2 text-xs rounded-lg font-medium transition-all hover:opacity-80"
                 style={{ background: "rgba(200,75,49,0.1)", border: "1px solid rgba(200,75,49,0.2)", color: "#C84B31" }}
@@ -615,7 +619,7 @@ export default function AdminConfiguracoesPage() {
             )}
 
             <Select
-              label="Nova permissão"
+              label="Permissão principal"
               value={newRole}
               onChange={(e) => setNewRole(e.target.value as UserRole)}
               options={[
@@ -627,6 +631,52 @@ export default function AdminConfiguracoesPage() {
                 { value: "admin", label: "Administrador" },
               ]}
             />
+
+            {/* Uma pessoa faz mais de uma coisa. A Tácia cuida dos eventos e
+                conduz um grupo, e antes escolher um cargo apagava o outro. */}
+            <div>
+              <label className="text-xs text-cream/40 font-dm mb-2 block">
+                Também é (marque quantos precisar)
+              </label>
+              <div className="flex flex-wrap gap-2">
+                {(
+                  [
+                    ["associado", "Associado"],
+                    ["condutor", "Condutor"],
+                    ["eventos", "Eventos"],
+                    ["instructor", "Professor"],
+                    ["admin", "Administrador"],
+                  ] as [UserRole, string][]
+                )
+                  .filter(([v]) => v !== newRole)
+                  .map(([valor, rotulo]) => {
+                    const marcado = newCargos.includes(valor);
+                    return (
+                      <button
+                        key={valor}
+                        type="button"
+                        onClick={() =>
+                          setNewCargos((c) =>
+                            c.includes(valor) ? c.filter((x) => x !== valor) : [...c, valor]
+                          )
+                        }
+                        className="px-3 py-1.5 rounded-lg text-xs transition-all"
+                        style={{
+                          background: marcado ? "rgba(200,75,49,0.14)" : "rgba(255,255,255,0.03)",
+                          color: marcado ? "#E8836A" : "rgba(253,251,247,0.4)",
+                          border: `1px solid ${marcado ? "rgba(200,75,49,0.32)" : "rgba(255,255,255,0.08)"}`,
+                        }}
+                      >
+                        {rotulo}
+                      </button>
+                    );
+                  })}
+              </div>
+              <p className="text-[11px] text-cream/30 mt-2">
+                A permissão principal já vale por si. Marque aqui só o que a pessoa faz além dela.
+                Ela precisa sair e entrar de novo para valer.
+              </p>
+            </div>
 
             {newRole === "eventos" && editingUser.role !== "eventos" && (
               <div

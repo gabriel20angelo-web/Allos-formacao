@@ -29,7 +29,7 @@ export async function POST(request: Request) {
     return Response.json({ error: "Sem permissão" }, { status: 403 });
   }
 
-  const { userId, role } = await request.json();
+  const { userId, role, cargos } = await request.json();
 
   if (!userId || !role) {
     return Response.json({ error: "userId e role são obrigatórios" }, { status: 400 });
@@ -44,11 +44,29 @@ export async function POST(request: Request) {
     return Response.json({ error: "Não pode remover sua própria permissão" }, { status: 400 });
   }
 
+  // Cargos extras. O papel principal continua sendo um só e governa tudo que
+  // já existia; estes somam por cima, para quem faz duas coisas.
+  let extras: string[] = [];
+  if (cargos !== undefined) {
+    if (!Array.isArray(cargos)) {
+      return Response.json({ error: "cargos precisa ser uma lista" }, { status: 400 });
+    }
+    const invalido = cargos.find(
+      (c: string) => !(ALLOWED_ROLES as readonly string[]).includes(c)
+    );
+    if (invalido) {
+      return Response.json({ error: `Cargo inválido: ${invalido}` }, { status: 400 });
+    }
+    // O papel principal já está lá: repetir na lista de extras só criaria dois
+    // lugares para dizer a mesma coisa, e um deles ficaria desatualizado.
+    extras = Array.from(new Set(cargos.filter((c: string) => c !== role)));
+  }
+
   // Service role só agora, exclusivamente pra escrita (bypassa RLS).
   const sb = await createServiceRoleClient();
   const { error } = await sb
     .from("profiles")
-    .update({ role })
+    .update({ role, ...(cargos !== undefined ? { cargos: extras } : {}) })
     .eq("id", userId);
 
   if (error) {

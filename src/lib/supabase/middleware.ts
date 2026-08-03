@@ -83,7 +83,7 @@ export async function updateSession(request: NextRequest) {
     // getClaims() verifica o JWT local via JWKS cacheado (Supabase usa ES256
     // assimetrico) — elimina round-trip pra /auth/v1/user em quase toda chamada.
     // Fallback pra getUser() quando claims falhar (HMAC, JWKS indisponivel etc).
-    let user: { id: string; role?: string | null } | null = null;
+    let user: { id: string; role?: string | null; cargos?: string[] } | null = null;
     try {
       const claimsResult = await supabase.auth.getClaims();
       const claims = claimsResult.data?.claims;
@@ -91,6 +91,11 @@ export async function updateSession(request: NextRequest) {
         user = {
           id: claims.sub as string,
           role: (claims as Record<string, unknown>).user_role as string | null | undefined ?? null,
+          // Cargos extras viajam no token junto do papel principal: sem isto o
+          // middleware leria só um deles e mandaria a pessoa embora da área do
+          // segundo cargo dela.
+          cargos:
+            ((claims as Record<string, unknown>).user_cargos as string[] | undefined) ?? [],
         };
       } else if (claimsResult.error) {
         // claims invalido/expirado — tenta refresh via getUser
@@ -142,26 +147,39 @@ export async function updateSession(request: NextRequest) {
       const EVENTOS_HOME = "/formacao/admin/eventos";
       const CONDUTOR_HOME = "/formacao/admin/meu-grupo";
       let role: string | null = user.role ?? null;
+      let cargos: string[] = user.cargos ?? [];
 
       if (!role) {
         const { data: profile } = await supabase
           .from("profiles")
-          .select("role")
+          .select("role, cargos")
           .eq("id", user.id)
           .single();
         role = profile?.role ?? null;
+        cargos = profile?.cargos ?? [];
       }
 
-      if (!role || !allowedRoles.has(role)) {
+      // Basta UM cargo servir. Antes isto olhava só o papel principal, e como
+      // papel é uma coluna só, quem cuida dos eventos e conduz um grupo perdia
+      // uma das duas áreas ao ganhar a outra.
+      const meus = new Set([role, ...cargos].filter(Boolean) as string[]);
+      const tem = (c: string) => meus.has(c);
+
+      if (!Array.from(meus).some((c) => allowedRoles.has(c))) {
         return hardRedirect("/formacao", supabaseResponse);
       }
 
-      if (role === "eventos" && !pathname.startsWith(EVENTOS_HOME)) {
-        return hardRedirect(EVENTOS_HOME, supabaseResponse);
-      }
+      // Preso a uma área só quem não tem nenhum cargo amplo. Quem acumula
+      // eventos e condução circula entre as duas.
+      const amplo = tem("admin") || tem("instructor");
+      const areasProprias = [
+        tem("eventos") ? EVENTOS_HOME : null,
+        tem("condutor") ? CONDUTOR_HOME : null,
+      ].filter(Boolean) as string[];
 
-      if (role === "condutor" && !pathname.startsWith(CONDUTOR_HOME)) {
-        return hardRedirect(CONDUTOR_HOME, supabaseResponse);
+      if (!amplo && areasProprias.length) {
+        const estaEmAreaPropria = areasProprias.some((a) => pathname.startsWith(a));
+        if (!estaEmAreaPropria) return hardRedirect(areasProprias[0], supabaseResponse);
       }
     }
 
