@@ -54,7 +54,7 @@ export default function TermosPage() {
     <LegalPage
       title="Termos de uso"
       version="1.0"
-      effectiveFrom="3 de agosto de 2026"
+      effectiveFrom="1º de julho de 2026"
       toc={toc}
     >
       <LegalSection id="quem-somos" title="1. Quem somos">
@@ -460,7 +460,13 @@ export default function TermosPage() {
         </LegalP>
         <LegalP>
           17.3. As versões anteriores ficam disponíveis em{" "}
-          <Placeholder>[URL DO HISTÓRICO DE VERSÕES]</Placeholder>.
+          <a
+            href="/formacao/versoes#termos-de-uso"
+            className="text-accent hover:underline"
+          >
+            allos.org.br/formacao/versoes
+          </a>
+          .
         </LegalP>
       </LegalSection>
 
@@ -512,7 +518,7 @@ export default function TermosPage() {
         <LegalTable
           caption="Histórico de versões dos termos de uso"
           head={["Versão", "Vigência", "Alterações"]}
-          rows={[["1.0", "3 de agosto de 2026", "Versão inicial"]]}
+          rows={[["1.0", "1º de julho de 2026", "Versão inicial"]]}
         />
       </LegalSection>
     </LegalPage>

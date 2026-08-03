@@ -51,7 +51,7 @@ export default function CookiesPage() {
     <LegalPage
       title="Política de cookies"
       version="1.0"
-      effectiveFrom="3 de agosto de 2026"
+      effectiveFrom="1º de julho de 2026"
       toc={toc}
     >
       <LegalLead>
@@ -300,7 +300,13 @@ export default function CookiesPage() {
         </LegalP>
         <LegalP>
           As versões anteriores ficam disponíveis em{" "}
-          <Placeholder>[URL DO HISTÓRICO DE VERSÕES]</Placeholder>.
+          <a
+            href="/formacao/versoes#politica-de-cookies"
+            className="text-accent hover:underline"
+          >
+            allos.org.br/formacao/versoes
+          </a>
+          .
         </LegalP>
       </LegalSection>
 
@@ -322,7 +328,7 @@ export default function CookiesPage() {
         <LegalTable
           caption="Histórico de versões da política de cookies"
           head={["Versão", "Vigência", "Alterações"]}
-          rows={[["1.0", "3 de agosto de 2026", "Versão inicial"]]}
+          rows={[["1.0", "1º de julho de 2026", "Versão inicial"]]}
         />
       </LegalSection>
     </LegalPage>
