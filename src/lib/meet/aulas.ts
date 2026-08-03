@@ -17,6 +17,20 @@ export interface ResultadoSugestoes {
   criadas: number;
   ja_existiam: number;
   sem_curso: number;
+  /** Sugestões que trocaram o link do Drive pelo do YouTube quando ele ficou pronto. */
+  atualizadas: number;
+}
+
+/** Endereço do vídeo, preferindo o YouTube quando ele já existe. */
+function montarUrl(
+  gravacaoUri: string,
+  youtubeId: string | null,
+  inicioSeg: number | null
+): string {
+  if (!youtubeId) return gravacaoUri;
+  return (
+    `https://www.youtube.com/watch?v=${youtubeId}` + (inicioSeg ? `&t=${inicioSeg}` : "")
+  );
 }
 
 /** "Encontro 7 · 05/08" — a numeração continua de onde a seção parou. */
@@ -26,7 +40,7 @@ function montarTitulo(numero: number, data: string): string {
 }
 
 export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoes> {
-  const res: ResultadoSugestoes = { criadas: 0, ja_existiam: 0, sem_curso: 0 };
+  const res: ResultadoSugestoes = { criadas: 0, ja_existiam: 0, sem_curso: 0, atualizadas: 0 };
 
   // Só encontro com gravação pronta e que ainda não gerou sugestão.
   const { data: encontros } = await sb
@@ -36,9 +50,6 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     )
     .eq("descartado", false)
     .not("gravacao_uri", "is", null)
-    // Onde o YouTube está ligado, espera o envio terminar: sugerir agora criaria
-    // a aula apontando para o Drive, e o vídeo bom chegaria depois.
-    .or("youtube_status.is.null,youtube_status.eq.pronto,youtube_status.eq.erro")
     .order("data_reuniao", { ascending: true })
     .limit(50);
 
@@ -56,8 +67,15 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
 
   const { data: jaSugeridos } = await sb
     .from("formacao_meet_aulas_sugeridas")
-    .select("encontro_id");
-  const vistos = new Set((jaSugeridos || []).map((s: { encontro_id: string }) => s.encontro_id));
+    .select("id, encontro_id, status, video_url");
+  const sugeridoPorEncontro = new Map(
+    (jaSugeridos || []).map(
+      (s: { id: string; encontro_id: string; status: string; video_url: string }) => [
+        s.encontro_id,
+        s,
+      ]
+    )
+  );
 
   for (const e of encontros as {
     id: string;
@@ -69,8 +87,24 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     youtube_video_id: string | null;
     inicio_efetivo_seg: number | null;
   }[]) {
-    if (vistos.has(e.id)) {
+    const existente = sugeridoPorEncontro.get(e.id);
+    if (existente) {
       res.ja_existiam++;
+
+      // A aula entra na fila com o link do Drive assim que a gravação existe,
+      // sem esperar o YouTube. Se o envio terminar antes de alguém aprovar, o
+      // link é trocado aqui: melhor uma aula que melhora sozinha do que uma
+      // fila vazia esperando um envio que pode nem estar configurado.
+      if (e.youtube_video_id && existente.status === "pendente") {
+        const melhor = montarUrl(e.gravacao_uri, e.youtube_video_id, e.inicio_efetivo_seg);
+        if (melhor !== existente.video_url) {
+          await sb
+            .from("formacao_meet_aulas_sugeridas")
+            .update({ video_url: melhor })
+            .eq("id", existente.id);
+          res.atualizadas++;
+        }
+      }
       continue;
     }
 
@@ -89,13 +123,7 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
       .eq("curso_id", space.curso_id)
       .eq("status", "aprovada");
 
-    // Se o vídeo já subiu para o YouTube, a aula aponta para lá: player melhor,
-    // sem depender de compartilhamento do Drive, e com o `start` pulando a
-    // espera antes do encontro começar.
-    const url = e.youtube_video_id
-      ? `https://www.youtube.com/watch?v=${e.youtube_video_id}` +
-        (e.inicio_efetivo_seg ? `&t=${e.inicio_efetivo_seg}` : "")
-      : e.gravacao_uri;
+    const url = montarUrl(e.gravacao_uri, e.youtube_video_id, e.inicio_efetivo_seg);
 
     const { error } = await sb.from("formacao_meet_aulas_sugeridas").insert({
       encontro_id: e.id,
