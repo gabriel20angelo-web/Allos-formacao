@@ -16,7 +16,10 @@ function voltar(req: NextRequest, params: Record<string, string>) {
   // está logado.
   const url = new URL("/formacao/admin/meet", baseUrlPublica(req));
   for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
-  return NextResponse.redirect(url);
+  const resposta = NextResponse.redirect(url);
+  // O segredo de ida e volta serve uma vez só.
+  resposta.cookies.delete("meet_oauth_state");
+  return resposta;
 }
 
 export async function GET(req: NextRequest) {
@@ -30,6 +33,18 @@ export async function GET(req: NextRequest) {
 
   if (erroGoogle) return voltar(req, { erro: `Google recusou: ${erroGoogle}` });
   if (!code) return voltar(req, { erro: "Google não devolveu o código." });
+
+  // O código só vale se for resposta a um pedido feito por este app. Sem esta
+  // conferência, um link montado por outra pessoa poderia fazer um admin logado
+  // gravar a conta dela como dona de tudo, com um clique.
+  const stateRecebido = req.nextUrl.searchParams.get("state");
+  const stateEsperado = req.cookies.get("meet_oauth_state")?.value;
+
+  if (!stateEsperado || !stateRecebido || stateRecebido !== stateEsperado) {
+    return voltar(req, {
+      erro: "A autorização não confere com o pedido feito aqui. Comece de novo pelo botão do painel.",
+    });
+  }
 
   const clientId = process.env.GOOGLE_MEET_CLIENT_ID;
   const clientSecret = process.env.GOOGLE_MEET_CLIENT_SECRET;

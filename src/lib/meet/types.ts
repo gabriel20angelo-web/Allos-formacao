@@ -58,7 +58,13 @@ export interface MeetTranscript {
 export interface MeetTranscriptEntry {
   name: string;
   participant?: string; // aponta para o participant
-  text?: string; // NÃO é persistido; só serve pra contar turno
+  /**
+   * O texto É guardado, em `formacao_meet_falas`, por decisão do Gabriel em
+   * 03/08/2026 (a decisão original era não guardar). A tabela tem leitura
+   * restrita a admin e nenhuma policy de escrita justamente por isso: encontro
+   * de formação toca em material clínico.
+   */
+  text?: string;
   languageCode?: string;
   startTime?: string;
   endTime?: string;

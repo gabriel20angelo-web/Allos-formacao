@@ -32,9 +32,11 @@ function segredoConfere(recebido: string | null): boolean {
 }
 
 export async function GET(req: NextRequest) {
+  // Só pelo cabeçalho. Aceitar o segredo na própria URL o espalharia por
+  // registro de acesso, histórico de navegador e cabeçalho de origem, e ele é a
+  // única coisa que protege esta rota.
   const header = req.headers.get("authorization");
-  const bearer = header?.startsWith("Bearer ") ? header.slice(7) : null;
-  const token = bearer || req.nextUrl.searchParams.get("token");
+  const token = header?.startsWith("Bearer ") ? header.slice(7) : null;
 
   if (!segredoConfere(token)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

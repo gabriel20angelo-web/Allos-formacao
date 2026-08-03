@@ -213,6 +213,8 @@ export default function MeetAdminPage() {
   const [aulas, setAulas] = useState<AulaSugerida[]>([]);
   const [aulasPublicadas, setAulasPublicadas] = useState<AulaSugerida[]>([]);
   const [aulasBloqueadas, setAulasBloqueadas] = useState<AulaBloqueada[]>([]);
+  const [falhouEncontros, setFalhouEncontros] = useState(false);
+  const [falhouFila, setFalhouFila] = useState(false);
   const [tituloEditado, setTituloEditado] = useState<Record<string, string>>({});
 
   const carregarAulas = useCallback(async () => {
@@ -230,6 +232,15 @@ export default function MeetAdminPage() {
   }, []);
 
   async function decidirAula(a: AulaSugerida, acao: "aprovar" | "descartar") {
+    // Descartar não tem volta: a sugestão sai da fila e nenhuma tela lê
+    // descartadas. Aprovar também merece pausa, porque libera o vídeo para
+    // quem tiver o link.
+    const aviso =
+      acao === "descartar"
+        ? `Descartar "${a.titulo}"? Ela não volta para a fila, e a gravação continua só no Drive.`
+        : `Publicar "${a.titulo}" em ${a.curso_titulo}? O vídeo fica acessível a quem tiver o link.`;
+    if (!confirm(aviso)) return;
+
     setTrabalhando(a.id);
     try {
       const r = await fetch("/formacao/api/admin/meet/aulas", {
@@ -437,7 +448,14 @@ export default function MeetAdminPage() {
     const j = await pegarJson<{ encontros?: Encontro[]; error?: string }>(
       `/formacao/api/admin/meet/encontros?limite=40${verDescartados ? "&descartados=1" : ""}`
     );
-    if (j && !j.error) setEncontros(j.encontros || []);
+    // Falha ao buscar é diferente de não haver nada: sem separar os dois, a
+    // tela anuncia "nenhum encontro" quando na verdade não conseguiu perguntar.
+    if (j && !j.error) {
+      setEncontros(j.encontros || []);
+      setFalhouEncontros(false);
+    } else {
+      setFalhouEncontros(true);
+    }
   }, [verDescartados]);
 
   const carregarVinculos = useCallback(async () => {
@@ -493,7 +511,12 @@ export default function MeetAdminPage() {
     const j = await pegarJson<{ fila?: ItemFila[]; error?: string }>(
       "/formacao/api/admin/meet/aliases"
     );
-    if (j && !j.error) setFila(j.fila || []);
+    if (j && !j.error) {
+      setFila(j.fila || []);
+      setFalhouFila(false);
+    } else {
+      setFalhouFila(true);
+    }
   }, []);
 
   useEffect(() => {
@@ -738,10 +761,16 @@ export default function MeetAdminPage() {
   }
 
   async function removerExcecao(id: string) {
-    const r = await fetch(`/formacao/api/admin/meet/excecoes?id=${id}`, { method: "DELETE" });
-    if (r.ok) {
+    // Esta função era a única do arquivo que ignorava a falha: quando o
+    // servidor recusava, nada acontecia na tela e a pessoa não tinha como
+    // saber se tinha funcionado.
+    try {
+      const r = await fetch(`/formacao/api/admin/meet/excecoes?id=${id}`, { method: "DELETE" });
+      await lerResposta(r);
       toast.success("Exceção removida.");
       await carregar();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Não consegui remover a exceção.");
     }
   }
 
@@ -1117,14 +1146,19 @@ export default function MeetAdminPage() {
                             ? "Qualquer pessoa com o link entra direto, sem ninguém admitir."
                             : "Quem é de fora do domínio precisa ser admitido. Clique para reabrir."
                         }
+                        // Sem verde e vermelho: aberta e fechada não são "certo"
+                        // e "errado", são dois estados normais em momentos
+                        // diferentes do dia. Verde na sala aberta sugeria que
+                        // aquele era o estado seguro, quando é o contrário:
+                        // aberta é a sala em que qualquer um com o link entra.
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
                         style={{
                           background:
                             space.access_type === "OPEN"
-                              ? "rgba(34,197,94,0.12)"
-                              : "rgba(245,158,11,0.12)",
-                          color: space.access_type === "OPEN" ? "#22C55E" : "#F59E0B",
-                          border: `1px solid ${space.access_type === "OPEN" ? "rgba(34,197,94,0.3)" : "rgba(245,158,11,0.3)"}`,
+                              ? "rgba(108,92,231,0.12)"
+                              : "rgba(255,255,255,0.03)",
+                          color: space.access_type === "OPEN" ? ROXO : "rgba(253,251,247,0.45)",
+                          border: `1px solid ${space.access_type === "OPEN" ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.08)"}`,
                         }}
                       >
                         {space.access_type === "OPEN" ? (
@@ -1390,7 +1424,15 @@ export default function MeetAdminPage() {
             )}
           </Card>
 
-          {encontrosFiltrados.length === 0 ? (
+          {falhouEncontros ? (
+            <Card className="p-6 text-center">
+              <AlertTriangle className="h-5 w-5 text-amber-400 mx-auto mb-2" />
+              <p className="text-sm text-cream/60">Não consegui buscar os encontros.</p>
+              <p className="text-xs text-cream/40 mt-1">
+                Isso não quer dizer que não há nenhum. Recarregue a página.
+              </p>
+            </Card>
+          ) : encontrosFiltrados.length === 0 ? (
             <Card className="p-6 text-center text-sm text-cream/40">
               Nenhum encontro capturado ainda. Depois que os grupos usarem as salas novas, eles
               aparecem aqui sozinhos.
@@ -1704,7 +1746,15 @@ export default function MeetAdminPage() {
             </Card>
           )}
 
-          {fila.length === 0 ? (
+          {falhouFila ? (
+            <Card className="p-6 text-center">
+              <AlertTriangle className="h-5 w-5 text-amber-400 mx-auto mb-2" />
+              <p className="text-sm text-cream/60">Não consegui buscar os nomes pendentes.</p>
+              <p className="text-xs text-cream/40 mt-1">
+                Pode haver nomes esperando. Recarregue a página.
+              </p>
+            </Card>
+          ) : fila.length === 0 ? (
             <Card className="p-6 text-center">
               <CheckCircle2 className="h-6 w-6 text-emerald-400 mx-auto mb-2" />
               <p className="text-sm text-cream/60">Nenhum nome pendente.</p>

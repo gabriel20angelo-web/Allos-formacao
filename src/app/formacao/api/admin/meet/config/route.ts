@@ -20,17 +20,23 @@ export async function GET() {
   const sb = await createServiceRoleClient();
   const { data } = await sb
     .from("formacao_cronograma")
-    .select(
-      "id, duracao_minutos, tolerancia_atraso_min, limite_encerramento_min, pasta_drive_id, pasta_drive_url"
-    )
+    .select("id, duracao_minutos, tolerancia_atraso_min, limite_encerramento_min")
+    .maybeSingle();
+
+  // A pasta vive em tabela própria porque formacao_cronograma tem leitura
+  // pública, e RLS é por linha, não por coluna.
+  const { data: cfgMeet } = await sb
+    .from("formacao_meet_config")
+    .select("pasta_drive_id, pasta_drive_url")
+    .eq("id", 1)
     .maybeSingle();
 
   return NextResponse.json({
     duracao_minutos: data?.duracao_minutos ?? 90,
     tolerancia_atraso_min: data?.tolerancia_atraso_min ?? 7,
     limite_encerramento_min: data?.limite_encerramento_min ?? 120,
-    pasta_drive_id: data?.pasta_drive_id ?? null,
-    pasta_drive_url: data?.pasta_drive_url ?? null,
+    pasta_drive_id: cfgMeet?.pasta_drive_id ?? null,
+    pasta_drive_url: cfgMeet?.pasta_drive_url ?? null,
   });
 }
 
@@ -80,10 +86,11 @@ export async function POST(req: NextRequest) {
   // A pasta é verificada contra o Drive antes de salvar: link errado descoberto
   // agora é um aviso; descoberto depois é gravação que não foi para lugar nenhum.
   let pastaNome: string | null = null;
+  const patchPasta: Record<string, string | null> = {};
   if (body.pasta_drive !== undefined) {
     if (!body.pasta_drive) {
-      patchTexto.pasta_drive_id = null;
-      patchTexto.pasta_drive_url = null;
+      patchPasta.pasta_drive_id = null;
+      patchPasta.pasta_drive_url = null;
     } else {
       const id = extrairIdDaPasta(body.pasta_drive);
       if (!id) {
@@ -95,8 +102,8 @@ export async function POST(req: NextRequest) {
       try {
         const pasta = await verificarPasta(id);
         pastaNome = pasta.name;
-        patchTexto.pasta_drive_id = id;
-        patchTexto.pasta_drive_url = body.pasta_drive;
+        patchPasta.pasta_drive_id = id;
+        patchPasta.pasta_drive_url = body.pasta_drive;
       } catch (e) {
         return NextResponse.json(
           { error: e instanceof Error ? e.message : "Não consegui acessar essa pasta." },
@@ -106,11 +113,29 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  if (!Object.keys(patch).length && !Object.keys(patchTexto).length) {
+  if (
+    !Object.keys(patch).length &&
+    !Object.keys(patchTexto).length &&
+    !Object.keys(patchPasta).length
+  ) {
     return NextResponse.json({ error: "Nada para alterar." }, { status: 400 });
   }
 
   const sb = await createServiceRoleClient();
+
+  if (Object.keys(patchPasta).length) {
+    const { error } = await sb
+      .from("formacao_meet_config")
+      .upsert(
+        { id: 1, ...patchPasta, atualizado_em: new Date().toISOString() },
+        { onConflict: "id" }
+      );
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  if (!Object.keys(patch).length && !Object.keys(patchTexto).length) {
+    return NextResponse.json({ ok: true, pasta_nome: pastaNome, ...patchPasta });
+  }
 
   // A tabela é singleton, mas pode nem ter linha ainda em base nova.
   const { data: existente } = await sb
