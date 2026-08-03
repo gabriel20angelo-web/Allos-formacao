@@ -427,12 +427,18 @@ export async function enfileirarEncontro(
   const { data: e } = await sb
     .from("formacao_meet_encontros")
     .select(
-      "id, atividade_nome, data_reuniao, gravacao_uri, gravacao_file_id, youtube_video_id, space_name"
+      "id, atividade_nome, data_reuniao, gravacao_uri, gravacao_file_id, youtube_video_id, space_name, descartado"
     )
     .eq("id", encontroId)
     .maybeSingle();
 
   if (!e) return { ok: false, motivo: "Encontro não encontrado." };
+
+  // Cada corte é cobrado por minuto de vídeo. Gastar isso num teste de link
+  // seria o pior jeito possível de descobrir que o encontro era lixo.
+  if (e.descartado) {
+    return { ok: false, motivo: "Este encontro está descartado. Restaure antes de gerar clipes." };
+  }
 
   const url = e.youtube_video_id
     ? `https://www.youtube.com/watch?v=${e.youtube_video_id}`

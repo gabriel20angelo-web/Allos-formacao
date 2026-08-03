@@ -29,11 +29,14 @@ export async function conciliarPendentes(sb: Sb): Promise<ResultadoConciliacao> 
     continuam_na_fila: 0,
   };
 
+  // Encontro descartado não entra: casar o nome de alguém que apareceu num
+  // teste de link não liga ninguém a nada, e enche a fila de trabalho inútil.
   const { data: pendentes } = await sb
     .from("formacao_meet_participacoes")
-    .select("display_name, display_name_norm")
+    .select("display_name, display_name_norm, formacao_meet_encontros!inner(descartado)")
     .is("aluno_id", null)
     .eq("eh_condutor", false)
+    .eq("formacao_meet_encontros.descartado", false)
     .limit(500);
 
   if (!pendentes?.length) return res;

@@ -23,11 +23,16 @@ export async function GET() {
 
   const { data: pendentes } = await sb
     .from("formacao_meet_participacoes")
-    .select("display_name, display_name_norm, minutos_presentes, encontro_id")
+    .select(
+      "display_name, display_name_norm, minutos_presentes, encontro_id, formacao_meet_encontros!inner(descartado)"
+    )
     .is("aluno_id", null)
     // Condutor e conta da casa não são aluno: pedir para conciliar toda semana
     // é convidar o erro, porque a saída óbvia (ligar a alguém) é a errada.
     .eq("eh_condutor", false)
+    // Nem quem apareceu num teste de link: identificar essa pessoa não serve
+    // para nada, porque o encontro dela está fora de toda estatística.
+    .eq("formacao_meet_encontros.descartado", false)
     .order("created_at", { ascending: false })
     .limit(500);
 

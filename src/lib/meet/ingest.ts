@@ -252,7 +252,7 @@ export async function ingerir(opts?: {
         const { data: existente } = await sb
           .from("formacao_meet_encontros")
           .select(
-            "id, transcricao_ingerida, gravacao_uri, gravacao_file_id, transcricao_uri, transcricao_file_id"
+            "id, transcricao_ingerida, gravacao_uri, gravacao_file_id, transcricao_uri, transcricao_file_id, descartado, descartado_manual"
           )
           .eq("conference_record_id", conf.name)
           .maybeSingle();
@@ -505,12 +505,25 @@ export async function ingerir(opts?: {
         // quórum do grupo nasça estragada e que alguém precise limpar depois.
         const pareceTeste = total <= 1 && duracaoMin <= 5;
 
+        // Decisão de gente não é desfeita por rotina.
+        //
+        // Este upsert roda de novo em toda rodada enquanto a transcrição não
+        // fica pronta, e antes ele reescrevia `descartado` pela heurística. O
+        // efeito era invisível e chato: o administrador descartava um encontro
+        // real, e quinze minutos depois ele voltava para as médias como se nada
+        // tivesse acontecido, com o motivo apagado junto.
+        const decidiuNaMao = !!existente?.descartado_manual;
+
         const encontroRow = {
           conference_record_id: conf.name,
-          descartado: pareceTeste,
-          descartado_motivo: pareceTeste
-            ? "Descartado automaticamente: no máximo uma pessoa, por até cinco minutos."
-            : null,
+          ...(decidiuNaMao
+            ? {}
+            : {
+                descartado: pareceTeste,
+                descartado_motivo: pareceTeste
+                  ? "Descartado automaticamente: no máximo uma pessoa, por até cinco minutos."
+                  : null,
+              }),
           space_name: space.space_name,
           slot_id: space.slot_id,
           atividade_nome: slot?.atividade_nome || space.rotulo || null,
@@ -622,7 +635,14 @@ export async function ingerir(opts?: {
         // ── ponte com a tabela antiga ──
         // Encontro descartado não atravessa a ponte: as telas antigas não têm
         // como saber que ele é lixo, e o quórum delas ficaria errado.
-        if (pareceTeste) {
+        //
+        // Vale para o descarte automático e para o manual. Antes só o
+        // automático segurava, então o encontro que o administrador jogou fora
+        // voltava para as telas de estatística por este caminho, mesmo depois
+        // de a linha ter sido apagada no descarte.
+        const foiDescartado = decidiuNaMao ? !!existente?.descartado : pareceTeste;
+
+        if (foiDescartado) {
           await sb
             .from("formacao_meet_presencas")
             .delete()

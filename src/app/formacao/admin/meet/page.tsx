@@ -15,6 +15,7 @@ import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
   UserSearch, Video, FileText, X, Youtube,
+  Trash2,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -257,6 +258,7 @@ export default function MeetAdminPage() {
   const [marcadas, setMarcadas] = useState<string[]>([]);
   const [buscandoAulas, setBuscandoAulas] = useState(false);
   const [falhouEncontros, setFalhouEncontros] = useState(false);
+  const [diagDrive, setDiagDrive] = useState<string | null>(null);
 
   const carregarClipes = useCallback(async () => {
     const j = await pegarJson<{ jobs?: ClipJob[]; configurado?: boolean; error?: string }>(
@@ -585,6 +587,86 @@ export default function MeetAdminPage() {
       const j = await lerResposta(r);
       toast.success((j.aviso as string) || "Feito.");
       await carregarEncontros();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  /**
+   * Apaga de vez, sem volta.
+   *
+   * Descartar esconde e é reversível; isto não é, e por isso pergunta. Vale
+   * para o caso comum de testar o link cinco vezes e ficar com cinco encontros
+   * de um minuto atravancando a lista para sempre.
+   */
+  async function apagarEncontro(e: Encontro) {
+    if (
+      !confirm(
+        `Apagar de vez o encontro de ${new Date(e.inicio).toLocaleDateString("pt-BR")}?\n\n` +
+          "As participações e as falas vão junto. Isto não tem volta."
+      )
+    )
+      return;
+
+    setTrabalhando(e.id);
+    try {
+      const r = await fetch(`/formacao/api/admin/meet/encontros?id=${e.id}&apagar=1`, {
+        method: "DELETE",
+      });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Apagado.");
+      await carregarEncontros();
+      await carregar();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function verificarDrive() {
+    setTrabalhando("drive");
+    setDiagDrive(null);
+    try {
+      const j = await pegarJson<Record<string, unknown>>(
+        "/formacao/api/admin/meet/diagnostico-drive"
+      );
+      if (!j) throw new Error("Sem resposta do servidor.");
+      // A conclusão é o que interessa; o resto é matéria para quem for
+      // investigar a fundo, e cabe no console.
+      console.info("[diagnostico-drive]", j);
+      setDiagDrive(
+        (j.conclusao as string) ||
+          (j.erro as string) ||
+          "Sem problemas encontrados no acesso ao Drive."
+      );
+    } catch (e) {
+      setDiagDrive(e instanceof Error ? e.message : "Não consegui verificar.");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function limparDescartados() {
+    if (
+      !confirm(
+        "Apagar de vez TODOS os encontros descartados?\n\n" +
+          "As participações e as falas de cada um vão junto. Isto não tem volta."
+      )
+    )
+      return;
+
+    setTrabalhando("limpar");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/encontros?apagar_descartados=1", {
+        method: "DELETE",
+      });
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Limpo.");
+      await carregarEncontros();
+      await carregar();
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Erro");
     } finally {
@@ -1049,7 +1131,7 @@ export default function MeetAdminPage() {
           ["aulas", `Aulas a publicar${aulas.length ? ` (${aulas.length})` : ""}`],
           ["clipes", "Clipes"],
           ["nomes", `Nomes a resolver${status?.nomes_pendentes ? ` (${fila.length || status.nomes_pendentes})` : ""}`],
-          ["diagnostico", "Diagnóstico"],
+          ["diagnostico", "Ajustes"],
         ] as [Aba, string][]).map(([id, label]) => (
           <button
             key={id}
@@ -1471,6 +1553,25 @@ export default function MeetAdminPage() {
               >
                 {verDescartados ? "Ocultar descartados" : "Ver descartados"}
               </button>
+              {/* A faxina só existe enquanto se olha o lixo. Fora daí, é um
+                  botão destrutivo esperando um clique errado. */}
+              {verDescartados && encontros.length > 0 && (
+                <button
+                  onClick={limparDescartados}
+                  disabled={trabalhando === "limpar"}
+                  title="Apaga de vez todos os encontros descartados, com participações e falas."
+                  className="px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                  style={{
+                    background: "rgba(245,158,11,0.08)",
+                    color: "#F59E0B",
+                    border: "1px solid rgba(245,158,11,0.25)",
+                  }}
+                >
+                  {trabalhando === "limpar"
+                    ? "Apagando"
+                    : `Apagar os ${encontros.length} de vez`}
+                </button>
+              )}
               <button
                 onClick={buscarNasFalas}
                 disabled={trabalhando === "busca"}
@@ -1623,6 +1724,20 @@ export default function MeetAdminPage() {
                       >
                         {e.descartado ? "Restaurar" : "Descartar"}
                       </button>
+                      {/* Apagar só aparece no que já está descartado: para
+                          chegar aqui foi preciso descartar antes e ir procurar
+                          na lista dos descartados. Duas decisões, não uma. */}
+                      {e.descartado && (
+                        <button
+                          onClick={() => apagarEncontro(e)}
+                          disabled={trabalhando === e.id}
+                          title="Apagar de vez, com as participações e as falas. Não tem volta."
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg text-cream/30 hover:text-amber-400 disabled:opacity-40"
+                          style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      )}
                     </div>
                   </div>
 
@@ -2272,6 +2387,24 @@ export default function MeetAdminPage() {
             <Linha ok={!!status?.autorizado} texto={`Conta autorizada${status?.organizer_email ? `: ${status.organizer_email}` : ""}`} />
             <Linha ok={!!status?.cron_configurado} texto="Segredo do cron configurado" />
             <Linha ok={(status?.total_salas ?? 0) > 0} texto={`${status?.total_salas ?? 0} salas criadas`} />
+
+            {/* Esta verificação já existia no servidor e nenhum botão a
+                chamava. Ela distingue as três causas de o Drive recusar —
+                permissão não concedida, app barrado pela organização, pasta
+                inexistente — que de fora parecem o mesmo erro. */}
+            <div className="pt-2 mt-1 border-t border-white/5">
+              <button
+                onClick={verificarDrive}
+                disabled={trabalhando === "drive"}
+                className="px-3 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                style={{ background: "rgba(255,255,255,0.04)", color: "rgba(253,251,247,0.6)", border: "1px solid rgba(255,255,255,0.08)" }}
+              >
+                {trabalhando === "drive" ? "Verificando" : "Verificar acesso ao Drive"}
+              </button>
+              {diagDrive && (
+                <p className="text-xs text-cream/50 mt-2 whitespace-pre-wrap">{diagDrive}</p>
+              )}
+            </div>
           </Card>
 
           <Card className="p-4">

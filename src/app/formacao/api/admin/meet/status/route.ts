@@ -36,14 +36,24 @@ export async function GET() {
     .select("id", { count: "exact", head: true })
     .eq("ativo", true);
 
+  // Sem o filtro, o número no alto da tela contava o lixo: vinte testes de
+  // link viravam "vinte encontros capturados", e nenhum deles era encontro.
   const { count: totalEncontros } = await sb
     .from("formacao_meet_encontros")
-    .select("id", { count: "exact", head: true });
+    .select("id", { count: "exact", head: true })
+    .eq("descartado", false);
 
+  // Junção interna com o encontro para não pedir que alguém identifique o nome
+  // de um participante de um teste de link. Era o caso mais irritante: a fila
+  // enchia de nomes que ninguém precisava resolver.
   const { count: pendentes } = await sb
     .from("formacao_meet_participacoes")
-    .select("id", { count: "exact", head: true })
-    .is("aluno_id", null);
+    .select("id, formacao_meet_encontros!inner(descartado)", {
+      count: "exact",
+      head: true,
+    })
+    .is("aluno_id", null)
+    .eq("formacao_meet_encontros.descartado", false);
 
   // A configuração vem junto de propósito. Cada rota administrativa valida a
   // sessão com o Supabase, e várias chamadas simultâneas disputam a renovação

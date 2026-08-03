@@ -46,9 +46,48 @@ export async function DELETE(req: NextRequest) {
 
   const id = req.nextUrl.searchParams.get("id");
   const restaurar = req.nextUrl.searchParams.get("restaurar") === "1";
-  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
+  const apagar = req.nextUrl.searchParams.get("apagar") === "1";
+  const todosDescartados = req.nextUrl.searchParams.get("apagar_descartados") === "1";
 
   const sb = await createServiceRoleClient();
+
+  // ── apagar de vez os que já estão descartados ──
+  // Descartar esconde e é reversível; isto não é. Existe porque testar um link
+  // cinco vezes produz cinco encontros de um minuto, e a lista fica ilegível
+  // para sempre por causa de lixo que ninguém vai querer de volta.
+  if (todosDescartados) {
+    const { data: alvos } = await sb
+      .from("formacao_meet_encontros")
+      .select("id, conference_record_id")
+      .eq("descartado", true);
+
+    if (!alvos?.length) {
+      return NextResponse.json({ ok: true, apagados: 0, aviso: "Não havia nada descartado." });
+    }
+
+    const conferencias = alvos
+      .map((e: { conference_record_id: string | null }) => e.conference_record_id)
+      .filter(Boolean) as string[];
+
+    if (conferencias.length) {
+      await sb.from("formacao_meet_presencas").delete().in("conference_record_id", conferencias);
+    }
+
+    const { error } = await sb
+      .from("formacao_meet_encontros")
+      .delete()
+      .eq("descartado", true);
+
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+    return NextResponse.json({
+      ok: true,
+      apagados: alvos.length,
+      aviso: `${alvos.length} ${alvos.length === 1 ? "encontro apagado" : "encontros apagados"} de vez. Participações e falas foram junto.`,
+    });
+  }
+
+  if (!id) return NextResponse.json({ error: "id obrigatório" }, { status: 400 });
 
   const { data: encontro } = await sb
     .from("formacao_meet_encontros")
@@ -60,10 +99,31 @@ export async function DELETE(req: NextRequest) {
     return NextResponse.json({ error: "Encontro não encontrado" }, { status: 404 });
   }
 
+  // ── apagar um ──
+  if (apagar) {
+    if (encontro.conference_record_id) {
+      await sb
+        .from("formacao_meet_presencas")
+        .delete()
+        .eq("conference_record_id", encontro.conference_record_id);
+    }
+    const { error } = await sb.from("formacao_meet_encontros").delete().eq("id", id);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({
+      ok: true,
+      apagado: true,
+      aviso: "Apagado de vez, com as participações e falas.",
+    });
+  }
+
+  // `descartado_manual` é o que impede a ingestão de desfazer isto na rodada
+  // seguinte: a heurística automática só reconhece encontro de uma pessoa por
+  // até cinco minutos, então tudo que uma pessoa descartou voltava sozinho.
   const { error } = await sb
     .from("formacao_meet_encontros")
     .update({
       descartado: !restaurar,
+      descartado_manual: true,
       descartado_motivo: restaurar ? null : "Descartado pelo administrador.",
     })
     .eq("id", id);

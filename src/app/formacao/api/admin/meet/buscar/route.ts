@@ -62,11 +62,15 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ termo, resultados: [] });
   }
 
+  // Fala de encontro descartado não entra no resultado. O trecho existe no
+  // banco, mas veio de um teste de link, e devolvê-lo faria a busca apontar
+  // para um encontro que a lista nem mostra mais.
   const encontroIds = Array.from(new Set(falas.map((f) => f.encontro_id)));
   const { data: encontros } = await sb
     .from("formacao_meet_encontros")
     .select("id, atividade_nome, condutor_nome, data_reuniao, inicio, transcricao_uri")
-    .in("id", encontroIds);
+    .in("id", encontroIds)
+    .eq("descartado", false);
 
   const porEncontro = new Map(
     (encontros || []).map((e: { id: string }) => [e.id, e])
