@@ -58,6 +58,8 @@ interface AulaSugerida {
   duracao_min: number | null;
   data_reuniao: string;
   curso_titulo: string;
+  curso_slug: string | null;
+  curso_publicado: boolean;
 }
 interface Excecao {
   id: string;
@@ -203,13 +205,19 @@ export default function MeetAdminPage() {
   const [verDescartados, setVerDescartados] = useState(false);
   const [cursos, setCursos] = useState<CursoOpcao[]>([]);
   const [aulas, setAulas] = useState<AulaSugerida[]>([]);
+  const [aulasPublicadas, setAulasPublicadas] = useState<AulaSugerida[]>([]);
   const [tituloEditado, setTituloEditado] = useState<Record<string, string>>({});
 
   const carregarAulas = useCallback(async () => {
-    const j = await pegarJson<{ fila?: AulaSugerida[]; error?: string }>(
-      "/formacao/api/admin/meet/aulas"
-    );
-    if (j && !j.error) setAulas(j.fila || []);
+    const j = await pegarJson<{
+      fila?: AulaSugerida[];
+      publicadas?: AulaSugerida[];
+      error?: string;
+    }>("/formacao/api/admin/meet/aulas");
+    if (j && !j.error) {
+      setAulas(j.fila || []);
+      setAulasPublicadas(j.publicadas || []);
+    }
   }, []);
 
   async function decidirAula(a: AulaSugerida, acao: "aprovar" | "descartar") {
@@ -1523,6 +1531,42 @@ export default function MeetAdminPage() {
             vídeo para quem tiver o link, que é o que permite o aluno assistir. Antes de aprovar,
             vale abrir e conferir o começo da gravação, que costuma pegar a chegada das pessoas.
           </p>
+
+          {aulasPublicadas.length > 0 && (
+            <Card className="p-4">
+              <p className="text-sm text-cream font-semibold mb-2">Publicadas</p>
+              <div className="space-y-1.5">
+                {aulasPublicadas.map((a) => (
+                  <div key={a.id} className="flex items-center justify-between gap-2 text-xs flex-wrap">
+                    <span className="text-cream/60">
+                      {a.titulo}
+                      <span className="text-cream/30"> em </span>
+                      {a.curso_titulo}
+                      {!a.curso_publicado && (
+                        <span
+                          className="ml-1.5 text-amber-400/80"
+                          title="A aula existe, mas o curso está como rascunho e nenhum aluno o enxerga."
+                        >
+                          curso não publicado
+                        </span>
+                      )}
+                    </span>
+                    {a.curso_slug && (
+                      <a
+                        href={`/formacao/curso/${a.curso_slug}`}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="shrink-0"
+                        style={{ color: ROXO }}
+                      >
+                        abrir no curso
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </Card>
+          )}
 
           {aulas.length === 0 ? (
             <Card className="p-6 text-center text-sm text-cream/40">

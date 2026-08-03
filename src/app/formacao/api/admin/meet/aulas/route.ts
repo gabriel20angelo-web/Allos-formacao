@@ -40,22 +40,47 @@ export async function GET() {
     .order("data_reuniao", { ascending: false })
     .limit(50);
 
+  // As publicadas também voltam, com link para o curso. Sem isso, aprovar faz o
+  // item sumir da tela e ninguém sabe para onde ele foi: o curso é outro lugar,
+  // e a aula pode estar numa seção que a pessoa não pensou em abrir.
+  const { data: publicadas } = await sb
+    .from("formacao_meet_aulas_sugeridas")
+    .select("*")
+    .eq("status", "aprovada")
+    .order("decidido_em", { ascending: false })
+    .limit(10);
+
   const cursoIds = Array.from(
-    new Set((fila || []).map((f: { curso_id: string }) => f.curso_id))
+    new Set(
+      [...(fila || []), ...(publicadas || [])].map((f: { curso_id: string }) => f.curso_id)
+    )
   );
   const { data: cursos } = cursoIds.length
-    ? await sb.from("courses").select("id, title, slug").in("id", cursoIds)
+    ? await sb.from("courses").select("id, title, slug, status").in("id", cursoIds)
     : { data: [] };
 
-  const nomePorCurso = new Map(
-    (cursos || []).map((c: { id: string; title: string }) => [c.id, c.title])
+  const porCurso = new Map(
+    (cursos || []).map((c: { id: string; title: string; slug: string; status: string }) => [
+      c.id,
+      c,
+    ])
   );
 
-  return NextResponse.json({
-    fila: (fila || []).map((f: Sugestao & { curso_id: string }) => ({
+  const enriquecer = (f: Sugestao & { curso_id: string }) => {
+    const curso = porCurso.get(f.curso_id);
+    return {
       ...f,
-      curso_titulo: nomePorCurso.get(f.curso_id) || "curso removido",
-    })),
+      curso_titulo: curso?.title || "curso removido",
+      curso_slug: curso?.slug || null,
+      // Curso em rascunho não aparece para o aluno por mais publicada que a
+      // aula esteja, e isso precisa estar escrito na tela.
+      curso_publicado: curso?.status === "published",
+    };
+  };
+
+  return NextResponse.json({
+    fila: (fila || []).map(enriquecer),
+    publicadas: (publicadas || []).map(enriquecer),
   });
 }
 
