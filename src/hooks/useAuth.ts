@@ -37,6 +37,10 @@ interface AuthContextValue {
   isInstructor: boolean;
   isStudent: boolean;
   isAssociado: boolean;
+  /** Cargo dedicado a eventos do calendário — vê só essa área. */
+  isEventos: boolean;
+  /** Admin ou cargo de eventos. */
+  canManageEvents: boolean;
 }
 
 interface InitialSession {
@@ -318,6 +322,9 @@ export function AuthProvider({
       isInstructor: profile?.role === "instructor",
       isStudent: profile?.role === "student",
       isAssociado: profile?.role === "associado",
+      isEventos: profile?.role === "eventos",
+      canManageEvents:
+        profile?.role === "admin" || profile?.role === "eventos",
     }),
     [user, profile, loading, signOut]
   );

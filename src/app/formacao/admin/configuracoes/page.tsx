@@ -12,7 +12,7 @@ import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import { motion } from "framer-motion";
-import { Search, Shield, AlertTriangle, Plus, UserPlus, BookOpen, Check } from "lucide-react";
+import { Search, Shield, AlertTriangle, Plus, UserPlus, BookOpen, Check, CalendarDays } from "lucide-react";
 import type { Profile, UserRole } from "@/types";
 
 const CategoriasPage = dynamic(() => import("@/app/formacao/admin/categorias/page"), { ssr: false });
@@ -23,6 +23,7 @@ const roleLabels: Record<string, string> = {
   admin: "Admin",
   instructor: "Professor",
   associado: "Associado",
+  eventos: "Eventos",
   student: "Aluno",
 };
 
@@ -455,7 +456,7 @@ export default function AdminConfiguracoesPage() {
           />
         </div>
         <div className="flex gap-2 flex-wrap">
-          {["all", "student", "associado", "instructor", "admin"].map((r) => (
+          {["all", "student", "associado", "instructor", "eventos", "admin"].map((r) => (
             <button
               key={r}
               onClick={() => { setRoleFilter(r); setVisibleCount(ROLES_PER_PAGE); }}
@@ -620,9 +621,26 @@ export default function AdminConfiguracoesPage() {
                 { value: "student", label: "Aluno" },
                 { value: "associado", label: "Associado" },
                 { value: "instructor", label: "Professor" },
+                { value: "eventos", label: "Eventos (só o calendário de eventos)" },
                 { value: "admin", label: "Administrador" },
               ]}
             />
+
+            {newRole === "eventos" && editingUser.role !== "eventos" && (
+              <div
+                className="flex items-center gap-3 p-3 rounded-[10px]"
+                style={{
+                  background: "rgba(217,70,239,0.06)",
+                  border: "1px solid rgba(217,70,239,0.15)",
+                }}
+              >
+                <CalendarDays className="h-4 w-4 text-fuchsia-400 flex-shrink-0" />
+                <p className="text-xs text-fuchsia-300">
+                  Entra no painel apenas em Eventos — não vê alunos,
+                  certificados nem o resto da formação.
+                </p>
+              </div>
+            )}
 
             {/* Danger confirmation for admin role */}
             {newRole === "admin" && editingUser.role !== "admin" && (

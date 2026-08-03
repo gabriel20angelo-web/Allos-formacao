@@ -20,6 +20,7 @@ import {
   X,
   User,
   Calendar,
+  CalendarDays,
   Users,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
@@ -43,6 +44,11 @@ const navItems: {
   { href: "/formacao/admin/configuracoes", label: "Configurações", icon: Settings },
 ];
 
+/** O cargo "eventos" enxerga só a própria área. */
+const eventosNavItems: typeof navItems = [
+  { href: "/formacao/admin/eventos", label: "Eventos", icon: CalendarDays },
+];
+
 const pageTitles: Record<string, string> = {
   "/formacao/admin": "Dashboard",
   "/formacao/admin/formacao-base": "Formação",
@@ -52,6 +58,7 @@ const pageTitles: Record<string, string> = {
   "/formacao/admin/certificados": "Certificados",
   "/formacao/admin/moderacao": "Moderação",
   "/formacao/admin/configuracoes": "Configurações",
+  "/formacao/admin/eventos": "Eventos",
 };
 
 export default function AdminLayout({
@@ -59,8 +66,10 @@ export default function AdminLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { profile, loading, signOut, isAdmin, isInstructor } = useAuth();
+  const { profile, loading, signOut, isAdmin, isInstructor, isEventos } =
+    useAuth();
   const pathname = usePathname();
+  const items = isEventos ? eventosNavItems : navItems;
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSugestoes, setPendingSugestoes] = useState(0);
   // Auth/role check is enforced by middleware at src/lib/supabase/middleware.ts
@@ -131,7 +140,7 @@ export default function AdminLayout({
     );
   }
 
-  if (!profile || (!isAdmin && !isInstructor)) {
+  if (!profile || (!isAdmin && !isInstructor && !isEventos)) {
     return (
       <div className="min-h-screen flex items-center justify-center px-4" style={{ background: "#111111" }}>
         <div className="max-w-md text-center space-y-4">
@@ -139,7 +148,7 @@ export default function AdminLayout({
             Acesso restrito
           </h1>
           <p className="text-cream/50 text-sm">
-            Você precisa de uma conta de administrador ou instrutor pra acessar esta área.
+            Você precisa de uma conta de administrador, instrutor ou de eventos pra acessar esta área.
           </p>
           <Link
             href="/formacao"
@@ -160,7 +169,10 @@ export default function AdminLayout({
     <div className="flex flex-col h-full">
       {/* Brand with logo */}
       <div className="p-6" style={{ borderBottom: "1px solid rgba(200,75,49,0.1)" }}>
-        <Link href="/formacao/admin" className="flex items-center gap-2.5">
+        <Link
+          href={isEventos ? "/formacao/admin/eventos" : "/formacao/admin"}
+          className="flex items-center gap-2.5"
+        >
           <Image src="/Icone_Allos_Verde.png" alt="Allos" width={28} height={28} />
           <div>
             <span className="font-fraunces font-bold text-[16px] text-cream tracking-wide">Allos</span>
@@ -171,7 +183,7 @@ export default function AdminLayout({
 
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-1">
-        {navItems.map((item) => {
+        {items.map((item) => {
           const isActive =
             pathname === item.href ||
             (item.href !== "/formacao/admin" &&
@@ -328,7 +340,9 @@ export default function AdminLayout({
                   ? "Admin"
                   : profile.role === "instructor"
                     ? "Professor"
-                    : "Aluno"}
+                    : profile.role === "eventos"
+                      ? "Eventos"
+                      : "Aluno"}
               </Badge>
             </div>
             {/* Avatar */}

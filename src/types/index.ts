@@ -1,4 +1,10 @@
-export type UserRole = "student" | "instructor" | "admin" | "associado";
+/** "eventos" só administra os eventos do calendário (migration 041). */
+export type UserRole =
+  | "student"
+  | "instructor"
+  | "admin"
+  | "associado"
+  | "eventos";
 
 export type CourseStatus = "draft" | "published" | "archived";
 
