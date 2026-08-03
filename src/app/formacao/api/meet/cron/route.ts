@@ -9,6 +9,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { arquivarGravacoes } from "@/lib/meet/arquivar";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
@@ -58,6 +59,10 @@ export async function GET(req: NextRequest) {
     const semana = await fecharSemanaSePreciso(sb);
     const status = await atualizarStatusSlots(sb);
 
+    // Por último: mover arquivo pode falhar por permissão do Google, e essa
+    // falha não pode derrubar a captura de presença, que é o que importa.
+    const arquivos = await arquivarGravacoes(sb);
+
     return NextResponse.json({
       ok: true,
       encerramento,
@@ -66,6 +71,7 @@ export async function GET(req: NextRequest) {
       ingestao,
       status,
       semana,
+      arquivos,
     });
   } catch (e) {
     console.error("[meet/cron]", e);

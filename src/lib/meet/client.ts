@@ -35,6 +35,11 @@ export const MEET_SCOPES = [
   // vira dona das salas e do Drive onde as gravações vão parar.
   "openid",
   "https://www.googleapis.com/auth/userinfo.email",
+  // Mover gravação e transcrição para a pasta escolhida. É escopo restrito pelo
+  // Google, porque mexe em arquivo que o app não criou: quem criou foi o Meet.
+  // Se a organização barrar, tudo o mais continua funcionando e os arquivos só
+  // ficam onde o Google os pôs.
+  "https://www.googleapis.com/auth/drive",
 ];
 
 /** E-mail da conta que autorizou, para o painel mostrar de quem é o acesso. */

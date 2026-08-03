@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
+import { extrairIdDaPasta, verificarPasta } from "@/lib/meet/drive";
 
 export const dynamic = "force-dynamic";
 
@@ -19,13 +20,17 @@ export async function GET() {
   const sb = await createServiceRoleClient();
   const { data } = await sb
     .from("formacao_cronograma")
-    .select("id, duracao_minutos, tolerancia_atraso_min, limite_encerramento_min")
+    .select(
+      "id, duracao_minutos, tolerancia_atraso_min, limite_encerramento_min, pasta_drive_id, pasta_drive_url"
+    )
     .maybeSingle();
 
   return NextResponse.json({
     duracao_minutos: data?.duracao_minutos ?? 90,
     tolerancia_atraso_min: data?.tolerancia_atraso_min ?? 7,
     limite_encerramento_min: data?.limite_encerramento_min ?? 120,
+    pasta_drive_id: data?.pasta_drive_id ?? null,
+    pasta_drive_url: data?.pasta_drive_url ?? null,
   });
 }
 
@@ -35,7 +40,11 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  let body: { tolerancia_atraso_min?: number; limite_encerramento_min?: number };
+  let body: {
+    tolerancia_atraso_min?: number;
+    limite_encerramento_min?: number;
+    pasta_drive?: string | null;
+  };
   try {
     body = await req.json();
   } catch {
@@ -43,6 +52,7 @@ export async function POST(req: NextRequest) {
   }
 
   const patch: Record<string, number> = {};
+  const patchTexto: Record<string, string | null> = {};
 
   if (body.tolerancia_atraso_min !== undefined) {
     const valor = Number(body.tolerancia_atraso_min);
@@ -67,7 +77,36 @@ export async function POST(req: NextRequest) {
     patch.limite_encerramento_min = Math.round(valor);
   }
 
-  if (!Object.keys(patch).length) {
+  // A pasta é verificada contra o Drive antes de salvar: link errado descoberto
+  // agora é um aviso; descoberto depois é gravação que não foi para lugar nenhum.
+  let pastaNome: string | null = null;
+  if (body.pasta_drive !== undefined) {
+    if (!body.pasta_drive) {
+      patchTexto.pasta_drive_id = null;
+      patchTexto.pasta_drive_url = null;
+    } else {
+      const id = extrairIdDaPasta(body.pasta_drive);
+      if (!id) {
+        return NextResponse.json(
+          { error: "Não reconheci uma pasta nesse link. Cole o endereço da pasta no Drive." },
+          { status: 400 }
+        );
+      }
+      try {
+        const pasta = await verificarPasta(id);
+        pastaNome = pasta.name;
+        patchTexto.pasta_drive_id = id;
+        patchTexto.pasta_drive_url = body.pasta_drive;
+      } catch (e) {
+        return NextResponse.json(
+          { error: e instanceof Error ? e.message : "Não consegui acessar essa pasta." },
+          { status: 400 }
+        );
+      }
+    }
+  }
+
+  if (!Object.keys(patch).length && !Object.keys(patchTexto).length) {
     return NextResponse.json({ error: "Nada para alterar." }, { status: 400 });
   }
 
@@ -79,12 +118,14 @@ export async function POST(req: NextRequest) {
     .select("id")
     .maybeSingle();
 
+  const dados = { ...patch, ...patchTexto };
+
   const { error } = existente
-    ? await sb.from("formacao_cronograma").update(patch).eq("id", existente.id)
-    : await sb.from("formacao_cronograma").insert(patch);
+    ? await sb.from("formacao_cronograma").update(dados).eq("id", existente.id)
+    : await sb.from("formacao_cronograma").insert(dados);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, ...patch });
+  return NextResponse.json({ ok: true, ...dados, pasta_nome: pastaNome });
 }

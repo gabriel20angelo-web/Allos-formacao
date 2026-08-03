@@ -185,6 +185,28 @@ export default function MeetAdminPage() {
   const [duracaoAberta, setDuracaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
   const [limiteEncerramento, setLimiteEncerramento] = useState(120);
+  const [pastaDrive, setPastaDrive] = useState("");
+
+  async function salvarPasta() {
+    setTrabalhando("pasta");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/config", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pasta_drive: pastaDrive.trim() || null }),
+      });
+      const j = await lerResposta(r);
+      toast.success(
+        j.pasta_nome
+          ? `Gravações vão para a pasta "${j.pasta_nome}".`
+          : "Pasta removida: os arquivos ficam onde o Meet coloca."
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar a pasta");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
   const [novaAvulsa, setNovaAvulsa] = useState("");
   const [filtroGrupo, setFiltroGrupo] = useState("");
   const [busca, setBusca] = useState("");
@@ -263,6 +285,7 @@ export default function MeetAdminPage() {
       pegarJson<{
         tolerancia_atraso_min?: number;
         limite_encerramento_min?: number;
+        pasta_drive_url?: string | null;
         error?: string;
       }>("/formacao/api/admin/meet/config"),
     ]);
@@ -274,6 +297,7 @@ export default function MeetAdminPage() {
     if (cfg && !cfg.error) {
       setTolerancia(cfg.tolerancia_atraso_min ?? 7);
       setLimiteEncerramento(cfg.limite_encerramento_min ?? 120);
+      setPastaDrive(cfg.pasta_drive_url ?? "");
     }
     setLoading(false);
   }, []);
@@ -1394,6 +1418,32 @@ export default function MeetAdminPage() {
                 className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
               />
               <span className="text-xs text-cream/40">minutos</span>
+            </div>
+
+            <p className="text-sm text-cream font-semibold mt-4 mb-1">
+              Pasta das gravações
+            </p>
+            <p className="text-xs text-cream/40 mb-3">
+              Cole o endereço de uma pasta do Drive. Gravações e transcrições passam a ser movidas
+              para lá assim que o Google terminar de gerá-las, com nome de data e grupo. Vazio
+              deixa tudo onde o Meet coloca.
+            </p>
+            <div className="flex items-center gap-2 flex-wrap">
+              <input
+                type="text"
+                value={pastaDrive}
+                onChange={(e) => setPastaDrive(e.target.value)}
+                placeholder="https://drive.google.com/drive/folders/..."
+                className="flex-1 min-w-[240px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+              />
+              <button
+                onClick={salvarPasta}
+                disabled={trabalhando === "pasta"}
+                className="px-3 py-1.5 rounded-lg text-xs font-semibold disabled:opacity-40"
+                style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+              >
+                {trabalhando === "pasta" ? "Conferindo" : "Salvar pasta"}
+              </button>
             </div>
 
             <p className="text-sm text-cream font-semibold mt-4 mb-1">

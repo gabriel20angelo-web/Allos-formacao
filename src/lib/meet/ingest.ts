@@ -270,6 +270,7 @@ export async function ingerir(opts?: {
           { minutos: number; turnos: number }
         >();
         let transcricaoUri: string | null = null;
+        let transcricaoFileId: string | null = null;
         let transcricaoPronta = false;
         const falasParaGravar: {
           participant_api_id: string | null;
@@ -286,6 +287,8 @@ export async function ingerir(opts?: {
           const pronta = transcricoes.find((t) => t.docsDestination?.exportUri);
           if (pronta) {
             transcricaoUri = pronta.docsDestination?.exportUri || null;
+            // documentId do Docs é o mesmo fileId do Drive.
+            transcricaoFileId = pronta.docsDestination?.document || null;
             const entradas = await listarEntradasTranscricao(pronta.name);
             let ordem = 0;
             for (const e of entradas) {
@@ -328,10 +331,14 @@ export async function ingerir(opts?: {
         }
 
         let gravacaoUri: string | null = null;
+        let gravacaoFileId: string | null = null;
         try {
           const gravacoes = await listarGravacoes(conf.name);
-          gravacaoUri = gravacoes.find((g) => g.driveDestination?.exportUri)
-            ?.driveDestination?.exportUri || null;
+          const pronta = gravacoes.find((g) => g.driveDestination?.exportUri);
+          gravacaoUri = pronta?.driveDestination?.exportUri || null;
+          // O identificador do arquivo é o que permite movê-lo depois; o link
+          // de exportação não serve para isso.
+          gravacaoFileId = pronta?.driveDestination?.file || null;
         } catch {
           // Gravação desligada devolve lista vazia; erro aqui não invalida o resto.
         }
@@ -474,7 +481,9 @@ export async function ingerir(opts?: {
           vozes_ativas_pct: vozesAtivas,
           fala_condutor_pct: falaCondutorPct,
           gravacao_uri: gravacaoUri,
+          gravacao_file_id: gravacaoFileId,
           transcricao_uri: transcricaoUri,
+          transcricao_file_id: transcricaoFileId,
           transcricao_ingerida: transcricaoPronta,
           ingerido_em: new Date().toISOString(),
         };
