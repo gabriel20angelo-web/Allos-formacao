@@ -11,6 +11,7 @@ import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
+import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
 import { ingerir } from "@/lib/meet/ingest";
 import { atualizarStatusSlots, fecharSemanaSePreciso } from "@/lib/meet/status-slots";
 
@@ -43,6 +44,10 @@ export async function GET(req: NextRequest) {
     // encontro fechado, em vez de esperar a próxima batida.
     const encerramento = await encerrarReunioesLongas(sb);
 
+    // Depois de encerrar: fechar a porta antes disso deixaria quem está dentro
+    // preso numa sala que não aceita mais ninguém, sem encerrar a reunião.
+    const janela = await aplicarJanelaDeAcesso(sb);
+
     const excecoes = await sincronizarExcecoes(sb);
     const ingestao = await ingerir({ origem: "cron", diasAtras: 15 });
 
@@ -56,6 +61,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       ok: true,
       encerramento,
+      janela,
       excecoes,
       ingestao,
       status,

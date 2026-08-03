@@ -39,6 +39,7 @@ interface SpaceRow {
   transcrever: boolean;
   notas: boolean;
   access_type: "OPEN" | "TRUSTED" | "RESTRICTED";
+  janela_automatica: boolean;
   ativo: boolean;
 }
 interface Excecao {
@@ -463,8 +464,30 @@ export default function MeetAdminPage() {
     }
   }
 
+  async function religarJanela(space: SpaceRow) {
+    setTrabalhando(space.space_name + "janela");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name, janela_automatica: true }),
+      });
+      await lerResposta(r);
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name ? { ...s, janela_automatica: true } : s
+        )
+      );
+      toast.success("A sala volta a abrir e fechar no horário do grupo.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
   async function alternarAcesso(space: SpaceRow) {
-    const novo = space.access_type === "OPEN" ? "TRUSTED" : "OPEN";
+    const novo = space.access_type === "OPEN" ? "RESTRICTED" : "OPEN";
     setTrabalhando(space.space_name + "acesso");
     try {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
@@ -475,13 +498,15 @@ export default function MeetAdminPage() {
       await lerResposta(r);
       setSpaces((atual) =>
         atual.map((s) =>
-          s.space_name === space.space_name ? { ...s, access_type: novo } : s
+          s.space_name === space.space_name
+            ? { ...s, access_type: novo, janela_automatica: false }
+            : s
         )
       );
       toast.success(
         novo === "OPEN"
-          ? "Entrada livre: ninguém precisa ser admitido."
-          : "Só gente do domínio entra direto; o resto bate à porta."
+          ? "Sala aberta. O horário automático desta sala foi desligado."
+          : "Sala fechada: quem tentar entrar bate à porta."
       );
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao alterar acesso");
@@ -698,8 +723,10 @@ export default function MeetAdminPage() {
       {aba === "salas" && (
         <div className="space-y-3">
           <p className="text-xs text-cream/40">
-            Cada grupo tem uma sala fixa. Transcrição ligada é o que permite medir tempo de
-            fala; gravação só é necessária se você quiser o vídeo, e é ela que ocupa o Drive.
+            Cada grupo tem uma sala fixa que abre 15 minutos antes do horário e fecha quando o
+            encontro já teria acabado. Fora dessa janela, quem tem o link bate à porta e não
+            entra. Transcrição ligada é o que permite medir tempo de fala; gravação só é
+            necessária se você quiser o vídeo, e é ela que ocupa o Drive.
           </p>
 
           {/* ── Sala fora da grade ──
@@ -857,8 +884,22 @@ export default function MeetAdminPage() {
                         ) : (
                           <DoorClosed className="h-3 w-3" />
                         )}
-                        {space.access_type === "OPEN" ? "Entrada livre" : "Porta fechada"}
+                        {space.access_type === "OPEN" ? "Aberta" : "Fechada"}
+                        {space.janela_automatica && (
+                          <span className="opacity-50">no horário</span>
+                        )}
                       </button>
+                      {!space.janela_automatica && (
+                        <button
+                          onClick={() => religarJanela(space)}
+                          disabled={trabalhando === space.space_name + "janela"}
+                          title="Volta a abrir 15 minutos antes do horário do grupo e fechar quando o encontro já teria acabado."
+                          className="px-2 py-1.5 rounded-lg text-xs text-cream/40 hover:text-cream/70 disabled:opacity-40"
+                          style={{ border: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          voltar ao horário
+                        </button>
+                      )}
                       <button
                         onClick={() => encerrarReuniao(space)}
                         disabled={trabalhando === space.space_name + "encerrar"}

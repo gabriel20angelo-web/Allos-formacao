@@ -132,6 +132,7 @@ export async function PATCH(req: NextRequest) {
     notas?: boolean;
     ativo?: boolean;
     access_type?: AccessType;
+    janela_automatica?: boolean;
   };
   try {
     body = await req.json();
@@ -145,12 +146,23 @@ export async function PATCH(req: NextRequest) {
   const sb = await createServiceRoleClient();
   const { data: atual } = await sb
     .from("formacao_meet_spaces")
-    .select("gravar, transcrever, notas, access_type")
+    .select("gravar, transcrever, notas, access_type, janela_automatica")
     .eq("space_name", body.space_name)
     .maybeSingle();
 
   if (!atual) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
+  }
+
+  // Religar a janela sozinha, sem trocar acesso: devolve a sala ao horário do
+  // grupo na próxima batida do cron.
+  if (body.janela_automatica === true && body.access_type === undefined) {
+    const { error } = await sb
+      .from("formacao_meet_spaces")
+      .update({ janela_automatica: true })
+      .eq("space_name", body.space_name);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, janela_automatica: true });
   }
 
   // Acesso e artefatos são dois updateMask diferentes na API, então viram duas
@@ -198,7 +210,12 @@ export async function PATCH(req: NextRequest) {
     .from("formacao_meet_spaces")
     .update({
       ...artefatos,
-      ...(body.access_type ? { access_type: body.access_type } : {}),
+      // Mexer no acesso à mão desliga a janela automática desta sala: quem
+      // abriu fora de hora tem um motivo, e o cron não pode fechar em quinze
+      // minutos o que uma pessoa acabou de abrir.
+      ...(body.access_type
+        ? { access_type: body.access_type, janela_automatica: false }
+        : {}),
       ...(body.ativo !== undefined ? { ativo: body.ativo } : {}),
     })
     .eq("space_name", body.space_name);
