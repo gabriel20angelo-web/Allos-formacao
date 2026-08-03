@@ -249,7 +249,10 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/spaces", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ slot_id: slot.id, gravar: false, transcrever: true, notas: false }),
+        // Grava e transcreve desde o começo, por escolha do Gabriel. O vídeo é
+        // o que ocupa Drive; a chave no painel desliga por grupo quando algum
+        // encontro não deve ser gravado.
+        body: JSON.stringify({ slot_id: slot.id, gravar: true, transcrever: true, notas: false }),
       });
       await lerResposta(r);
       toast.success("Sala criada. O link do grupo já aponta para ela.");

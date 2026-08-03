@@ -41,8 +41,8 @@ export async function POST(req: NextRequest) {
   }
 
   const artefatos = {
-    gravar: body.gravar === true,
-    transcrever: body.transcrever !== false, // transcrição é o padrão útil
+    gravar: body.gravar !== false, // grava por padrão; a chave do painel desliga
+    transcrever: body.transcrever !== false, // é ela que gera os indicadores
     notas: body.notas === true,
   };
 
