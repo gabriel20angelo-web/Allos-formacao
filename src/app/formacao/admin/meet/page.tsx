@@ -75,7 +75,34 @@ interface ItemFila {
   sugestoes: { aluno_id: string; full_name: string; score: number }[];
 }
 
-type Aba = "salas" | "nomes" | "diagnostico";
+interface Participacao {
+  display_name: string;
+  aluno_id: string | null;
+  minutos_presentes: number;
+  permanencia_pct: number | null;
+  atraso_min: number | null;
+  minutos_fala: number | null;
+  n_turnos_fala: number | null;
+  n_sessoes: number;
+  eh_condutor: boolean;
+}
+interface Encontro {
+  id: string;
+  atividade_nome: string | null;
+  condutor_nome: string | null;
+  data_reuniao: string;
+  inicio: string;
+  fim: string | null;
+  duracao_min: number | null;
+  total_participantes: number;
+  vozes_ativas_pct: number | null;
+  fala_condutor_pct: number | null;
+  gravacao_uri: string | null;
+  transcricao_uri: string | null;
+  participacoes: Participacao[];
+}
+
+type Aba = "salas" | "encontros" | "nomes" | "diagnostico";
 
 /**
  * Fetch que nunca explode a tela.
@@ -124,6 +151,8 @@ export default function MeetAdminPage() {
   const [spaces, setSpaces] = useState<SpaceRow[]>([]);
   const [excecoes, setExcecoes] = useState<Excecao[]>([]);
   const [fila, setFila] = useState<ItemFila[]>([]);
+  const [encontros, setEncontros] = useState<Encontro[]>([]);
+  const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
   const [excecaoAberta, setExcecaoAberta] = useState<string | null>(null);
   const [tolerancia, setTolerancia] = useState(7);
@@ -166,6 +195,13 @@ export default function MeetAdminPage() {
     setLoading(false);
   }, []);
 
+  const carregarEncontros = useCallback(async () => {
+    const j = await pegarJson<{ encontros?: Encontro[]; error?: string }>(
+      "/formacao/api/admin/meet/encontros?limite=30"
+    );
+    if (j && !j.error) setEncontros(j.encontros || []);
+  }, []);
+
   const carregarFila = useCallback(async () => {
     const j = await pegarJson<{ fila?: ItemFila[]; error?: string }>(
       "/formacao/api/admin/meet/aliases"
@@ -179,7 +215,8 @@ export default function MeetAdminPage() {
 
   useEffect(() => {
     if (aba === "nomes") carregarFila();
-  }, [aba, carregarFila]);
+    if (aba === "encontros") carregarEncontros();
+  }, [aba, carregarFila, carregarEncontros]);
 
   const horarioPorId = useMemo(
     () => new Map(horarios.map((h) => [h.id, h])),
@@ -437,6 +474,7 @@ export default function MeetAdminPage() {
       <div className="flex flex-wrap gap-1">
         {([
           ["salas", "Salas dos grupos"],
+          ["encontros", `Encontros${status?.total_encontros ? ` (${status.total_encontros})` : ""}`],
           ["nomes", `Nomes a resolver${status?.nomes_pendentes ? ` (${fila.length || status.nomes_pendentes})` : ""}`],
           ["diagnostico", "Diagnóstico"],
         ] as [Aba, string][]).map(([id, label]) => (
@@ -596,6 +634,137 @@ export default function MeetAdminPage() {
             <Card className="p-6 text-center text-sm text-cream/40">
               Nenhum grupo ativo na grade.
             </Card>
+          )}
+        </div>
+      )}
+
+      {aba === "encontros" && (
+        <div className="space-y-3">
+          <p className="text-xs text-cream/40">
+            Cada encontro que de fato aconteceu, com quem esteve e por quanto tempo. A gravação e a
+            transcrição ficam no Drive da conta organizadora; os links abaixo levam direto a elas.
+          </p>
+
+          {encontros.length === 0 ? (
+            <Card className="p-6 text-center text-sm text-cream/40">
+              Nenhum encontro capturado ainda. Depois que os grupos usarem as salas novas, eles
+              aparecem aqui sozinhos.
+            </Card>
+          ) : (
+            encontros.map((e) => {
+              const aberto = encontroAberto === e.id;
+              const presentes = e.participacoes.filter((p) => !p.eh_condutor);
+              return (
+                <Card key={e.id} className="p-4">
+                  <div className="flex items-start justify-between gap-3 flex-wrap">
+                    <button
+                      onClick={() => setEncontroAberto(aberto ? null : e.id)}
+                      className="text-left min-w-[180px]"
+                    >
+                      <p className="text-sm text-cream font-semibold">
+                        {new Date(e.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", {
+                          weekday: "long",
+                          day: "2-digit",
+                          month: "2-digit",
+                        })}
+                        {" · "}
+                        {new Date(e.inicio).toLocaleTimeString("pt-BR", {
+                          hour: "2-digit",
+                          minute: "2-digit",
+                        })}
+                      </p>
+                      <p className="text-xs text-cream/40 mt-0.5">
+                        {e.atividade_nome || "Sem atividade"}
+                        {e.condutor_nome ? ` · ${e.condutor_nome}` : ""}
+                      </p>
+                    </button>
+
+                    <div className="flex items-center gap-3 flex-wrap text-xs">
+                      <span className="text-cream/60">
+                        <strong className="text-cream">{presentes.length}</strong> presentes
+                      </span>
+                      <span className="text-cream/40">{e.duracao_min ?? "—"} min</span>
+                      {e.vozes_ativas_pct !== null && (
+                        <span className="text-cream/40">
+                          {e.vozes_ativas_pct}% falaram
+                        </span>
+                      )}
+                      {e.transcricao_uri && (
+                        <a
+                          href={e.transcricao_uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg"
+                          style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+                        >
+                          <FileText className="h-3 w-3" /> Transcrição
+                        </a>
+                      )}
+                      {e.gravacao_uri && (
+                        <a
+                          href={e.gravacao_uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="flex items-center gap-1 px-2 py-1 rounded-lg"
+                          style={{ background: "rgba(108,92,231,0.12)", color: ROXO, border: "1px solid rgba(108,92,231,0.3)" }}
+                        >
+                          <Video className="h-3 w-3" /> Gravação
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {aberto && (
+                    <div className="mt-3 pt-3 border-t border-white/5 overflow-x-auto">
+                      <table className="w-full text-xs">
+                        <thead>
+                          <tr className="text-cream/30 text-left">
+                            <th className="pb-2 font-normal">Pessoa</th>
+                            <th className="pb-2 font-normal">Minutos</th>
+                            <th className="pb-2 font-normal">Do encontro</th>
+                            <th className="pb-2 font-normal">Chegou</th>
+                            <th className="pb-2 font-normal">Falou</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {e.participacoes.map((p, i) => (
+                            <tr key={i} className="border-t border-white/5">
+                              <td className="py-1.5 text-cream/70">
+                                {p.display_name}
+                                {p.eh_condutor && (
+                                  <span className="ml-1.5 text-cream/30">condutor</span>
+                                )}
+                                {!p.aluno_id && !p.eh_condutor && (
+                                  <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
+                                )}
+                              </td>
+                              <td className="py-1.5 text-cream/50">{p.minutos_presentes}</td>
+                              <td className="py-1.5 text-cream/50">
+                                {p.permanencia_pct !== null ? `${p.permanencia_pct}%` : "—"}
+                              </td>
+                              <td className="py-1.5 text-cream/50">
+                                {p.atraso_min === null
+                                  ? "—"
+                                  : p.atraso_min <= tolerancia
+                                    ? "no horário"
+                                    : `${p.atraso_min} min depois`}
+                              </td>
+                              <td className="py-1.5 text-cream/50">
+                                {p.minutos_fala === null
+                                  ? "—"
+                                  : p.minutos_fala === 0
+                                    ? "não falou"
+                                    : `${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala} vezes`}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  )}
+                </Card>
+              );
+            })
           )}
         </div>
       )}
