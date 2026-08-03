@@ -274,6 +274,40 @@ export default function MeetAdminPage() {
     carregar();
   }, [carregar]);
 
+  // Rede de segurança enquanto não há agendador externo: abrir o painel dispara
+  // a captura se ela não roda há mais de duas horas. Não substitui um cron de
+  // verdade (se ninguém abrir o painel na segunda, a semana não fecha sozinha),
+  // mas garante que o sistema não fique parado esperando um clique em "Buscar
+  // encontros agora".
+  useEffect(() => {
+    if (!status?.autorizado) return;
+    const ultima = status.ultima_ingestao?.executado_em;
+    const horas = ultima
+      ? (Date.now() - new Date(ultima).getTime()) / 3_600_000
+      : Infinity;
+    if (horas < 2) return;
+
+    let cancelado = false;
+    (async () => {
+      try {
+        const r = await fetch("/formacao/api/admin/meet/ingerir", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ dias: 15 }),
+        });
+        if (!r.ok || cancelado) return;
+        await carregar();
+      } catch {
+        // Silencioso de propósito: é pano de fundo, e o botão manual continua ali.
+      }
+    })();
+    return () => {
+      cancelado = true;
+    };
+    // Roda uma vez por abertura, quando o status inicial chega.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [status?.autorizado]);
+
   useEffect(() => {
     if (aba === "nomes") carregarFila();
     if (aba === "encontros") carregarEncontros();
