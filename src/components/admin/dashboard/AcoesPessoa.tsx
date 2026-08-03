@@ -9,7 +9,7 @@
 
 import { useState } from "react";
 import { toast } from "sonner";
-import { AlertTriangle, Lock, Mail, Unlock } from "lucide-react";
+import { AlertTriangle, Lock, Mail, Pencil, Unlock } from "lucide-react";
 import Modal from "@/components/ui/Modal";
 
 export default function AcoesPessoa({
@@ -33,6 +33,10 @@ export default function AcoesPessoa({
   const [carregandoPrevia, setCarregandoPrevia] = useState(false);
   const [enviando, setEnviando] = useState(false);
   const [configurado, setConfigurado] = useState(true);
+  // o texto sai pronto, mas o administrador pode ajustar antes de mandar
+  const [editando, setEditando] = useState(false);
+  const [assuntoEdit, setAssuntoEdit] = useState("");
+  const [textoEdit, setTextoEdit] = useState("");
 
   const [bloqueioAberto, setBloqueioAberto] = useState(false);
   const [motivo, setMotivo] = useState("");
@@ -57,6 +61,9 @@ export default function AcoesPessoa({
       }
       setConfigurado(payload.configurado !== false);
       setPrevia({ assunto: payload.assunto, texto: payload.texto });
+      setAssuntoEdit(payload.assunto);
+      setTextoEdit(payload.texto);
+      setEditando(false);
     } catch {
       toast.error("Erro de rede.");
       setPreviaAberta(false);
@@ -73,7 +80,7 @@ export default function AcoesPessoa({
         method: "POST",
         headers: { "Content-Type": "application/json" },
         credentials: "include",
-        body: JSON.stringify({ email, nivel }),
+        body: JSON.stringify({ email, nivel, assunto: assuntoEdit, texto: textoEdit }),
       });
       const payload = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -198,20 +205,60 @@ export default function AcoesPessoa({
               <p className="font-dm text-[13px] text-cream/70">{email}</p>
             </div>
             <div>
-              <p className="font-dm text-[10px] text-cream/35 mb-1">Assunto</p>
-              <p className="font-dm text-[13px] text-cream/80">{previa.assunto}</p>
+              <div className="flex items-center gap-2 mb-1">
+                <p className="font-dm text-[10px] text-cream/35">Assunto</p>
+                <div className="flex-1" />
+                <button
+                  onClick={() => setEditando((v) => !v)}
+                  className="font-dm text-[10px] flex items-center gap-1 hover:underline"
+                  style={{ color: "#C84B31" }}
+                >
+                  <Pencil className="h-2.5 w-2.5" />
+                  {editando ? "Ver como ficou" : "Editar texto"}
+                </button>
+              </div>
+              {editando ? (
+                <input
+                  type="text"
+                  value={assuntoEdit}
+                  onChange={(e) => setAssuntoEdit(e.target.value)}
+                  className="w-full dark-input rounded-[8px] px-3 py-2 text-[13px] font-dm"
+                />
+              ) : (
+                <p className="font-dm text-[13px] text-cream/80">{assuntoEdit}</p>
+              )}
             </div>
             <div>
               <p className="font-dm text-[10px] text-cream/35 mb-1">Mensagem</p>
-              <pre
-                className="font-dm text-[12px] text-cream/60 leading-relaxed whitespace-pre-wrap max-h-[45vh] overflow-y-auto px-3 py-2.5 rounded-[10px]"
-                style={{
-                  background: "rgba(255,255,255,0.02)",
-                  border: "1px solid rgba(255,255,255,0.06)",
-                }}
-              >
-                {previa.texto}
-              </pre>
+              {editando ? (
+                <textarea
+                  value={textoEdit}
+                  onChange={(e) => setTextoEdit(e.target.value)}
+                  rows={18}
+                  className="w-full dark-input rounded-[10px] px-3 py-2.5 text-[12px] font-dm leading-relaxed resize-y"
+                />
+              ) : (
+                <pre
+                  className="font-dm text-[12px] text-cream/60 leading-relaxed whitespace-pre-wrap max-h-[45vh] overflow-y-auto px-3 py-2.5 rounded-[10px]"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  {textoEdit}
+                </pre>
+              )}
+              {textoEdit !== previa.texto && (
+                <button
+                  onClick={() => {
+                    setAssuntoEdit(previa.assunto);
+                    setTextoEdit(previa.texto);
+                  }}
+                  className="font-dm text-[10px] text-cream/35 hover:text-cream/60 mt-1.5"
+                >
+                  Descartar edições e voltar ao texto gerado
+                </button>
+              )}
             </div>
 
             {!configurado && (

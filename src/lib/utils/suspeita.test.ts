@@ -62,12 +62,24 @@ describe("detectarSinais", () => {
     expect(rajada!.pessoa).toBe("Sabrina Sales Bezerra");
   });
 
-  it("não flagra quem enviou poucos feedbacks", () => {
+  it("não flagra três feedbacks no mesmo dia: acontece de boa-fé", () => {
     const eventos = [
       feedback("1", "10:00", "Grupo de prática clínica"),
       feedback("2", "11:00", "Tipos psicológicos"),
+      feedback("3", "12:00", "Introdução à ACP"),
     ];
     expect(detectarSinais(eventos)).toHaveLength(0);
+  });
+
+  it("flagra a partir do quarto feedback no mesmo dia", () => {
+    const eventos = [
+      feedback("1", "10:00", "A"),
+      feedback("2", "10:05", "B"),
+      feedback("3", "10:09", "C"),
+      feedback("4", "10:12", "D"),
+    ];
+    const sinais = detectarSinais(eventos);
+    expect(sinais.filter((s) => s.tipo === "feedback-rajada")).toHaveLength(1);
   });
 
   it("flagra muitas aulas concluídas em poucos minutos", () => {
@@ -118,6 +130,8 @@ describe("detectarSinais", () => {
       feedback("1", "01:52", "A"),
       feedback("2", "01:55", "B"),
       feedback("3", "01:57", "C"),
+      feedback("4", "01:59", "D"),
+      feedback("5", "02:02", "E"),
       ...Array.from({ length: 9 }, (_, i) => aula(String(i + 1), `11:57:${String(i).padStart(2, "0")}`)),
     ];
     const sinais = detectarSinais(eventos);

@@ -59,7 +59,11 @@ function janela(eventos: TimelineEvent[]): string {
   return ini === fim ? ini : `${ini}–${fim}`;
 }
 
-const LIMIAR_FEEDBACKS_DIA = 3;
+// Três formulários no mesmo dia acontece de boa-fé: quem participou de três
+// grupos e foi preencher tudo de uma vez. A partir do quarto o padrão deixa de
+// se explicar pela rotina. (Regra da formação síncrona; a assíncrona tem as
+// suas, mais abaixo.)
+const LIMIAR_FEEDBACKS_DIA = 4;
 const LIMIAR_AULAS = 8;
 const LIMIAR_AULAS_MINUTOS = 15;
 

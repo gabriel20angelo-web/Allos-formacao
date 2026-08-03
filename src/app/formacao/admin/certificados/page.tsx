@@ -9,6 +9,7 @@ import { motion } from "framer-motion";
 import { Search, ChevronDown, Award, Clock } from "lucide-react";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import VerificacoesTab from "@/components/admin/certificados/VerificacoesTab";
+import OcorrenciasTab from "@/components/admin/certificados/OcorrenciasTab";
 import { formatDate } from "@/lib/utils/format";
 import type { Certificate } from "@/types";
 
@@ -34,7 +35,7 @@ export default function AdminCertificadosPage() {
   const [certificates, setCertificates] = useState<Certificate[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
-  const [view, setView] = useState<"cursos" | "formacao" | "envios" | "avulso" | "verificacoes">("cursos");
+  const [view, setView] = useState<"cursos" | "formacao" | "envios" | "avulso" | "verificacoes" | "ocorrencias">("cursos");
 
   // Concluiu o curso mas não gerou o PDF: a emissão depende de um clique do
   // aluno, então "sem certificado" não quer dizer "não terminou".
@@ -254,6 +255,17 @@ export default function AdminCertificadosPage() {
           >
             Verificações
           </button>
+          <button
+            onClick={() => setView("ocorrencias")}
+            className="font-dm text-xs px-4 py-2 rounded-full transition-all"
+            style={{
+              backgroundColor: view === "ocorrencias" ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
+              color: view === "ocorrencias" ? "#C84B31" : "rgba(253,251,247,0.4)",
+              border: `1px solid ${view === "ocorrencias" ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+            }}
+          >
+            Ocorrências
+          </button>
         </div>
       </motion.div>
 
@@ -261,6 +273,7 @@ export default function AdminCertificadosPage() {
       {view === "envios" && <EnviosPage />}
       {view === "avulso" && <CertAvulsoPage />}
       {view === "verificacoes" && <VerificacoesTab onPersonClick={setPessoaAberta} />}
+      {view === "ocorrencias" && <OcorrenciasTab onPersonClick={setPessoaAberta} />}
 
       {view === "cursos" && (<>
       {/* Stats bar */}

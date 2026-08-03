@@ -17,6 +17,7 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDayNotes } from "@/hooks/useDayNotes";
 import { detectarSinais } from "@/lib/utils/suspeita";
+import { separarSinais, useSinaisResolvidos } from "@/hooks/useSinaisResolvidos";
 import { formatPrice } from "@/lib/utils/format";
 import {
   getGreeting,
@@ -151,6 +152,7 @@ export default function AdminDashboard() {
 
   // Anotações de dia: uma fonte só para as duas abas.
   const dayNotes = useDayNotes(!!profile && isAdmin);
+  const sinaisApi = useSinaisResolvidos(!!profile && isAdmin);
 
   // ── Mode toggle ──
   const [mode, setMode] = useState<DashMode>("sync");
@@ -1057,8 +1059,14 @@ export default function AdminDashboard() {
     URL.revokeObjectURL(url);
   };
 
-  const sinaisSync = useMemo(() => detectarSinais(syncEvents), [syncEvents]);
-  const sinaisAsync = useMemo(() => detectarSinais(asyncEvents), [asyncEvents]);
+  const sinaisSync = useMemo(
+    () => separarSinais(detectarSinais(syncEvents), sinaisApi.porSinal),
+    [syncEvents, sinaisApi.porSinal]
+  );
+  const sinaisAsync = useMemo(
+    () => separarSinais(detectarSinais(asyncEvents), sinaisApi.porSinal),
+    [asyncEvents, sinaisApi.porSinal]
+  );
 
   // ═══════════════════════════════════════════════════════════
   // Derived values
@@ -1290,7 +1298,7 @@ export default function AdminDashboard() {
 
               <div className="h-5" />
 
-              <SinaisAtencao sinais={sinaisSync} onPersonClick={setPessoaAberta} />
+              <SinaisAtencao abertos={sinaisSync.abertos} arquivados={sinaisSync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 
               {/* ── Atividade recente (feedbacks do /certificado) ── */}
               <motion.div
@@ -2017,7 +2025,7 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
 
-              <SinaisAtencao sinais={sinaisAsync} onPersonClick={setPessoaAberta} />
+              <SinaisAtencao abertos={sinaisAsync.abertos} arquivados={sinaisAsync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 
               {/* ── Atividade recente (movimento nos cursos) ── */}
               <motion.div

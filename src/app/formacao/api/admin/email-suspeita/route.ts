@@ -24,6 +24,32 @@ import { sendMail, workspaceConfigurado } from "@/lib/email/googleWorkspace";
 
 export const dynamic = "force-dynamic";
 
+/** Versão HTML de um texto editado à mão, preservando os parágrafos. */
+function textoParaHtml(texto: string): string {
+  const escapar = (t: string) =>
+    t
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+  const paragrafos = texto
+    .split(/\n{2,}/)
+    .map(
+      (bloco) =>
+        `<p style="margin:0 0 14px;font-size:14px;line-height:1.65;color:#2f2f2f">${escapar(
+          bloco
+        ).replace(/\n/g, "<br>")}</p>`
+    )
+    .join("\n");
+
+  return `<!doctype html>
+<html lang="pt-BR"><body style="margin:0;padding:24px;background:#f5f4f2;font-family:Georgia,'Times New Roman',serif">
+  <div style="max-width:620px;margin:0 auto;background:#ffffff;border:1px solid #e6e2dc;border-radius:10px;padding:32px">
+    <p style="margin:0 0 16px;font-size:11px;letter-spacing:.14em;text-transform:uppercase;color:#a33d27">Associação Allos</p>
+    ${paragrafos}
+  </div>
+</body></html>`;
+}
+
 interface SupabaseLike {
   from: (t: string) => {
     select: (c: string, o?: unknown) => Record<string, unknown>;
@@ -239,7 +265,12 @@ export async function POST(req: NextRequest) {
   const guarda = await exigirAdmin();
   if (guarda.erro) return guarda.erro;
 
-  let body: { email?: string; nivel?: NivelEmail };
+  let body: {
+    email?: string;
+    nivel?: NivelEmail;
+    assunto?: string;
+    texto?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -273,13 +304,29 @@ export async function POST(req: NextRequest) {
     );
   }
 
+  // O administrador pode ajustar o texto na prévia. Quando ajusta, o HTML é
+  // regerado a partir do que ele escreveu: mandar o texto editado junto com o
+  // HTML original faria as duas versões do e-mail dizerem coisas diferentes,
+  // e o cliente de e-mail escolhe qual mostrar.
+  const assuntoEditado = (body.assunto || "").trim();
+  const textoEditado = (body.texto || "").trim();
+  const foiEditado =
+    (!!assuntoEditado && assuntoEditado !== montado.email.assunto) ||
+    (!!textoEditado && textoEditado !== montado.email.texto);
+
+  const assuntoFinal = assuntoEditado || montado.email.assunto;
+  const textoFinal = textoEditado || montado.email.texto;
+  const htmlFinal = foiEditado
+    ? textoParaHtml(textoFinal)
+    : montado.email.html;
+
   try {
     await sendMail({
       para: alvo,
       nomeDestinatario: montado.dados.nome,
-      assunto: montado.email.assunto,
-      html: montado.email.html,
-      texto: montado.email.texto,
+      assunto: assuntoFinal,
+      html: htmlFinal,
+      texto: textoFinal,
     });
   } catch (err) {
     console.error("[email-suspeita]", err);
@@ -292,9 +339,9 @@ export async function POST(req: NextRequest) {
   const db = await createServiceRoleClient();
   await db.from("email_envios").insert({
     destinatario: alvo,
-    tipo: `atividade-suspeita:${nivel}`,
-    assunto: montado.email.assunto,
-    corpo: montado.email.texto,
+    tipo: `atividade-suspeita:${nivel}${foiEditado ? ":editado" : ""}`,
+    assunto: assuntoFinal,
+    corpo: textoFinal,
     enviado_por: guarda.user?.id ?? null,
   });
 

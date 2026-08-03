@@ -42,6 +42,13 @@ export interface EmailMontado {
 
 const CONTATO = "suporte@allos.org.br";
 
+// A resposta vai para uma página do site, não para a caixa de entrada: chega
+// estruturada, fica junto do caso no painel, e funciona para quem está com o
+// acesso bloqueado e não consegue entrar na plataforma.
+const BASE =
+  process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
+const URL_OCORRENCIA = BASE + "/formacao/ocorrencia?origem=aviso";
+
 function dataPtBR(dia: string): string {
   const [y, m, d] = dia.split("-");
   return `${d}/${m}/${y}`;
@@ -148,13 +155,18 @@ export function montarEmailSuspeita(
   const prazo =
     nivel === "notificacao"
       ? `Você tem 7 (sete) dias corridos, contados do recebimento desta mensagem, para se manifestar, conforme a cláusula 8.5. Recebida a manifestação, respondemos em até 5 (cinco) dias úteis.`
-      : `Se houver explicação, queremos ouvi-la antes de qualquer decisão. Responda esta mensagem contando o que aconteceu.`;
+      : `Se houver explicação, queremos ouvi-la antes de qualquer decisão. Use a página abaixo para contar o que aconteceu.`;
 
   const saida =
     `Se os registros não refletem o que você de fato fez, é possível que tenha ` +
     `havido falha técnica, e isso se resolve. Se refletem, o caminho mais ` +
     `simples é acompanhar o conteúdo: o acesso continua liberado e a formação ` +
     `é gratuita. Nenhuma das duas situações precisa terminar mal.`;
+
+  const comoResponder =
+    `Para se manifestar, preencha o formulário em ${URL_OCORRENCIA} . ` +
+    `Não responda este e-mail: pela página a sua explicação chega direto a ` +
+    `quem analisa o caso, junto com o histórico da sua conta.`;
 
   const assinatura = `Associação Allos\nFormação\n${CONTATO}`;
 
@@ -176,6 +188,8 @@ export function montarEmailSuspeita(
     boaFe,
     "",
     prazo,
+    "",
+    comoResponder,
     "",
     saida,
     "",
@@ -225,6 +239,11 @@ export function montarEmailSuspeita(
     ${p(consequencia)}
     ${p(`<span style="color:#5a5a5a;font-size:13px">${boaFe}</span>`)}
     ${p(`<strong>${prazo}</strong>`)}
+
+    <p style="margin:0 0 16px">
+      <a href="${URL_OCORRENCIA}" style="display:inline-block;background:#a33d27;color:#ffffff;text-decoration:none;padding:11px 20px;border-radius:6px;font-size:14px;font-weight:700">Explicar o que aconteceu</a>
+    </p>
+    ${p(`<span style="font-size:13px;color:#5a5a5a">Não responda este e-mail: pela página a sua explicação chega direto a quem analisa o caso.</span>`)}
     ${p(saida)}
 
     <hr style="border:none;border-top:1px solid #e6e2dc;margin:24px 0 16px">
