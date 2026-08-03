@@ -167,6 +167,149 @@ export async function getCourseWatchSeconds(
   }
 }
 
+/**
+ * Uma linha do recorte por curso: quanto tempo a pessoa passou ali e quanto
+ * conteúdo ela deu por concluído naquele mesmo curso.
+ */
+export interface UsageCurso {
+  courseId: string;
+  titulo: string;
+  /** Permanência ativa somada nas sessões daquele curso. */
+  segundos: number;
+  aulasConcluidas: number;
+  /** Duração declarada SÓ das aulas concluídas, nunca a do curso inteiro. */
+  minutosConteudoConcluido: number;
+}
+
+interface LinhaSessaoCurso {
+  course_id: string | null;
+  seconds: number | null;
+}
+
+interface LinhaProgressoCurso {
+  lesson: {
+    duration_minutes: number | null;
+    section: {
+      course: { id: string; title: string | null } | null;
+    } | null;
+  } | null;
+}
+
+/**
+ * Tempo de permanência de uma pessoa quebrado por curso, ao lado do conteúdo
+ * que ela concluiu em cada um. Responde à pergunta que o total da plataforma
+ * não responde: "ela marcou 19 aulas neste curso, mas ficou quanto tempo ali?".
+ *
+ * O denominador é a duração das aulas QUE ELA CONCLUIU, não a do curso inteiro.
+ * Quem parou na metade não deve ser cobrado pela metade que não fez: comparar
+ * com o curso todo faria qualquer pessoa em andamento parecer suspeita, e o
+ * número deixaria de significar alguma coisa.
+ *
+ * Entram os cursos com tempo registrado E os com aulas concluídas sem tempo
+ * nenhum, porque a ausência de tempo também é informação: quem concluiu antes
+ * de o rastreio (migration 042) entrar no ar não tem sessão gravada.
+ */
+export async function getUsagePorCurso(userId: string): Promise<UsageCurso[]> {
+  if (!userId) return [];
+
+  try {
+    const supabase = createClient();
+
+    const [sessoesRes, progressoRes] = await Promise.all([
+      supabase
+        .from(TABLE)
+        .select("course_id, seconds")
+        .eq("user_id", userId)
+        .not("course_id", "is", null),
+      // O curso não está em lesson_progress: sobe-se lessons → sections →
+      // courses para saber a que curso cada aula concluída pertence.
+      supabase
+        .from("lesson_progress")
+        .select(
+          "lesson:lessons!lesson_id(duration_minutes, section:sections!section_id(course:courses!course_id(id, title)))",
+        )
+        .eq("user_id", userId)
+        .eq("completed", true),
+    ]);
+
+    // Meia leitura seria pior que nenhuma: se só o progresso falhasse, todo
+    // curso apareceria com zero aula concluída e pareceria tempo sem conteúdo.
+    if (sessoesRes.error || progressoRes.error) return [];
+
+    const porCurso = new Map<string, UsageCurso>();
+    const garantir = (courseId: string): UsageCurso => {
+      let linha = porCurso.get(courseId);
+      if (!linha) {
+        linha = {
+          courseId,
+          titulo: "",
+          segundos: 0,
+          aulasConcluidas: 0,
+          minutosConteudoConcluido: 0,
+        };
+        porCurso.set(courseId, linha);
+      }
+      return linha;
+    };
+
+    for (const sessao of (sessoesRes.data ?? []) as LinhaSessaoCurso[]) {
+      if (!sessao.course_id) continue;
+      garantir(sessao.course_id).segundos += Math.max(
+        0,
+        Math.trunc(sessao.seconds ?? 0),
+      );
+    }
+
+    for (const progresso of (progressoRes.data ??
+      []) as unknown as LinhaProgressoCurso[]) {
+      const curso = progresso.lesson?.section?.course;
+      if (!curso?.id) continue;
+      const linha = garantir(curso.id);
+      if (curso.title) linha.titulo = curso.title;
+      linha.aulasConcluidas += 1;
+      // Aula sem duração cadastrada soma zero em vez de chutar uma média: um
+      // denominador inventado viraria uma porcentagem inventada.
+      linha.minutosConteudoConcluido += Math.max(
+        0,
+        Math.trunc(progresso.lesson?.duration_minutes ?? 0),
+      );
+    }
+
+    // Curso onde só houve tempo (nenhuma aula concluída) não passou por
+    // courses no embed acima, então o título vem numa busca à parte.
+    const semTitulo = Array.from(porCurso.values())
+      .filter((linha) => !linha.titulo)
+      .map((linha) => linha.courseId);
+
+    if (semTitulo.length > 0) {
+      const { data: cursos } = await supabase
+        .from("courses")
+        .select("id, title")
+        .in("id", semTitulo);
+
+      for (const curso of (cursos ?? []) as { id: string; title: string | null }[]) {
+        const linha = porCurso.get(curso.id);
+        if (linha && curso.title) linha.titulo = curso.title;
+      }
+    }
+
+    return Array.from(porCurso.values())
+      .map((linha) => ({
+        ...linha,
+        // Curso apagado ou fora do alcance de leitura ainda aparece: o tempo
+        // gasto nele é real e some da conta se a linha for descartada.
+        titulo: linha.titulo || "Curso sem título",
+      }))
+      .sort(
+        (a, b) =>
+          b.minutosConteudoConcluido - a.minutosConteudoConcluido ||
+          b.segundos - a.segundos,
+      );
+  } catch {
+    return [];
+  }
+}
+
 /** Segundos em texto curto: "2h 14min", "43min", "1h". Zero vira travessão. */
 export function formatDuration(seconds: number): string {
   if (!Number.isFinite(seconds) || seconds <= 0) return "—";

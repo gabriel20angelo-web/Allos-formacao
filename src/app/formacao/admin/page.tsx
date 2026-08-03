@@ -16,7 +16,11 @@ import { useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useDayNotes } from "@/hooks/useDayNotes";
-import { detectarSinais } from "@/lib/utils/suspeita";
+import {
+  detectarSinais,
+  personKey,
+  type TempoDeCurso,
+} from "@/lib/utils/suspeita";
 import { separarSinais, useSinaisResolvidos } from "@/hooks/useSinaisResolvidos";
 import { formatPrice } from "@/lib/utils/format";
 import {
@@ -35,6 +39,7 @@ import HintButton from "@/components/admin/dashboard/HintButton";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
 import SinaisAtencao from "@/components/admin/dashboard/SinaisAtencao";
+import EmailsEnviados from "@/components/admin/dashboard/EmailsEnviados";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import AdminNotesSection from "@/components/admin/dashboard/AdminNotesSection";
 import Card from "@/components/ui/Card";
@@ -204,6 +209,11 @@ export default function AdminDashboard() {
   const [asyncEventsLoading, setAsyncEventsLoading] = useState(true);
   const [asyncRange, setAsyncRange] = useState<ActivityRange>("30d");
   const [truncatedSources, setTruncatedSources] = useState<string[]>([]);
+  // Tempo medido por pessoa e curso: alimenta a regra que compara permanência
+  // com a duração do que foi marcado como concluído.
+  const [tempoPorPessoa, setTempoPorPessoa] = useState<
+    Map<string, TempoDeCurso[]>
+  >(new Map());
   const [pessoaAberta, setPessoaAberta] = useState<PessoaRef | null>(null);
 
   // ═══════════════════════════════════════════════════════════
@@ -519,6 +529,130 @@ export default function AdminDashboard() {
 
     fetchActivity().catch(() => setAsyncEventsLoading(false));
   }, [profile, isAdmin]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Tempo medido por pessoa e curso
+  // ═══════════════════════════════════════════════════════════
+  //
+  // Cruza três coisas: quanto tempo a pessoa ficou em cada curso, quantas
+  // aulas marcou como concluídas e quanto dura esse conteúdo. A comparação usa
+  // só o que ela concluiu, não o curso inteiro, senão quem fez metade seria
+  // cobrado pela outra metade.
+
+  useEffect(() => {
+    async function fetchTempo() {
+      if (!profile || !isAdmin) return;
+      const sb = createClient();
+
+      const [sessoesRes, progressoRes, aulasRes, secoesRes, cursosRes] =
+        await Promise.all([
+          sb
+            .from("usage_sessions")
+            .select("user_id, course_id, seconds")
+            .not("course_id", "is", null),
+          sb
+            .from("lesson_progress")
+            .select("user_id, lesson_id")
+            .eq("completed", true),
+          sb.from("lessons").select("id, section_id, duration_minutes"),
+          sb.from("sections").select("id, course_id"),
+          sb.from("courses").select("id, title"),
+        ]);
+
+      // tabela ainda não existe neste ambiente: a regra simplesmente não roda
+      if (sessoesRes.error) return;
+
+      type Sessao = { user_id: string; course_id: string; seconds: number };
+      type Progresso = { user_id: string; lesson_id: string };
+      type Aula = { id: string; section_id: string; duration_minutes: number | null };
+      type Secao = { id: string; course_id: string };
+      type Curso = { id: string; title: string };
+
+      const cursoDaSecao = new Map<string, string>();
+      ((secoesRes.data ?? []) as Secao[]).forEach((sec) =>
+        cursoDaSecao.set(sec.id, sec.course_id)
+      );
+      const tituloDoCurso = new Map<string, string>();
+      ((cursosRes.data ?? []) as Curso[]).forEach((c) =>
+        tituloDoCurso.set(c.id, c.title)
+      );
+      const infoDaAula = new Map<string, { curso: string; minutos: number }>();
+      ((aulasRes.data ?? []) as Aula[]).forEach((a) => {
+        const curso = cursoDaSecao.get(a.section_id);
+        if (curso) {
+          infoDaAula.set(a.id, { curso, minutos: a.duration_minutes ?? 0 });
+        }
+      });
+
+      // e-mail é a chave da pessoa em todo o resto do painel
+      const emailDoUsuario = new Map<string, string>();
+      asyncEvents.forEach((e) => {
+        if (e.personEmail) emailDoUsuario.set(e.personEmail, e.personEmail);
+      });
+
+      const { data: perfis } = await sb.from("profiles").select("id, email");
+      const emailPorId = new Map<string, string>();
+      ((perfis ?? []) as { id: string; email: string }[]).forEach((pf) =>
+        emailPorId.set(pf.id, pf.email)
+      );
+
+      // user+curso → acumulados
+      const acc = new Map<
+        string,
+        { userId: string; courseId: string; segundos: number; aulas: number; minutos: number }
+      >();
+      const chave = (u: string, c: string) => u + "|" + c;
+
+      ((sessoesRes.data ?? []) as Sessao[]).forEach((se) => {
+        const k = chave(se.user_id, se.course_id);
+        const atual = acc.get(k) ?? {
+          userId: se.user_id,
+          courseId: se.course_id,
+          segundos: 0,
+          aulas: 0,
+          minutos: 0,
+        };
+        atual.segundos += se.seconds ?? 0;
+        acc.set(k, atual);
+      });
+
+      ((progressoRes.data ?? []) as Progresso[]).forEach((pr) => {
+        const info = infoDaAula.get(pr.lesson_id);
+        if (!info) return;
+        const k = chave(pr.user_id, info.curso);
+        const atual = acc.get(k) ?? {
+          userId: pr.user_id,
+          courseId: info.curso,
+          segundos: 0,
+          aulas: 0,
+          minutos: 0,
+        };
+        atual.aulas += 1;
+        atual.minutos += info.minutos;
+        acc.set(k, atual);
+      });
+
+      const mapa = new Map<string, TempoDeCurso[]>();
+      acc.forEach((v) => {
+        const email = emailPorId.get(v.userId);
+        if (!email) return;
+        const k = personKey({ person: email, personEmail: email });
+        const lista = mapa.get(k) ?? [];
+        lista.push({
+          courseId: v.courseId,
+          titulo: tituloDoCurso.get(v.courseId) || "Curso",
+          segundos: v.segundos,
+          minutosConteudoConcluido: v.minutos,
+          aulasConcluidas: v.aulas,
+        });
+        mapa.set(k, lista);
+      });
+
+      setTempoPorPessoa(mapa);
+    }
+
+    fetchTempo().catch(() => {});
+  }, [profile, isAdmin, asyncEvents]);
 
   // ── Async engagement stats ──
   useEffect(() => {
@@ -1064,8 +1198,12 @@ export default function AdminDashboard() {
     [syncEvents, sinaisApi.porSinal]
   );
   const sinaisAsync = useMemo(
-    () => separarSinais(detectarSinais(asyncEvents), sinaisApi.porSinal),
-    [asyncEvents, sinaisApi.porSinal]
+    () =>
+      separarSinais(
+        detectarSinais(asyncEvents, { tempoPorPessoa }),
+        sinaisApi.porSinal
+      ),
+    [asyncEvents, sinaisApi.porSinal, tempoPorPessoa]
   );
 
   // ═══════════════════════════════════════════════════════════
@@ -1297,6 +1435,8 @@ export default function AdminDashboard() {
               />
 
               <div className="h-5" />
+
+              <EmailsEnviados />
 
               <SinaisAtencao abertos={sinaisSync.abertos} avisados={sinaisSync.avisados} arquivados={sinaisSync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 
@@ -2024,6 +2164,8 @@ export default function AdminDashboard() {
                   </div>
                 </motion.div>
               )}
+
+              <EmailsEnviados />
 
               <SinaisAtencao abertos={sinaisAsync.abertos} avisados={sinaisAsync.avisados} arquivados={sinaisAsync.arquivados} api={sinaisApi} onPersonClick={setPessoaAberta} />
 

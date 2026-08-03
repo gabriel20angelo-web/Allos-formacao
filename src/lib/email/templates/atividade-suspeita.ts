@@ -81,6 +81,14 @@ function descreverSinal(s: Sinal): { titulo: string; corpo: string } {
           `concluídas em sequência, em intervalo menor que a duração dos ` +
           `próprios vídeos.`,
       };
+    case "tempo-incompativel":
+      return {
+        titulo: s.titulo,
+        corpo:
+          `${s.detalhe} A plataforma registra o tempo em que a página do curso ` +
+          `fica aberta e ativa, e é esse número que sustenta a carga horária ` +
+          `declarada no certificado.`,
+      };
     case "conclusao-no-mesmo-dia":
       return {
         titulo: `${dataPtBR(s.dia)} — ${s.titulo}`,
@@ -118,12 +126,12 @@ export function montarEmailSuspeita(
 
   const assunto =
     nivel === "notificacao"
-      ? "Notificação: verificação de registros da sua conta na Allos"
-      : "Sobre registros atípicos na sua conta da Formação Allos";
+      ? "Precisamos da sua ajuda para conferir um registro"
+      : "Uma dúvida sobre registros da sua conta na Allos";
 
   const abertura =
     nivel === "notificacao"
-      ? `${primeiroNome}, esta é uma comunicação formal sobre os registros da sua conta na plataforma de formação da Associação Allos.`
+      ? `${primeiroNome}, precisamos da sua ajuda para entender alguns registros da sua conta na plataforma de formação da Associação Allos.`
       : `${primeiroNome}, tudo bem? Estamos entrando em contato sobre alguns registros da sua conta na plataforma de formação da Allos.`;
 
   const contexto =
@@ -139,22 +147,19 @@ export function montarEmailSuspeita(
       : `Ao revisar sua conta, encontramos ${ocorrencias.length} ocorrências:`;
 
   const consequencia =
-    `Certificado emitido a partir de registro inconsistente pode ser anulado, ` +
-    `conforme a cláusula 8.6. A anulação passa a constar no verificador ` +
-    `público de autenticidade e, quando o documento já tiver sido apresentado ` +
-    `a instituição de ensino, empregador ou conselho de classe, a Allos pode ` +
-    `comunicar a anulação diretamente a esse destinatário, nos termos da ` +
-    `cláusula 8.8, que você aceitou. As providências que a instituição venha ` +
-    `a tomar a partir daí não dependem de nós.`;
+    `Não estamos afirmando que houve irregularidade. Registro é registro, e ` +
+    `nem sempre reflete o que de fato aconteceu: falha de conexão, aula ` +
+    `acompanhada por outro meio e computador compartilhado produzem padrões ` +
+    `parecidos. Por isso perguntamos antes de tirar qualquer conclusão.`;
 
   const boaFe =
-    `O uso da plataforma está sujeito ao dever de boa-fé objetiva previsto no ` +
-    `art. 422 do Código Civil, e o tratamento desses registros se apoia no ` +
-    `art. 7º, incisos V e IX, da Lei nº 13.709/2018.`;
+    `Nossa relação se apoia na boa-fé objetiva prevista no art. 422 do Código ` +
+    `Civil, e é nesse espírito que escrevemos: partimos do princípio de que há ` +
+    `uma explicação, e queremos conhecê-la.`;
 
   const prazo =
     nivel === "notificacao"
-      ? `Você tem 7 (sete) dias corridos, contados do recebimento desta mensagem, para se manifestar, conforme a cláusula 8.5. Recebida a manifestação, respondemos em até 5 (cinco) dias úteis.`
+      ? `Pedimos que você responda em até 7 (sete) dias corridos, o prazo previsto na cláusula 8.5 dos Termos de Uso. Respondemos em até 5 (cinco) dias úteis depois disso.`
       : `Se houver explicação, queremos ouvi-la antes de qualquer decisão. Use a página abaixo para contar o que aconteceu.`;
 
   const saida =

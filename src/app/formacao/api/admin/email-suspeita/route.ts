@@ -21,6 +21,7 @@ import {
   type NivelEmail,
 } from "@/lib/email/templates/atividade-suspeita";
 import { sendMail, workspaceConfigurado } from "@/lib/email/googleWorkspace";
+import { montarEmailRetratacao } from "@/lib/email/templates/retratacao";
 
 export const dynamic = "force-dynamic";
 
@@ -267,7 +268,8 @@ export async function POST(req: NextRequest) {
 
   let body: {
     email?: string;
-    nivel?: NivelEmail;
+    nivel?: NivelEmail | "retratacao";
+    nome?: string;
     assunto?: string;
     texto?: string;
   };
@@ -291,6 +293,49 @@ export async function POST(req: NextRequest) {
       },
       { status: 503 }
     );
+  }
+
+  // ── Retratação ──
+  // Não passa pela montagem de sinais de propósito: retratar não depende de
+  // haver ocorrência, e o texto não pode variar conforme o que a auditoria
+  // acha hoje. Também não exige que a pessoa exista no banco: o que importa é
+  // que ela recebeu o e-mail anterior.
+  if (body.nivel === "retratacao") {
+    const { data: perfil } = await (await createServiceRoleClient())
+      .from("profiles")
+      .select("full_name")
+      .eq("email", alvo)
+      .maybeSingle();
+
+    const nome = (body.nome || perfil?.full_name || "").trim();
+    const retratacao = montarEmailRetratacao(nome);
+
+    try {
+      await sendMail({
+        para: alvo,
+        nomeDestinatario: nome || undefined,
+        assunto: retratacao.assunto,
+        html: retratacao.html,
+        texto: retratacao.texto,
+      });
+    } catch (err) {
+      console.error("[email-suspeita/retratacao]", err);
+      return NextResponse.json(
+        { error: "Falha no envio pelo Gmail. Verifique as credenciais." },
+        { status: 502 }
+      );
+    }
+
+    const db = await createServiceRoleClient();
+    await db.from("email_envios").insert({
+      destinatario: alvo,
+      tipo: "retratacao",
+      assunto: retratacao.assunto,
+      corpo: retratacao.texto,
+      enviado_por: guarda.user?.id ?? null,
+    });
+
+    return NextResponse.json({ ok: true, retratacao: true });
   }
 
   const montado = await montar(alvo, nivel);

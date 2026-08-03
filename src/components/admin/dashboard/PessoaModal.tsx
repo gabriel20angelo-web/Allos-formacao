@@ -12,6 +12,7 @@ import { createClient } from "@/lib/supabase/client";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import ActivityTimeline from "./ActivityTimeline";
+import TempoPorCurso from "./TempoPorCurso";
 import { detectarSinais, type Sinal } from "@/lib/utils/suspeita";
 import { formatDuration, getUsageTotals } from "@/lib/queries/usage";
 import type { ActivityRange, TimelineEvent } from "@/lib/utils/activity";
@@ -556,6 +557,14 @@ export default function PessoaModal({
               ))}
             </div>
           )}
+
+          {/* ── Tempo por curso ── */}
+          <div className="space-y-2">
+            <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
+              Tempo por curso
+            </p>
+            <TempoPorCurso userId={dossie.userId} />
+          </div>
 
           {/* ── Linha do tempo dela ── */}
           <ActivityTimeline

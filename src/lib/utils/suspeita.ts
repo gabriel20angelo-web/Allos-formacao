@@ -13,7 +13,31 @@ import { dayKey, hourLabel, type TimelineEvent } from "./activity";
 export type SinalTipo =
   | "feedback-rajada"
   | "aula-rajada"
+  | "tempo-incompativel"
   | "conclusao-no-mesmo-dia";
+
+/**
+ * Tempo medido de permanência por curso, para a regra que compara o registrado
+ * com a duração do que a pessoa marcou como concluído.
+ *
+ * Sem isto, a única defesa contra "concluí tudo em um minuto" é a rajada, que
+ * só pega quem clica em sequência. Quem espaça os cliques ao longo do dia
+ * passa batido pela rajada, mas não passa por aqui: o tempo total continua
+ * pequeno demais para o conteúdo declarado.
+ */
+export interface TempoDeCurso {
+  courseId: string;
+  titulo: string;
+  segundos: number;
+  /** Duração somada das aulas que a pessoa concluiu, em minutos. */
+  minutosConteudoConcluido: number;
+  aulasConcluidas: number;
+}
+
+export interface ContextoSinais {
+  /** personKey → tempo por curso daquela pessoa. */
+  tempoPorPessoa?: Map<string, TempoDeCurso[]>;
+}
 
 export interface Sinal {
   id: string;
@@ -59,16 +83,73 @@ function janela(eventos: TimelineEvent[]): string {
   return ini === fim ? ini : `${ini}–${fim}`;
 }
 
-// Três formulários no mesmo dia acontece de boa-fé: quem participou de três
-// grupos e foi preencher tudo de uma vez. A partir do quarto o padrão deixa de
-// se explicar pela rotina. (Regra da formação síncrona; a assíncrona tem as
-// suas, mais abaixo.)
-const LIMIAR_FEEDBACKS_DIA = 4;
+// Formação síncrona. Preencher vários formulários de uma vez é comum em quem
+// participa de muitos grupos e deixa para regularizar tudo junto, então o
+// limiar precisa ficar longe do uso honesto: seis declarações no mesmo dia já
+// são doze horas de carga horária, o que não se explica por rotina.
+const LIMIAR_FEEDBACKS_DIA = 6;
 const LIMIAR_AULAS = 8;
 const LIMIAR_AULAS_MINUTOS = 15;
 
-export function detectarSinais(events: TimelineEvent[]): Sinal[] {
+// Abaixo disto o tempo registrado não sustenta a carga declarada. 30% é
+// deliberadamente generoso: cobre quem assiste em velocidade acelerada, quem já
+// conhecia o conteúdo e quem deixou a aba em segundo plano por um trecho.
+const PROPORCAO_TEMPO_MINIMA = 0.3;
+// Conteúdo curto não gera conclusão confiável: cinco minutos de vídeo com dois
+// de permanência não dizem nada.
+const MINUTOS_CONTEUDO_MINIMO = 20;
+
+export function detectarSinais(
+  events: TimelineEvent[],
+  contexto: ContextoSinais = {}
+): Sinal[] {
   const sinais: Sinal[] = [];
+
+  // ── Tempo de permanência incompatível com o que foi concluído ──
+  // Independe de dia: olha o acumulado da pessoa em cada curso.
+  if (contexto.tempoPorPessoa) {
+    const nomePorChave = new Map<string, string>();
+    const emailPorChave = new Map<string, string>();
+    const ultimoDiaPorChave = new Map<string, string>();
+    events.forEach((e) => {
+      const k = personKey(e);
+      const nomeAtual = nomePorChave.get(k) ?? "";
+      if (e.person.length > nomeAtual.length) nomePorChave.set(k, e.person);
+      if (e.personEmail) emailPorChave.set(k, e.personEmail);
+      const dia = dayKey(e.timestamp);
+      const ultimo = ultimoDiaPorChave.get(k);
+      if (!ultimo || dia > ultimo) ultimoDiaPorChave.set(k, dia);
+    });
+
+    contexto.tempoPorPessoa.forEach((cursos, chave) => {
+      cursos.forEach((c) => {
+        if (c.minutosConteudoConcluido < MINUTOS_CONTEUDO_MINIMO) return;
+        // Sem nenhuma sessão registrada a pessoa é anterior ao rastreio: não dá
+        // para afirmar nada, e afirmar seria acusar por ausência de dado.
+        if (c.segundos === 0) return;
+
+        const proporcao = c.segundos / (c.minutosConteudoConcluido * 60);
+        if (proporcao >= PROPORCAO_TEMPO_MINIMA) return;
+
+        const minutosRegistrados = Math.round(c.segundos / 60);
+        sinais.push({
+          id: `tempo-${chave}|${c.courseId}`,
+          tipo: "tempo-incompativel",
+          pessoa: nomePorChave.get(chave) || chave,
+          email: emailPorChave.get(chave),
+          dia: ultimoDiaPorChave.get(chave) || dayKey(new Date().toISOString()),
+          titulo: `${c.aulasConcluidas} aulas concluídas em ${c.titulo} com ${minutosRegistrados} min de permanência`,
+          detalhe:
+            `O conteúdo concluído soma ${c.minutosConteudoConcluido} min, e o tempo ` +
+            `registrado na plataforma é ${Math.round(proporcao * 100)}% disso. ` +
+            `Marcar aula como assistida é um clique, e o clique não exige ter assistido.`,
+          // peso cresce conforme a distância: quanto menos tempo, mais grave
+          peso: Math.round(10 + (1 - proporcao) * 10),
+          eventos: [],
+        });
+      });
+    });
+  }
 
   // pessoa+dia → eventos
   const porPessoaDia = new Map<string, TimelineEvent[]>();

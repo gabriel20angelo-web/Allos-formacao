@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { formatDuration } from "@/lib/queries/usage";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
@@ -94,6 +95,18 @@ interface ProfileRow {
   full_name: string;
 }
 
+interface UsageSessionRow {
+  user_id: string;
+  seconds: number | null;
+}
+
+/**
+ * Situação da leitura de usage_sessions no curso aberto.
+ * "indisponivel" cobre tanto o ambiente sem a migration 042 quanto qualquer
+ * outra falha de leitura: nos dois casos a coluna some, porque não sabemos.
+ */
+type UsageStatus = "carregando" | "ok" | "indisponivel";
+
 // ═══════════════════════════════════════════════════════════════
 // Helpers
 // ═══════════════════════════════════════════════════════════════
@@ -101,6 +114,16 @@ interface ProfileRow {
 function pct(n: number, total: number): number {
   return total === 0 ? 0 : Math.round((n / total) * 100);
 }
+
+// O PostgREST devolve no máximo um teto de linhas por resposta (1000 por padrão
+// no Supabase). Cada linha de usage_sessions é uma janela de presença, então um
+// curso com algumas dezenas de alunos passa desse teto e a soma sairia truncada
+// para menos: exatamente o erro que esta coluna não pode cometer, já que ela
+// existe para não acusar ninguém por falta de dado. Por isso avançamos pelo
+// tamanho da página que o servidor devolveu, até vir vazia, em vez de confiar
+// num limite fixo. O teto de páginas é só uma trava contra laço infinito.
+const PAGINA_USAGE = 1000;
+const MAX_PAGINAS_USAGE = 50;
 
 function daysBetween(a: string, b: string): number {
   return Math.round(
@@ -172,6 +195,9 @@ export default function AnalyticsPage() {
   const [lessons, setLessons] = useState<LessonRow[]>([]);
   const [profiles, setProfiles] = useState<Map<string, string>>(new Map());
   const [dropdownOpen, setDropdownOpen] = useState(false);
+  // Segundos de permanência ativa por aluno, só do curso aberto.
+  const [usagePorAluno, setUsagePorAluno] = useState<Map<string, number>>(new Map());
+  const [usageStatus, setUsageStatus] = useState<UsageStatus>("carregando");
 
   // ── Fetch all data ────────────────────────────────────────
   const fetchData = useCallback(async () => {
@@ -238,6 +264,74 @@ export default function AnalyticsPage() {
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // ── Tempo na plataforma do curso selecionado ──────────────
+  //
+  // Fica fora do fetchData geral de propósito: o tempo só é lido na visão de
+  // detalhe, e uma varredura em usage_sessions sem filtro de curso traria
+  // linhas de todos os cursos sem serventia aqui. É uma passada por curso, com
+  // a soma por aluno feita no cliente, sem consulta por aluno.
+  useEffect(() => {
+    if (!selectedCourseId) {
+      setUsagePorAluno(new Map());
+      setUsageStatus("carregando");
+      return;
+    }
+
+    let cancelado = false;
+    setUsageStatus("carregando");
+
+    (async () => {
+      try {
+        const acumulado = new Map<string, number>();
+        let offset = 0;
+
+        for (let pagina = 0; pagina < MAX_PAGINAS_USAGE; pagina++) {
+          const { data, error } = await supabase
+            .from("usage_sessions")
+            .select("user_id, seconds")
+            .eq("course_id", selectedCourseId)
+            // Sem ordem estável o paginar poderia repetir ou pular linhas.
+            .order("id", { ascending: true })
+            .range(offset, offset + PAGINA_USAGE - 1);
+
+          if (error) {
+            if (cancelado) return;
+            // 42P01 = relação inexistente: ambiente sem a migration 042. Vale o
+            // mesmo desfecho para qualquer outra falha de leitura, porque
+            // mostrar "sem registro" para a turma inteira por causa de uma
+            // consulta quebrada seria acusar todo mundo por um problema nosso.
+            setUsagePorAluno(new Map());
+            setUsageStatus("indisponivel");
+            return;
+          }
+
+          const linhas = (data ?? []) as UsageSessionRow[];
+          for (const linha of linhas) {
+            if (!linha.user_id) continue;
+            const seconds = Math.max(0, Math.trunc(linha.seconds ?? 0));
+            acumulado.set(linha.user_id, (acumulado.get(linha.user_id) ?? 0) + seconds);
+          }
+
+          if (linhas.length === 0) break;
+          offset += linhas.length;
+        }
+
+        if (cancelado) return;
+        setUsagePorAluno(acumulado);
+        setUsageStatus("ok");
+      } catch {
+        if (cancelado) return;
+        setUsagePorAluno(new Map());
+        setUsageStatus("indisponivel");
+      }
+    })();
+
+    return () => {
+      cancelado = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedCourseId]);
 
   // ── Derived: course name map ──────────────────────────────
   const courseMap = useMemo(() => {
@@ -318,6 +412,11 @@ export default function AnalyticsPage() {
     });
 
     const lessonIds = new Set(orderedLessons.map((l) => l.id));
+
+    // Duração cadastrada de cada aula. Serve de denominador do tempo medido e
+    // sai das aulas já carregadas no fetch geral, sem consulta nova.
+    const duracaoPorAula = new Map<string, number>();
+    orderedLessons.forEach((l) => duracaoPorAula.set(l.id, l.duration_minutes ?? 0));
 
     // Lesson-by-lesson completion
     const relevantProgress = lessonProgress.filter(
@@ -401,6 +500,29 @@ export default function AnalyticsPage() {
           ? new Date(Math.max(...completedDates)).toISOString()
           : enr.enrolled_at;
 
+      // Tempo medido de permanência ativa, vindo da passada única já agregada.
+      // Soma zerada e ausência de linha dizem a mesma coisa nesta leitura (não
+      // há tempo medido), então as duas viram null e caem em "sem registro".
+      const tempoBruto = usagePorAluno.get(uid);
+      const tempoSegundos =
+        tempoBruto !== undefined && tempoBruto > 0 ? tempoBruto : null;
+
+      // Denominador: a duração do conteúdo que o próprio aluno deu por
+      // concluído. Aula sem duration_minutes cadastrada entra como zero, o que
+      // só encolhe o denominador e nunca infla a proporção contra ele.
+      const duracaoConcluidaSegundos = userProgress.reduce(
+        (soma, p) => soma + (duracaoPorAula.get(p.lesson_id) ?? 0) * 60,
+        0
+      );
+
+      // Faltando um dos lados a razão não diz nada: sem denominador seria
+      // divisão por zero, sem tempo medido seria inventar um zero que ninguém
+      // mediu. Nos dois casos a proporção fica de fora.
+      const razaoTempo =
+        tempoSegundos !== null && duracaoConcluidaSegundos > 0
+          ? Math.round((tempoSegundos / duracaoConcluidaSegundos) * 100)
+          : null;
+
       return {
         userId: uid,
         name: profiles.get(uid) || "Desconhecido",
@@ -410,6 +532,8 @@ export default function AnalyticsPage() {
         completedLessons: userProgress.length,
         totalLessons: orderedLessons.length,
         lastActivity,
+        tempoSegundos,
+        razaoTempo,
       };
     });
     students.sort((a, b) => b.progress - a.progress);
@@ -443,6 +567,7 @@ export default function AnalyticsPage() {
     examQuestions,
     reviews,
     profiles,
+    usagePorAluno,
   ]);
 
   // ═══════════════════════════════════════════════════════════
@@ -872,6 +997,11 @@ export default function AnalyticsPage() {
                         <th className="text-left py-2 pr-4">Status</th>
                         <th className="text-left py-2 pr-4">Progresso</th>
                         <th className="text-left py-2 pr-4">Aulas</th>
+                        {/* Sem a tabela usage_sessions no ambiente a coluna
+                            inteira some, cabeçalho e células. */}
+                        {usageStatus !== "indisponivel" && (
+                          <th className="text-left py-2 pr-4">Tempo na plataforma</th>
+                        )}
                         <th className="text-left py-2">Ultima atividade</th>
                       </tr>
                     </thead>
@@ -921,6 +1051,39 @@ export default function AnalyticsPage() {
                           <td className="py-2 pr-4 text-xs text-[#FDFBF7]/50">
                             {s.completedLessons}/{s.totalLessons}
                           </td>
+                          {usageStatus !== "indisponivel" && (
+                            <td className="py-2 pr-4">
+                              {usageStatus === "carregando" ? (
+                                <span className="text-xs text-[#FDFBF7]/30">
+                                  carregando
+                                </span>
+                              ) : s.tempoSegundos === null ? (
+                                // Cinza e por extenso: ausência de medição, não zero.
+                                <span className="text-xs text-[#FDFBF7]/40">
+                                  sem registro
+                                </span>
+                              ) : (
+                                <div className="flex items-center gap-2">
+                                  <span className="text-xs text-[#FDFBF7]/50">
+                                    {formatDuration(s.tempoSegundos)}
+                                  </span>
+                                  {s.razaoTempo !== null && (
+                                    <span
+                                      className="text-xs font-medium"
+                                      style={{
+                                        color:
+                                          s.razaoTempo < 30
+                                            ? "#F59E0B"
+                                            : "rgba(253,251,247,0.4)",
+                                      }}
+                                    >
+                                      {s.razaoTempo}%
+                                    </span>
+                                  )}
+                                </div>
+                              )}
+                            </td>
+                          )}
                           <td className="py-2 text-xs text-[#FDFBF7]/40">
                             {formatDate(s.lastActivity)}
                           </td>
@@ -981,9 +1144,46 @@ export default function AnalyticsPage() {
                         <span>{s.completedLessons}/{s.totalLessons} aulas</span>
                         <span>{formatDate(s.lastActivity)}</span>
                       </div>
+                      {usageStatus !== "indisponivel" && (
+                        <div className="flex justify-between font-dm text-xs text-[#FDFBF7]/40 mt-1">
+                          <span>Tempo na plataforma</span>
+                          {usageStatus === "carregando" ? (
+                            <span className="text-[#FDFBF7]/30">carregando</span>
+                          ) : s.tempoSegundos === null ? (
+                            <span className="text-[#FDFBF7]/40">sem registro</span>
+                          ) : (
+                            <span className="text-[#FDFBF7]/50">
+                              {formatDuration(s.tempoSegundos)}
+                              {s.razaoTempo !== null && (
+                                <span
+                                  className="ml-2 font-medium"
+                                  style={{
+                                    color:
+                                      s.razaoTempo < 30
+                                        ? "#F59E0B"
+                                        : "rgba(253,251,247,0.4)",
+                                  }}
+                                >
+                                  {s.razaoTempo}%
+                                </span>
+                              )}
+                            </span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   ))}
                 </div>
+
+                {usageStatus !== "indisponivel" && (
+                  <p className="font-dm text-xs text-[#FDFBF7]/40 mt-4">
+                    O percentual compara o tempo medido na plataforma com a
+                    duração das aulas que o aluno marcou como concluídas, e
+                    &quot;sem registro&quot; não é zero: aula concluída antes de
+                    a plataforma passar a medir permanência simplesmente nunca
+                    foi cronometrada.
+                  </p>
+                )}
               </>
             )}
           </Card>
