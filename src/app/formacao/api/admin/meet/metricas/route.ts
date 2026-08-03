@@ -118,6 +118,9 @@ export async function GET(req: NextRequest) {
 
   const geral = {
     encontros: lista.length,
+    // Quanto o encontro dura de fato, que costuma ser diferente do previsto:
+    // encontro de noventa minutos que acaba em quarenta é informação.
+    duracao_media_min: media(lista.map((e) => e.duracao_min ?? NaN)),
     quorum_medio: media(quoruns),
     quorum_maximo: Math.max(...quoruns, 0),
     minutos_medios_por_pessoa: media(participacoes.map((p) => p.minutos_presentes)),

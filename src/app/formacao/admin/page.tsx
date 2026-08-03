@@ -207,6 +207,7 @@ export default function AdminDashboard() {
   // as salas, a faixa não aparece em vez de mostrar zeros.
   const [quorumAuto, setQuorumAuto] = useState<{
     encontros: number;
+    duracao_media_min: number | null;
     quorum_medio: number | null;
     minutos_medios_por_pessoa: number | null;
     permanencia_media_pct: number | null;
@@ -1492,6 +1493,13 @@ export default function AdminDashboard() {
                         label: "Quórum médio",
                         value: quorumAuto.quorum_medio?.toFixed(1) ?? "—",
                         hint: "Média de participantes por encontro, sem contar o condutor.",
+                      },
+                      {
+                        label: "Duração média",
+                        value: quorumAuto.duracao_media_min
+                          ? `${Math.round(quorumAuto.duracao_media_min)} min`
+                          : "—",
+                        hint: "Quanto o encontro durou de fato, do primeiro ao último minuto da sala. Bem diferente do previsto é sinal de algo.",
                       },
                       {
                         label: "Minutos por pessoa",

@@ -341,8 +341,14 @@ export async function ingerir(opts?: {
             }
             transcricaoPronta = true;
           } else if (transcricoes.length === 0) {
-            // Encontro sem transcrição ligada: não há o que esperar.
-            transcricaoPronta = true;
+            // Lista vazia é ambígua: ou a sala não transcreve, ou o Google
+            // ainda não gerou. Tratar como "não vem" fecha o encontro cedo
+            // demais e o tempo de fala nunca é capturado, que é exatamente o
+            // que aconteceu. Só desiste depois de dois dias.
+            transcricaoPronta = horasDesdeOFim >= 48;
+          } else {
+            // Existe transcrição, mas ainda sem arquivo: está sendo processada.
+            transcricaoPronta = false;
           }
         } catch (e) {
           res.erros.push(
