@@ -16,6 +16,40 @@ import { getAccessToken, MeetApiError } from "./client";
 // o equilíbrio entre poucas idas e vindas e caber no tempo da requisição.
 const PEDACO = 8 * 1024 * 1024;
 
+/**
+ * Diz o que fazer, não o que aconteceu.
+ *
+ * "O YouTube recusou o acesso" mandou o Gabriel autorizar de novo três vezes
+ * sem resolver, porque a causa era outra. Cada recusa aqui tem uma ação
+ * diferente, e a resposta do Google diz qual.
+ */
+function traduzir(status: number, corpo: string): string {
+  const texto = corpo.toLowerCase();
+
+  if (texto.includes("has not been used in project") || texto.includes("is disabled")) {
+    const projeto = corpo.match(/project (\d+)/)?.[1];
+    return projeto
+      ? `A YouTube Data API não está ativada no projeto ${projeto}. Ative em console.developers.google.com/apis/api/youtube.googleapis.com/overview?project=${projeto} e tente de novo em um minuto.`
+      : "A YouTube Data API não está ativada neste projeto do Google Cloud.";
+  }
+  if (texto.includes("youtubesignuprequired")) {
+    return "A conta da Allos ainda não tem canal no YouTube. Crie o canal e tente de novo.";
+  }
+  if (texto.includes("quotaexceeded") || status === 429) {
+    return "A cota diária de envios do YouTube acabou. Volta a funcionar amanhã, sem precisar fazer nada.";
+  }
+  if (texto.includes("insufficientpermissions") || texto.includes("insufficient")) {
+    return "A autorização não inclui permissão de envio ao YouTube. Autorize de novo pelo painel e confira se o pedido sobre enviar vídeos aparece.";
+  }
+  if (status === 401) {
+    return "O acesso ao Google expirou. Autorize de novo pelo painel.";
+  }
+  if (status === 403) {
+    return "O YouTube recusou (403). Pode ser API desativada, conta sem canal, ou envio bloqueado no canal.";
+  }
+  return `O YouTube recusou a abertura do envio (código ${status}).`;
+}
+
 export interface SessaoUpload {
   url: string;
   tamanho: number;
@@ -62,13 +96,8 @@ export async function abrirSessaoUpload(
 
   if (!resp.ok) {
     const corpo = await resp.text();
-    const amigavel =
-      resp.status === 401 || resp.status === 403
-        ? "O YouTube recusou o acesso. Autorize de novo pelo painel e confirme que a conta tem um canal."
-        : resp.status === 400 && corpo.includes("youtubeSignupRequired")
-          ? "A conta da Allos ainda não tem canal no YouTube. Crie o canal e tente de novo."
-          : `O YouTube recusou a abertura do envio (código ${resp.status}).`;
-    throw new MeetApiError(amigavel, resp.status, corpo.slice(0, 400));
+    console.error("[youtube] abrir sessão", resp.status, corpo.slice(0, 600));
+    throw new MeetApiError(traduzir(resp.status, corpo), resp.status, corpo.slice(0, 400));
   }
 
   const location = resp.headers.get("location");
