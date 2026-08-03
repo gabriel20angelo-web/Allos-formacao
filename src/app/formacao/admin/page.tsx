@@ -17,17 +17,20 @@ import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { formatPrice } from "@/lib/utils/format";
 import {
-  getPeriodDate,
   getGreeting,
-  relativeTime,
-  PERIOD_LABELS,
   type DashMode,
-  type DashPeriod,
 } from "@/lib/utils/dashboard";
+import {
+  ACTIVITY_RANGES,
+  RANGE_LABELS,
+  getRangeStart,
+  type ActivityRange,
+  type TimelineEvent,
+} from "@/lib/utils/activity";
 import StatCard from "@/components/admin/dashboard/StatCard";
 import HintButton from "@/components/admin/dashboard/HintButton";
-import MiniBarChart from "@/components/admin/dashboard/MiniBarChart";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
+import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
 import AdminNotesSection from "@/components/admin/dashboard/AdminNotesSection";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
@@ -42,11 +45,9 @@ import {
   UserX,
   GraduationCap,
   MessageSquare,
-  Clock,
   FileText,
   TrendingUp,
   Trophy,
-  Calendar,
   Activity,
   BarChart3,
   Flame,
@@ -68,18 +69,10 @@ interface DashboardStats {
   inactiveStudents: number;
 }
 
-interface ActivityEvent {
-  id: string;
-  type: "enrollment" | "completion" | "review";
-  userName: string;
-  courseTitle: string;
-  rating?: number;
-  timestamp: string;
-}
-
 // ─── Tipos locais pras queries Supabase ─────────────────────────────────
 // Subset dos campos das tabelas que essa página realmente lê.
 type SubmissionRow = {
+  id: string;
   created_at: string;
   nome_completo: string | null;
   atividade_nome: string | null;
@@ -89,14 +82,6 @@ type SubmissionRow = {
   condutores: string[] | null;
 };
 
-type EnrollmentJoinRow = {
-  id: string;
-  enrolled_at: string;
-  status: string;
-  completed_at: string | null;
-  user?: { full_name: string | null } | null;
-  course?: { title: string | null } | null;
-};
 
 type EnrollmentDateRow = {
   enrolled_at: string;
@@ -115,35 +100,54 @@ type PaidEnrollmentRow = { courses?: { price_cents: number | null } | null };
 
 type AtividadeRow = { nome: string; carga_horaria: number };
 
-type SlotRow = {
+// ─── Fontes da timeline assíncrona ──────────────────────────────────────
+type NamedUser = { full_name: string | null } | null;
+
+type SignupRow = { id: string; full_name: string | null; created_at: string };
+
+type EnrollmentEventRow = {
+  id: string;
+  enrolled_at: string;
+  completed_at: string | null;
   status: string;
+  user?: NamedUser;
+  course?: { title: string | null } | null;
+};
+
+type LessonProgressRow = {
+  id: string;
+  completed_at: string;
+  user?: NamedUser;
+  lesson?: {
+    title: string | null;
+    section?: { course?: { title: string | null } | null } | null;
+  } | null;
+};
+
+type CertificateRow = {
+  id: string;
+  issued_at: string;
+  user?: NamedUser;
+  course?: { title: string | null } | null;
+};
+
+type CommentRow = {
+  id: string;
+  content: string;
   created_at: string;
-  atividade_nome: string | null;
-  dia_semana: number;
-  formacao_horarios?: { hora: string } | null;
+  user?: NamedUser;
+  lesson?: { title: string | null } | null;
 };
 
-type HorarioRow = { hora: string };
-
-type PresencaWeekRow = {
-  media_participantes: number | null;
-  pico_participantes: number | null;
-  participantes: { nome: string }[] | null;
+type ExamRow = {
+  id: string;
+  score: number;
+  passed: boolean;
+  attempted_at: string;
+  user?: NamedUser;
+  course?: { title: string | null } | null;
 };
 
-// Inline pra evitar import duplicado; bate com `StatCardData` de StatCard.tsx.
-import type { LucideIcon } from "lucide-react";
-type StatCardSpec = {
-  label: string;
-  value: string;
-  suffix?: string;
-  subtitle?: string;
-  hint?: string;
-  icon: LucideIcon;
-  iconColor: string;
-  iconBg: string;
-  trend?: number;
-};
 
 // ═══════════════════════════════════════════════════════════════
 // Main component
@@ -163,7 +167,6 @@ export default function AdminDashboard() {
   const [completionTrend, setCompletionTrend] = useState<
     { date: string; count: number }[]
   >([]);
-  const [activityFeed, setActivityFeed] = useState<ActivityEvent[]>([]);
   const [asyncEngagement, setAsyncEngagement] = useState<{
     avgProgress: number;
     topCourses: { title: string; slug: string; watchCount: number; avgProgress: number }[];
@@ -172,7 +175,9 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
 
   // ── Sync (Formação Base) stats ──
-  const [dashPeriod, setDashPeriod] = useState<DashPeriod>("month");
+  // A janela vale para a aba inteira: cards, rankings e timeline falam do
+  // mesmo recorte de tempo, então não há dois seletores concorrendo.
+  const [dashPeriod, setDashPeriod] = useState<ActivityRange>("30d");
   const [formacaoStats, setFormacaoStats] = useState<{
     totalFeedbacks: number;
     avgNotaGrupo: number;
@@ -185,11 +190,7 @@ export default function AdminDashboard() {
       relatos: { text: string; date: string }[];
     }[];
     topParticipantes: { nome: string; horas: number; count: number }[];
-    enrollmentTrend: { date: string; count: number }[];
-    submissionsTrend: { date: string; count: number }[];
     activityDist: { name: string; count: number }[];
-    totalSessions: number;
-    avgParticipantsPerSession: number;
     avgFrequencyPerStudent: number;
     uniqueParticipants: number;
     activeStudents: number;
@@ -200,19 +201,18 @@ export default function AdminDashboard() {
     topGroupsByParticipation: { name: string; count: number }[];
     ratingDistribution: { rating: number; count: number }[];
     conductorRatingDist: { rating: number; count: number }[];
-    heatmapData: { dia: number; hora: string; count: number }[];
     retentionByMonth: { month: string; active: number; churned: number }[];
   } | null>(null);
   const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null);
 
-  // ── Meet quorum stats ──
-  const [quorumStats, setQuorumStats] = useState<{
-    gruposEstaSemana: number;
-    mediaEstaSemana: number;
-    picoEstaSemana: number;
-    participantesUnicos: number;
-    tendencia: number;
-  } | null>(null);
+  // ── Timelines de atividade ──
+  // Os eventos são carregados uma vez e recortados no cliente: trocar de
+  // janela é instantâneo e não gera nova ida ao banco.
+  const [syncEvents, setSyncEvents] = useState<TimelineEvent[]>([]);
+  const [asyncEvents, setAsyncEvents] = useState<TimelineEvent[]>([]);
+  const [asyncEventsLoading, setAsyncEventsLoading] = useState(true);
+  const [asyncRange, setAsyncRange] = useState<ActivityRange>("30d");
+  const [truncatedSources, setTruncatedSources] = useState<string[]>([]);
 
   // ═══════════════════════════════════════════════════════════
   // Data fetching: Async dashboard stats
@@ -320,17 +320,12 @@ export default function AdminDashboard() {
         inactiveStudents,
       });
 
-      // Enrollment chart + completion trend + activity feed
+      // Enrollment chart + completion trend
       if (ids.length > 0) {
         const thirtyDaysAgo = new Date();
         thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-        const [
-          enrollmentsRes,
-          completionsRes,
-          recentEnrollFeed,
-          recentReviewsFeed,
-        ] = await Promise.all([
+        const [enrollmentsRes, completionsRes] = await Promise.all([
           supabase
             .from("enrollments")
             .select("enrolled_at")
@@ -345,22 +340,6 @@ export default function AdminDashboard() {
             .not("completed_at", "is", null)
             .gte("completed_at", thirtyDaysAgo.toISOString())
             .order("completed_at"),
-          supabase
-            .from("enrollments")
-            .select(
-              "id, enrolled_at, status, completed_at, user:profiles!user_id(full_name), course:courses!course_id(title)"
-            )
-            .in("course_id", ids)
-            .order("enrolled_at", { ascending: false })
-            .limit(40),
-          supabase
-            .from("reviews")
-            .select(
-              "id, rating, created_at, user:profiles!user_id(full_name), course:courses!course_id(title)"
-            )
-            .in("course_id", ids)
-            .order("created_at", { ascending: false })
-            .limit(15),
         ]);
 
         // Enrollment chart data
@@ -389,58 +368,205 @@ export default function AdminDashboard() {
           );
         }
 
-        // Build activity feed
-        const events: ActivityEvent[] = [];
-
-        if (recentEnrollFeed.data) {
-          (recentEnrollFeed.data as unknown as EnrollmentJoinRow[]).forEach((e) => {
-            const userName = e.user?.full_name || "Aluno";
-            const courseTitle = e.course?.title || "Curso";
-
-            events.push({
-              id: `enroll-${e.id}`,
-              type: "enrollment",
-              userName,
-              courseTitle,
-              timestamp: e.enrolled_at,
-            });
-
-            if (e.status === "completed" && e.completed_at) {
-              events.push({
-                id: `complete-${e.id}`,
-                type: "completion",
-                userName,
-                courseTitle,
-                timestamp: e.completed_at,
-              });
-            }
-          });
-        }
-
-        if (recentReviewsFeed.data) {
-          (recentReviewsFeed.data as unknown as ReviewJoinRow[]).forEach((r) => {
-            events.push({
-              id: `review-${r.id}`,
-              type: "review",
-              userName: r.user?.full_name || "Aluno",
-              courseTitle: r.course?.title || "Curso",
-              rating: r.rating,
-              timestamp: r.created_at,
-            });
-          });
-        }
-
-        events.sort(
-          (a, b) =>
-            new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-        );
-        setActivityFeed(events.slice(0, 30));
       }
 
       setLoading(false);
     }
 
     fetchStats().catch(() => setLoading(false));
+  }, [profile, isAdmin]);
+
+  // ═══════════════════════════════════════════════════════════
+  // Data fetching: eventos da timeline assíncrona
+  // ═══════════════════════════════════════════════════════════
+  //
+  // Uma passada só, sem filtro de data: o histórico inteiro da Allos cabe
+  // folgado em memória e assim trocar de janela não custa ida ao banco. O teto
+  // por fonte existe só para o dia em que isso deixar de ser verdade — quando
+  // bater, a timeline avisa em vez de mostrar um recorte silencioso.
+  // A RLS já limita o instrutor aos alunos dos cursos dele.
+
+  useEffect(() => {
+    const ROW_CAP = 2000;
+
+    async function fetchActivity() {
+      if (!profile) return;
+      const supabase = createClient();
+      const opts = { count: "exact" as const };
+
+      const [signups, enrolls, lessonsDone, revs, certs, comments, exams] =
+        await Promise.all([
+          isAdmin
+            ? supabase
+                .from("profiles")
+                .select("id, full_name, created_at", opts)
+                .order("created_at", { ascending: false })
+                .limit(ROW_CAP)
+            : Promise.resolve({ data: [], count: 0 }),
+          supabase
+            .from("enrollments")
+            .select(
+              "id, enrolled_at, completed_at, status, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              opts
+            )
+            .order("enrolled_at", { ascending: false })
+            .limit(ROW_CAP),
+          supabase
+            .from("lesson_progress")
+            .select(
+              "id, completed_at, user:profiles!user_id(full_name), lesson:lessons!lesson_id(title, section:sections!section_id(course:courses!course_id(title)))",
+              opts
+            )
+            .eq("completed", true)
+            .not("completed_at", "is", null)
+            .order("completed_at", { ascending: false })
+            .limit(ROW_CAP),
+          supabase
+            .from("reviews")
+            .select(
+              "id, rating, comment, created_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              opts
+            )
+            .order("created_at", { ascending: false })
+            .limit(ROW_CAP),
+          supabase
+            .from("certificates")
+            .select(
+              "id, issued_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              opts
+            )
+            .order("issued_at", { ascending: false })
+            .limit(ROW_CAP),
+          supabase
+            .from("lesson_comments")
+            .select(
+              "id, content, created_at, user:profiles!user_id(full_name), lesson:lessons!lesson_id(title)",
+              opts
+            )
+            .order("created_at", { ascending: false })
+            .limit(ROW_CAP),
+          supabase
+            .from("exam_attempts")
+            .select(
+              "id, score, passed, attempted_at, user:profiles!user_id(full_name), course:courses!course_id(title)",
+              opts
+            )
+            .order("attempted_at", { ascending: false })
+            .limit(ROW_CAP),
+        ]);
+
+      const events: TimelineEvent[] = [];
+      const capped: string[] = [];
+      const flagIfCapped = (label: string, count: number | null | undefined) => {
+        if ((count ?? 0) > ROW_CAP) capped.push(label);
+      };
+
+      ((signups.data ?? []) as SignupRow[]).forEach((p) => {
+        events.push({
+          id: `signup-${p.id}`,
+          type: "signup",
+          timestamp: p.created_at,
+          person: p.full_name || "Sem nome",
+          title: "",
+        });
+      });
+      flagIfCapped("cadastros", signups.count);
+
+      ((enrolls.data ?? []) as unknown as EnrollmentEventRow[]).forEach((e) => {
+        const person = e.user?.full_name || "Aluno";
+        const course = e.course?.title || "Curso";
+        events.push({
+          id: `enroll-${e.id}`,
+          type: "enrollment",
+          timestamp: e.enrolled_at,
+          person,
+          title: course,
+        });
+        if (e.status === "completed" && e.completed_at) {
+          events.push({
+            id: `complete-${e.id}`,
+            type: "completion",
+            timestamp: e.completed_at,
+            person,
+            title: course,
+          });
+        }
+      });
+      flagIfCapped("matrículas", enrolls.count);
+
+      ((lessonsDone.data ?? []) as unknown as LessonProgressRow[]).forEach((p) => {
+        events.push({
+          id: `lesson-${p.id}`,
+          type: "lesson",
+          timestamp: p.completed_at,
+          person: p.user?.full_name || "Aluno",
+          title: p.lesson?.title?.trim() || "aula",
+          detail: p.lesson?.section?.course?.title || undefined,
+        });
+      });
+      flagIfCapped("aulas concluídas", lessonsDone.count);
+
+      ((revs.data ?? []) as unknown as (ReviewJoinRow & { comment: string | null })[]).forEach(
+        (r) => {
+          events.push({
+            id: `review-${r.id}`,
+            type: "review",
+            timestamp: r.created_at,
+            person: r.user?.full_name || "Aluno",
+            title: r.course?.title || "Curso",
+            detail: r.comment || undefined,
+            score: r.rating,
+            scoreSuffix: "/5",
+          });
+        }
+      );
+      flagIfCapped("avaliações", revs.count);
+
+      ((certs.data ?? []) as unknown as CertificateRow[]).forEach((c) => {
+        events.push({
+          id: `cert-${c.id}`,
+          type: "certificate",
+          timestamp: c.issued_at,
+          person: c.user?.full_name || "Aluno",
+          title: c.course?.title || "Curso",
+        });
+      });
+      flagIfCapped("certificados", certs.count);
+
+      ((comments.data ?? []) as unknown as CommentRow[]).forEach((c) => {
+        events.push({
+          id: `comment-${c.id}`,
+          type: "comment",
+          timestamp: c.created_at,
+          person: c.user?.full_name || "Aluno",
+          title: c.lesson?.title?.trim() || "uma aula",
+          detail: c.content,
+        });
+      });
+      flagIfCapped("comentários", comments.count);
+
+      ((exams.data ?? []) as unknown as ExamRow[]).forEach((e) => {
+        events.push({
+          id: `exam-${e.id}`,
+          type: "exam",
+          timestamp: e.attempted_at,
+          person: e.user?.full_name || "Aluno",
+          title: e.course?.title || "Curso",
+          detail: e.passed ? "Aprovado" : "Não atingiu a nota",
+          score: e.score,
+        });
+      });
+      flagIfCapped("provas", exams.count);
+
+      events.sort(
+        (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+      );
+      setAsyncEvents(events);
+      setTruncatedSources(capped);
+      setAsyncEventsLoading(false);
+    }
+
+    fetchActivity().catch(() => setAsyncEventsLoading(false));
   }, [profile, isAdmin]);
 
   // ── Async engagement stats ──
@@ -589,42 +715,54 @@ export default function AdminDashboard() {
     async function fetchFormacaoStats() {
       if (!profile) return;
       const supabase = createClient();
-      const periodStart = getPeriodDate(dashPeriod);
+      // `null` no "Tudo": sem corte inferior.
+      const rangeStart = getRangeStart(dashPeriod);
+      const periodStart = rangeStart ?? new Date(0);
 
       try {
-        const [subsRes, atividadesRes, enrollRes, slotsRes, horariosRes] =
-          await Promise.all([
-            // submissions stay unfiltered here — the inactive/retention math
-            // below needs the full participant history to detect first/last
-            // appearance per person.
-            supabase
-              .from("certificado_submissions")
-              .select(
-                "nome_completo, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at"
-              ),
-            supabase
-              .from("certificado_atividades")
-              .select("nome, carga_horaria"),
-            // enrollments are only used for the period-window trend chart, so
-            // we can safely filter at the DB level and skip the client-side
-            // pass over the entire enrollments table.
-            supabase
-              .from("enrollments")
-              .select("enrolled_at")
-              .gte("enrolled_at", periodStart.toISOString()),
-            supabase
-              .from("formacao_slots")
-              .select(
-                "id, status, dia_semana, horario_id, atividade_nome, formacao_horarios(hora)"
-              ),
-            supabase.from("formacao_horarios").select("id, hora, ordem"),
-          ]);
+        // Só o que nasce no formulário de /certificado alimenta esta aba.
+        const [subsRes, atividadesRes] = await Promise.all([
+          // submissions stay unfiltered here — the inactive/retention math
+          // below needs the full participant history to detect first/last
+          // appearance per person.
+          supabase
+            .from("certificado_submissions")
+            .select(
+              "id, nome_completo, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at"
+            ),
+          supabase
+            .from("certificado_atividades")
+            .select("nome, carga_horaria"),
+        ]);
 
         const allSubs = (subsRes.data ?? []) as SubmissionRow[];
         const atividades = (atividadesRes.data ?? []) as AtividadeRow[];
-        const enrollData = (enrollRes.data ?? []) as EnrollmentDateRow[];
-        const slotsData = (slotsRes.data ?? []) as SlotRow[];
-        const horariosData = (horariosRes.data ?? []) as HorarioRow[];
+
+        // A timeline recorta a janela sozinha, então recebe o histórico inteiro.
+        setSyncEvents(
+          allSubs
+            .map((s) => {
+              const condutores = (s.condutores || []).filter(Boolean);
+              const partes = [
+                condutores.length > 0 ? `com ${condutores.join(", ")}` : "",
+                s.relato?.trim() ? `“${s.relato.trim()}”` : "",
+              ].filter(Boolean);
+              return {
+                id: `sub-${s.id}`,
+                type: "feedback" as const,
+                timestamp: s.created_at,
+                person: (s.nome_completo || "Sem nome").trim(),
+                title: s.atividade_nome || "atividade",
+                detail: partes.join(" · ") || undefined,
+                score: s.nota_grupo ?? undefined,
+                scoreSuffix: "/10",
+              };
+            })
+            .sort(
+              (a, b) =>
+                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+            )
+        );
 
         // Filter submissions by period
         const subs = allSubs.filter(
@@ -703,36 +841,6 @@ export default function AdminDashboard() {
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count);
 
-        // Submissions trend (group by day within period)
-        const subsByDay: Record<string, number> = {};
-        subs.forEach((s) => {
-          const day = s.created_at.split("T")[0];
-          subsByDay[day] = (subsByDay[day] || 0) + 1;
-        });
-        const submissionsTrend = Object.entries(subsByDay)
-          .map(([date, count]) => ({ date, count }))
-          .sort((a, b) => a.date.localeCompare(b.date));
-
-        // Enrollment trend (based on period window)
-        const enrollByDay: Record<string, number> = {};
-        enrollData.forEach((e) => {
-          if (new Date(e.enrolled_at) >= periodStart) {
-            const day = e.enrolled_at.split("T")[0];
-            enrollByDay[day] = (enrollByDay[day] || 0) + 1;
-          }
-        });
-        const enrollmentTrend = Object.entries(enrollByDay)
-          .map(([date, count]) => ({ date, count }))
-          .sort((a, b) => a.date.localeCompare(b.date));
-
-        // Session metrics
-        const conductedSlots = slotsData.filter(
-          (s) =>
-            s.status === "conduzido" &&
-            new Date(s.created_at) >= periodStart
-        );
-        const totalSessions = conductedSlots.length;
-
         // Unique participants in period
         const uniqueNames = new Set<string>();
         subs.forEach((s) => {
@@ -741,8 +849,6 @@ export default function AdminDashboard() {
         });
         const uniqueParticipants = uniqueNames.size;
 
-        const avgParticipantsPerSession =
-          totalSessions > 0 ? total / totalSessions : 0;
         const avgFrequencyPerStudent =
           uniqueParticipants > 0 ? total / uniqueParticipants : 0;
 
@@ -837,42 +943,6 @@ export default function AdminDashboard() {
           });
         }
 
-        // Heatmap: dia x hora engagement
-        const heatmapMap = new Map<string, number>();
-        const submissionCountByAtividade = new Map<string, number>();
-        subs.forEach((s) => {
-          const name = (s.atividade_nome || "").toLowerCase();
-          submissionCountByAtividade.set(
-            name,
-            (submissionCountByAtividade.get(name) || 0) + 1
-          );
-        });
-
-        const activeSlots = slotsData.filter((s) => s.atividade_nome);
-        activeSlots.forEach((slot) => {
-          const hora = slot.formacao_horarios?.hora || "";
-          const key = `${slot.dia_semana}-${hora}`;
-          const atividadeName = (slot.atividade_nome || "").toLowerCase();
-          const count = submissionCountByAtividade.get(atividadeName) || 0;
-          heatmapMap.set(key, (heatmapMap.get(key) || 0) + count);
-        });
-
-        if (heatmapMap.size === 0 && horariosData.length > 0) {
-          horariosData.forEach((h) => {
-            for (let d = 0; d < 5; d++) {
-              const key = `${d}-${h.hora}`;
-              if (!heatmapMap.has(key)) heatmapMap.set(key, 0);
-            }
-          });
-        }
-
-        const heatmapData = Array.from(heatmapMap.entries()).map(
-          ([key, count]) => {
-            const [dia, hora] = key.split("-");
-            return { dia: parseInt(dia), hora, count };
-          }
-        );
-
         // Retention by month (last 6 months)
         const retentionByMonth: {
           month: string;
@@ -943,11 +1013,7 @@ export default function AdminDashboard() {
           totalRelatos,
           topCondutores: topC,
           topParticipantes: topP,
-          enrollmentTrend,
-          submissionsTrend,
           activityDist,
-          totalSessions,
-          avgParticipantsPerSession,
           avgFrequencyPerStudent,
           uniqueParticipants,
           activeStudents,
@@ -958,7 +1024,6 @@ export default function AdminDashboard() {
           topGroupsByParticipation,
           ratingDistribution,
           conductorRatingDist,
-          heatmapData,
           retentionByMonth,
         });
       } catch {
@@ -970,105 +1035,6 @@ export default function AdminDashboard() {
   }, [profile, dashPeriod]);
 
   // ═══════════════════════════════════════════════════════════
-  // Data fetching: Meet quorum
-  // ═══════════════════════════════════════════════════════════
-
-  useEffect(() => {
-    async function fetchQuorum() {
-      try {
-        const supabase = createClient();
-        const now = new Date();
-        const jsDay = now.getDay();
-        const mondayOffset = jsDay === 0 ? 6 : jsDay - 1;
-        const monday = new Date(now);
-        monday.setDate(now.getDate() - mondayOffset);
-        const sunday = new Date(monday);
-        sunday.setDate(monday.getDate() + 6);
-
-        const inicioSemana = monday.toISOString().split("T")[0];
-        const fimSemana = sunday.toISOString().split("T")[0];
-
-        const prevMonday = new Date(monday);
-        prevMonday.setDate(monday.getDate() - 7);
-        const prevSunday = new Date(monday);
-        prevSunday.setDate(monday.getDate() - 1);
-
-        const [{ data: current }, { data: prev }] = await Promise.all([
-          supabase
-            .from("formacao_meet_presencas")
-            .select("*")
-            .gte("data_reuniao", inicioSemana)
-            .lte("data_reuniao", fimSemana),
-          supabase
-            .from("formacao_meet_presencas")
-            .select("media_participantes")
-            .gte(
-              "data_reuniao",
-              prevMonday.toISOString().split("T")[0]
-            )
-            .lte(
-              "data_reuniao",
-              prevSunday.toISOString().split("T")[0]
-            ),
-        ]);
-
-        const presencas = (current ?? []) as PresencaWeekRow[];
-        const prevPresencas = (prev ?? []) as PresencaWeekRow[];
-
-        if (presencas.length === 0 && prevPresencas.length === 0) {
-          setQuorumStats(null);
-          return;
-        }
-
-        const gruposEstaSemana = presencas.length;
-        const mediaEstaSemana =
-          gruposEstaSemana > 0
-            ? presencas.reduce(
-                (s, p) => s + (p.media_participantes || 0),
-                0
-              ) / gruposEstaSemana
-            : 0;
-        const picoEstaSemana =
-          gruposEstaSemana > 0
-            ? Math.max(
-                ...presencas.map((p) => p.pico_participantes || 0)
-              )
-            : 0;
-
-        const nomes = new Set<string>();
-        presencas.forEach((p) => {
-          (p.participantes || []).forEach((part) =>
-            nomes.add(part.nome)
-          );
-        });
-
-        const mediaPrev =
-          prevPresencas.length > 0
-            ? prevPresencas.reduce(
-                (s, p) => s + (p.media_participantes || 0),
-                0
-              ) / prevPresencas.length
-            : 0;
-        const tendencia =
-          mediaPrev > 0
-            ? ((mediaEstaSemana - mediaPrev) / mediaPrev) * 100
-            : 0;
-
-        setQuorumStats({
-          gruposEstaSemana,
-          mediaEstaSemana,
-          picoEstaSemana,
-          participantesUnicos: nomes.size,
-          tendencia,
-        });
-      } catch {
-        // table may not exist yet
-      }
-    }
-    if (profile) fetchQuorum();
-  }, [profile]);
-
-  // ═══════════════════════════════════════════════════════════
   // CSV Export (sync mode)
   // ═══════════════════════════════════════════════════════════
 
@@ -1076,7 +1042,7 @@ export default function AdminDashboard() {
     if (!formacaoStats) return;
     const lines: string[] = [];
     lines.push("=== RESUMO GERAL ===");
-    lines.push(`Período,${PERIOD_LABELS[dashPeriod]}`);
+    lines.push(`Período,${RANGE_LABELS[dashPeriod]}`);
     lines.push(`Total Feedbacks,${formacaoStats.totalFeedbacks}`);
     lines.push(
       `Nota Média Grupo,${formacaoStats.avgNotaGrupo.toFixed(1)}`
@@ -1085,9 +1051,6 @@ export default function AdminDashboard() {
       `Nota Média Condutor,${formacaoStats.avgNotaCondutor.toFixed(1)}`
     );
     lines.push(`Total Relatos,${formacaoStats.totalRelatos}`);
-    lines.push(
-      `Sessões Realizadas,${formacaoStats.totalSessions}`
-    );
     lines.push(
       `Participantes Únicos,${formacaoStats.uniqueParticipants}`
     );
@@ -1138,13 +1101,6 @@ export default function AdminDashboard() {
     formacaoStats.retentionByMonth.forEach((r) =>
       lines.push(`${r.month},${r.active},${r.churned}`)
     );
-    lines.push("");
-    lines.push("=== HEATMAP ENGAJAMENTO ===");
-    lines.push("Dia,Horário,Quantidade");
-    const dias = ["Seg", "Ter", "Qua", "Qui", "Sex"];
-    formacaoStats.heatmapData.forEach((h) =>
-      lines.push(`${dias[h.dia] || h.dia},${h.hora},${h.count}`)
-    );
     const csv = "\uFEFF" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1162,18 +1118,6 @@ export default function AdminDashboard() {
   const selectedCondutorData = selectedCondutor
     ? formacaoStats?.topCondutores.find((c) => c.name === selectedCondutor)
     : null;
-
-  const activityIcon = {
-    enrollment: GraduationCap,
-    completion: CheckCircle,
-    review: MessageSquare,
-  };
-
-  const activityColor = {
-    enrollment: "#D4854A",
-    completion: "#2E9E8F",
-    review: "#F59E0B",
-  };
 
   // ═══════════════════════════════════════════════════════════
   // Loading state
@@ -1266,7 +1210,7 @@ export default function AdminDashboard() {
           {/* Period selector + Export */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap gap-2">
-              {(Object.keys(PERIOD_LABELS) as DashPeriod[]).map((p) => (
+              {ACTIVITY_RANGES.map((p) => (
                 <button
                   key={p}
                   onClick={() => {
@@ -1290,7 +1234,7 @@ export default function AdminDashboard() {
                     }`,
                   }}
                 >
-                  {PERIOD_LABELS[p]}
+                  {RANGE_LABELS[p]}
                 </button>
               ))}
             </div>
@@ -1355,26 +1299,9 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              {/* ── Metrics: Sessões, Média por sessão, Frequência, Participantes únicos ── */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+              {/* ── Metrics: Frequência, Participantes únicos ── */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
                 {[
-                  {
-                    label: "Grupos conduzidos",
-                    hint: "Total de feedbacks/presenças registrados no formulário de certificado no período selecionado.",
-                    value: String(formacaoStats.totalSessions),
-                    icon: Calendar,
-                    iconColor: "#C84B31",
-                    iconBg: "rgba(200,75,49,0.1)",
-                  },
-                  {
-                    label: "Pessoas por grupo",
-                    hint: "Média de participantes por grupo conduzido no período.",
-                    value:
-                      formacaoStats.avgParticipantsPerSession.toFixed(1),
-                    icon: Users,
-                    iconColor: "#2E9E8F",
-                    iconBg: "rgba(46,158,143,0.1)",
-                  },
                   {
                     label: "Vezes que cada pessoa participou",
                     hint: "Em média, quantas vezes cada pessoa participou de grupos no período (total de presenças / participantes únicos).",
@@ -1449,55 +1376,23 @@ export default function AdminDashboard() {
                 ))}
               </div>
 
-              {/* ── Quórum do Meet ── */}
-              {quorumStats && quorumStats.gruposEstaSemana > 0 && (
-                <>
-                  <div className="mb-2 mt-2">
-                    <h3 className="font-fraunces font-semibold text-sm text-cream/60">
-                      Quórum do Meet
-                    </h3>
-                    <p className="font-dm text-[11px] text-cream/25">
-                      Presença capturada automaticamente nas reuniões do
-                      Google Meet esta semana.
-                    </p>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-                    {[
-                      {
-                        label: "Grupos realizados",
-                        value: String(quorumStats.gruposEstaSemana),
-                        icon: Calendar,
-                        iconColor: "#6c5ce7",
-                        iconBg: "rgba(108,92,231,0.1)",
-                      },
-                      {
-                        label: "Média por grupo",
-                        value: quorumStats.mediaEstaSemana.toFixed(1),
-                        icon: Users,
-                        iconColor: "#00b894",
-                        iconBg: "rgba(0,184,148,0.1)",
-                        trend: quorumStats.tendencia,
-                      },
-                      {
-                        label: "Pico da semana",
-                        value: String(quorumStats.picoEstaSemana),
-                        icon: TrendingUp,
-                        iconColor: "#fdcb6e",
-                        iconBg: "rgba(253,203,110,0.1)",
-                      },
-                      {
-                        label: "Participantes únicos",
-                        value: String(quorumStats.participantesUnicos),
-                        icon: GraduationCap,
-                        iconColor: "#e17055",
-                        iconBg: "rgba(225,112,85,0.1)",
-                      },
-                    ].map((card: StatCardSpec, i) => (
-                      <StatCard key={card.label} card={card} delay={0.7 + i * 0.06} />
-                    ))}
-                  </div>
-                </>
-              )}
+              {/* ── Atividade recente (feedbacks do /certificado) ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.7, duration: 0.4 }}
+                className="mb-6"
+              >
+                <ActivityTimeline
+                  events={syncEvents}
+                  range={dashPeriod}
+                  onRangeChange={setDashPeriod}
+                  hideRangeSelector
+                  accent="#C84B31"
+                  csvName="atividade_certificado"
+                  subtitle="Cada feedback enviado no formulário de certificação, do mais recente para o mais antigo. A janela é a mesma escolhida no topo da aba."
+                />
+              </motion.div>
 
               {/* ── Rankings: Condutores + Participantes + Activity Dist ── */}
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
@@ -2039,140 +1934,6 @@ export default function AdminDashboard() {
                 </motion.div>
               </div>
 
-              {/* ── Heatmap ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.15, duration: 0.4 }}
-                className="mb-6"
-              >
-                <Card>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Flame
-                      className="h-4 w-4"
-                      style={{ color: "#C84B31" }}
-                    />
-                    <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                      Mapa de engajamento por horário
-                    </h3>
-                  </div>
-                  {formacaoStats.heatmapData.length > 0
-                    ? (() => {
-                        const dayLabels = [
-                          "Seg",
-                          "Ter",
-                          "Qua",
-                          "Qui",
-                          "Sex",
-                        ];
-                        const horas = Array.from(
-                          new Set(
-                            formacaoStats.heatmapData.map(
-                              (h) => h.hora
-                            )
-                          )
-                        ).sort();
-                        const maxHeat = Math.max(
-                          ...formacaoStats.heatmapData.map(
-                            (h) => h.count
-                          ),
-                          1
-                        );
-
-                        const getCount = (
-                          dia: number,
-                          hora: string
-                        ) => {
-                          const found =
-                            formacaoStats.heatmapData.find(
-                              (h) =>
-                                h.dia === dia && h.hora === hora
-                            );
-                          return found ? found.count : 0;
-                        };
-
-                        return (
-                          <div className="overflow-x-auto">
-                            <div className="min-w-[400px]">
-                              <div className="flex items-center gap-1 mb-2">
-                                <div className="w-14" />
-                                {dayLabels.map((d) => (
-                                  <div
-                                    key={d}
-                                    className="flex-1 text-center font-dm text-[10px] text-cream/40 font-semibold"
-                                  >
-                                    {d}
-                                  </div>
-                                ))}
-                              </div>
-                              {horas.map((hora) => (
-                                <div
-                                  key={hora}
-                                  className="flex items-center gap-1 mb-1"
-                                >
-                                  <div className="w-14 text-right pr-2 font-dm text-[10px] text-cream/40 flex-shrink-0">
-                                    {hora}
-                                  </div>
-                                  {[1, 2, 3, 4, 5].map((dia) => {
-                                    const count = getCount(
-                                      dia,
-                                      hora
-                                    );
-                                    const intensity =
-                                      maxHeat > 0
-                                        ? count / maxHeat
-                                        : 0;
-                                    const bg =
-                                      count === 0
-                                        ? "rgba(255,255,255,0.02)"
-                                        : intensity < 0.33
-                                          ? "rgba(200,75,49,0.1)"
-                                          : intensity < 0.66
-                                            ? "rgba(200,75,49,0.3)"
-                                            : "rgba(200,75,49,0.6)";
-                                    return (
-                                      <div
-                                        key={dia}
-                                        className="flex-1 h-8 rounded-[6px] flex items-center justify-center group relative transition-all duration-200"
-                                        style={{ background: bg }}
-                                      >
-                                        {count > 0 && (
-                                          <span className="font-fraunces font-bold text-[10px] text-cream/60">
-                                            {count}
-                                          </span>
-                                        )}
-                                        <div className="absolute -top-7 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none z-10">
-                                          <div
-                                            className="px-2 py-0.5 rounded text-[9px] font-dm font-medium text-cream whitespace-nowrap"
-                                            style={{
-                                              background:
-                                                "rgba(30,30,30,0.95)",
-                                              border:
-                                                "1px solid rgba(200,75,49,0.2)",
-                                            }}
-                                          >
-                                            {dayLabels[dia - 1]}{" "}
-                                            {hora}: {count} feedback
-                                            {count !== 1 ? "s" : ""}
-                                          </div>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        );
-                      })()
-                    : (
-                      <p className="text-xs text-cream/30 text-center py-6">
-                        Sem dados
-                      </p>
-                    )}
-                </Card>
-              </motion.div>
-
               {/* ── Retention trend ── */}
               <motion.div
                 initial={{ opacity: 0, y: 12 }}
@@ -2299,37 +2060,6 @@ export default function AdminDashboard() {
                 </Card>
               </motion.div>
 
-              {/* ── Presenças registradas no período ── */}
-              <div className="grid grid-cols-1 gap-4 mb-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.25, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <FileText
-                        className="h-4 w-4"
-                        style={{ color: "#C84B31" }}
-                      />
-                      <h3 className="font-dm text-sm font-semibold text-cream/70">
-                        Presenças registradas no período
-                      </h3>
-                      <HintButton text="Quantidade de feedbacks/presenças enviados por dia no formulário de certificado." />
-                    </div>
-                    {formacaoStats.submissionsTrend.length > 0 ? (
-                      <MiniBarChart
-                        data={formacaoStats.submissionsTrend}
-                        color="#C84B31"
-                      />
-                    ) : (
-                      <p className="text-xs text-cream/30 text-center py-6">
-                        Nenhuma presença registrada no período.
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
-              </div>
             </>
           ) : (
             <div className="text-center py-12">
@@ -2484,14 +2214,33 @@ export default function AdminDashboard() {
                 </motion.div>
               )}
 
-              {/* Chart + Activity feed row */}
-              <div className="grid grid-cols-1 lg:grid-cols-3 gap-5 mb-8">
+              {/* ── Atividade recente (movimento nos cursos) ── */}
+              <motion.div
+                initial={{ opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.35, duration: 0.5 }}
+                className="mb-8"
+              >
+                <ActivityTimeline
+                  events={asyncEvents}
+                  range={asyncRange}
+                  onRangeChange={setAsyncRange}
+                  loading={asyncEventsLoading}
+                  accent="#2E9E8F"
+                  csvName="atividade_cursos"
+                  truncated={truncatedSources}
+                  subtitle="Quem chegou, quem assistiu e o que concluiu. Troque a janela para virar relatório do dia, da semana ou do histórico inteiro."
+                />
+              </motion.div>
+
+              {/* Gráficos de matrícula e conclusão */}
+              <div className="grid grid-cols-1 gap-5 mb-8">
                 {/* Charts column */}
                 <motion.div
                   initial={{ opacity: 0, y: 16 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: 0.4, duration: 0.5 }}
-                  className="lg:col-span-2 space-y-5"
+                  className="space-y-5"
                 >
                   {/* Enrollment chart */}
                   <Card>
@@ -2638,98 +2387,6 @@ export default function AdminDashboard() {
                   </Card>
                 </motion.div>
 
-                {/* Enrollment trend */}
-                {formacaoStats && formacaoStats.enrollmentTrend.length > 0 && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.45, duration: 0.4 }}
-                    className="lg:col-span-2 mb-4"
-                  >
-                    <Card>
-                      <div className="flex items-center gap-2 mb-3">
-                        <TrendingUp className="h-4 w-4" style={{ color: "#2E9E8F" }} />
-                        <h3 className="font-dm text-sm font-semibold text-cream/70">Matrículas em cursos no período</h3>
-                        <HintButton text="Novas matrículas em cursos gravados ao longo do tempo." />
-                      </div>
-                      <MiniBarChart data={formacaoStats.enrollmentTrend} color="#2E9E8F" />
-                    </Card>
-                  </motion.div>
-                )}
-
-                {/* Activity feed column */}
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.5, duration: 0.5 }}
-                >
-                  <Card>
-                    <div className="flex items-center justify-between mb-3">
-                      <h2 className="font-fraunces font-bold text-lg text-cream">
-                        Atividade recente
-                      </h2>
-                      {activityFeed.length > 0 && (
-                        <span className="font-dm text-[10px] text-cream/30">
-                          {activityFeed.length} eventos
-                        </span>
-                      )}
-                    </div>
-                    {activityFeed.length > 0 ? (
-                      <div
-                        className="space-y-1 max-h-[640px] overflow-y-auto pr-1 -mr-1"
-                        style={{
-                          scrollbarWidth: "thin",
-                          scrollbarColor: "rgba(253,251,247,0.1) transparent",
-                        }}
-                      >
-                        {activityFeed.map((event) => {
-                          const Icon = activityIcon[event.type];
-                          const color = activityColor[event.type];
-                          let description = "";
-                          if (event.type === "enrollment") {
-                            description = `${event.userName} se matriculou em ${event.courseTitle}`;
-                          } else if (event.type === "completion") {
-                            description = `${event.userName} concluiu ${event.courseTitle}`;
-                          } else if (event.type === "review") {
-                            description = `Nova avaliação ${"★".repeat(event.rating || 0)}${event.rating && event.rating < 5 ? "☆".repeat(5 - event.rating) : ""} em ${event.courseTitle}`;
-                          }
-
-                          return (
-                            <div
-                              key={event.id}
-                              className="flex items-start gap-2.5 px-2 py-2 rounded-[8px] hover:bg-white/[.02] transition-colors duration-150"
-                            >
-                              <div
-                                className="w-6 h-6 rounded-md flex items-center justify-center flex-shrink-0 mt-0.5"
-                                style={{
-                                  background: `${color}15`,
-                                }}
-                              >
-                                <Icon
-                                  className="h-3 w-3"
-                                  style={{ color }}
-                                />
-                              </div>
-                              <div className="min-w-0 flex-1">
-                                <p className="text-xs font-dm text-cream/70 leading-snug line-clamp-2">
-                                  {description}
-                                </p>
-                                <p className="text-[10px] text-cream/25 mt-0.5 flex items-center gap-1">
-                                  <Clock className="h-2.5 w-2.5" />
-                                  {relativeTime(event.timestamp)}
-                                </p>
-                              </div>
-                            </div>
-                          );
-                        })}
-                      </div>
-                    ) : (
-                      <p className="text-sm text-cream/35 text-center py-6">
-                        Nenhuma atividade recente.
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
               </div>
 
               {/* Engagement stats */}

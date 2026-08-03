@@ -16,7 +16,9 @@ export default function MiniBarChart({
   const interval = labelInterval || Math.max(1, Math.floor(data.length / 6));
 
   return (
-    <div className={`flex items-end gap-1 ${height}`}>
+    // sem items-end: com ele as colunas ficam do tamanho do conteúdo e a
+    // altura percentual das barras colapsa para o mínimo
+    <div className={`flex gap-1 ${height}`}>
       {data.map((item, idx) => {
         const h = maxCount > 0 ? (item.count / maxCount) * 100 : 0;
         const dateLabel = item.date.split("-").slice(1).join("/");
