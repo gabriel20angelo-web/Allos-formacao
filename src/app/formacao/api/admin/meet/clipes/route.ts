@@ -137,7 +137,12 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  let body: { clip_id?: string; avaliacao?: "gostei" | "rejeitado" | null; oculto?: boolean };
+  let body: {
+    clip_id?: string;
+    avaliacao?: "gostei" | "rejeitado" | null;
+    oculto?: boolean;
+    anotacao?: string;
+  };
   try {
     body = await req.json();
   } catch {
@@ -156,6 +161,7 @@ export async function PATCH(req: NextRequest) {
     campos.avaliado_por = body.avaliacao ? auth.userId : null;
   }
   if (body.oculto !== undefined) campos.oculto = body.oculto;
+  if (body.anotacao !== undefined) campos.anotacao = body.anotacao.trim() || null;
 
   if (!Object.keys(campos).length) {
     return NextResponse.json({ error: "Nada para mudar." }, { status: 400 });
@@ -165,6 +171,50 @@ export async function PATCH(req: NextRequest) {
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
   return NextResponse.json({ ok: true });
+}
+
+/**
+ * Apaga clipes.
+ *
+ * Só a nossa linha: o corte continua existindo no OpusClip, que é quem o
+ * guarda. Aqui isto é a lista de curadoria, e apagar dela é dizer "não quero
+ * mais ver", não "destrua o arquivo".
+ */
+export async function DELETE(req: NextRequest) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const sb = await createServiceRoleClient();
+  const p = req.nextUrl.searchParams;
+
+  const clipId = p.get("clip_id");
+  if (clipId) {
+    const { error } = await sb.from("formacao_clips").delete().eq("id", clipId);
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    return NextResponse.json({ ok: true, apagados: 1 });
+  }
+
+  // Faxina: tudo que foi reprovado, de uma vez. É o fim natural da curadoria —
+  // o condutor marca o que não presta, e o administrador varre.
+  if (p.get("rejeitados") === "1") {
+    const jobId = p.get("job_id");
+    let q = sb.from("formacao_clips").delete().eq("avaliacao", "rejeitado");
+    if (jobId) q = q.eq("job_id", jobId);
+    // `select()` no delete devolve as linhas removidas: é assim que se sabe
+    // quantas eram, já que o count do PostgREST não vem no delete.
+    const { data, error } = await q.select("id");
+    if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+    const n = data?.length ?? 0;
+    return NextResponse.json({
+      ok: true,
+      apagados: n,
+      aviso: `${n} ${n === 1 ? "corte reprovado apagado" : "cortes reprovados apagados"}.`,
+    });
+  }
+
+  return NextResponse.json({ error: "Informe clip_id ou rejeitados=1." }, { status: 400 });
 }
 
 export async function POST(req: NextRequest) {

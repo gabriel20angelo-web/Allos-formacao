@@ -15,7 +15,7 @@ import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
   UserSearch, Video, FileText, X, Youtube,
-  Trash2, Play, ThumbsUp, ThumbsDown, EyeOff, Copy, ChevronDown, ChevronRight,
+  Trash2, Download, Play, ThumbsUp, ThumbsDown, EyeOff, Copy, ChevronDown, ChevronRight,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -170,6 +170,7 @@ interface Clipe {
   duracao_seg: number | null;
   pontuacao: number | null;
   avaliacao: "gostei" | "rejeitado" | null;
+  anotacao: string | null;
   oculto: boolean;
 }
 interface ClipJob {
@@ -266,6 +267,7 @@ export default function MeetAdminPage() {
   const [filtroClipes, setFiltroClipes] = useState<"novos" | "gostei" | "todos">("novos");
   const [assistindo, setAssistindo] = useState<Clipe | null>(null);
   const [atalhos, setAtalhos] = useState<Record<string, string>>({});
+  const [anotacao, setAnotacao] = useState("");
 
   const carregarClipes = useCallback(async () => {
     const j = await pegarJson<{ jobs?: ClipJob[]; configurado?: boolean; error?: string }>(
@@ -658,6 +660,43 @@ export default function MeetAdminPage() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Não consegui salvar");
       await carregarClipes();
+    }
+  }
+
+  async function salvarAnotacao(c: Clipe) {
+    if ((c.anotacao || "") === anotacao) return;
+    setClipJobs((jobs) =>
+      jobs.map((j) => ({
+        ...j,
+        clipes: j.clipes.map((x) => (x.id === c.id ? { ...x, anotacao } : x)),
+      }))
+    );
+    try {
+      await fetch("/formacao/api/admin/meet/clipes", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ clip_id: c.id, anotacao }),
+      });
+    } catch {
+      toast.error("Não consegui salvar a anotação.");
+    }
+  }
+
+  async function apagarReprovados(jobId: string) {
+    if (!confirm("Apagar todos os cortes reprovados deste vídeo?\n\nIsto não tem volta.")) return;
+    setTrabalhando(jobId + "limpar");
+    try {
+      const r = await fetch(
+        `/formacao/api/admin/meet/clipes?rejeitados=1&job_id=${jobId}`,
+        { method: "DELETE" }
+      );
+      const j = await lerResposta(r);
+      toast.success((j.aviso as string) || "Limpo.");
+      await carregarClipes();
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
     }
   }
 
@@ -2370,15 +2409,33 @@ export default function MeetAdminPage() {
 
                           {(() => {
                             const bons = j.clipes.filter((c) => c.avaliacao === "gostei").length;
+                            const ruins = j.clipes.filter(
+                              (c) => c.avaliacao === "rejeitado"
+                            ).length;
                             const novos = j.clipes.filter(
                               (c) => !c.avaliacao && !c.oculto
                             ).length;
                             return (
-                              <span className="text-[11px] text-cream/30">
-                                {bons > 0 && `${bons} aprovado${bons > 1 ? "s" : ""}`}
-                                {bons > 0 && novos > 0 && " · "}
-                                {novos > 0 && `${novos} por ver`}
-                              </span>
+                              <>
+                                <span className="text-[11px] text-cream/30">
+                                  {bons > 0 && `${bons} aprovado${bons > 1 ? "s" : ""}`}
+                                  {bons > 0 && novos > 0 && " · "}
+                                  {novos > 0 && `${novos} por ver`}
+                                </span>
+                                {/* A faxina fecha o ciclo da curadoria: alguém
+                                    marcou o que não presta, e isto varre. */}
+                                {ruins > 0 && (
+                                  <button
+                                    onClick={() => apagarReprovados(j.id)}
+                                    disabled={trabalhando === j.id + "limpar"}
+                                    className="text-[11px] text-cream/30 hover:text-amber-400 ml-auto disabled:opacity-40"
+                                  >
+                                    {trabalhando === j.id + "limpar"
+                                      ? "apagando"
+                                      : `apagar os ${ruins} reprovados`}
+                                  </button>
+                                )}
+                              </>
                             );
                           })()}
                         </div>
@@ -2410,6 +2467,17 @@ export default function MeetAdminPage() {
                                 </button>
                               ))}
                             </div>
+
+                            {/* O que olhar antes de aprovar. Quem avalia
+                                quarenta cortes cansa e passa a julgar pela
+                                miniatura, e é aí que entra um corte que soa
+                                bem e diz o contrário do que foi dito. */}
+                            <p className="text-[11px] text-cream/35 mb-2 leading-relaxed">
+                              Ouça antes de aprovar: o que decide é o que está sendo dito, não a
+                              imagem. Repare se o corte não começa no meio de uma ressalva nem
+                              termina antes dela. O mesmo corte serve em pé e deitado, então o
+                              formato não é motivo para reprovar.
+                            </p>
 
                             <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
                               {j.clipes
@@ -2707,9 +2775,22 @@ export default function MeetAdminPage() {
                 <p className="text-xs text-cream/30 mt-1">{assistindo.hashtags.join(" ")}</p>
               ) : null}
 
+              {/* "Não presta" sem motivo não ensina nada a quem faz a
+                  curadoria depois. Aqui é onde vira critério. */}
+              <textarea
+                value={anotacao}
+                onChange={(ev) => setAnotacao(ev.target.value)}
+                onBlur={() => salvarAnotacao(assistindo)}
+                placeholder="Por que presta, ou por que não. Ex: cortou no meio da ressalva."
+                rows={2}
+                className="w-full mt-3 px-2.5 py-2 rounded-lg text-xs resize-none"
+                style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#FDFBF7" }}
+              />
+
               <div className="flex items-center gap-2 mt-3">
                 <button
                   onClick={() => {
+                    salvarAnotacao(assistindo);
                     avaliarClipe(assistindo, "gostei");
                     setAssistindo(null);
                   }}
@@ -2720,6 +2801,7 @@ export default function MeetAdminPage() {
                 </button>
                 <button
                   onClick={() => {
+                    salvarAnotacao(assistindo);
                     avaliarClipe(assistindo, "rejeitado");
                     setAssistindo(null);
                   }}
@@ -2728,8 +2810,18 @@ export default function MeetAdminPage() {
                 >
                   <ThumbsDown className="h-3.5 w-3.5" /> Não presta
                 </button>
+                <a
+                  href={`/formacao/api/admin/meet/clipes/baixar?clip_id=${assistindo.id}`}
+                  title="Baixar o arquivo"
+                  className="p-1.5 rounded-lg text-cream/40"
+                >
+                  <Download className="h-4 w-4" />
+                </a>
                 <button
-                  onClick={() => setAssistindo(null)}
+                  onClick={() => {
+                    salvarAnotacao(assistindo);
+                    setAssistindo(null);
+                  }}
                   className="ml-auto p-1.5 rounded-lg text-cream/40"
                 >
                   <X className="h-4 w-4" />
@@ -2860,6 +2952,14 @@ function ClipeCard({
           >
             <Copy className="h-3.5 w-3.5" />
           </button>
+          <a
+            href={`/formacao/api/admin/meet/clipes/baixar?clip_id=${c.id}`}
+            title="Baixar o arquivo"
+            className="p-1.5 rounded-lg text-cream/30 inline-flex"
+            style={{ background: "rgba(255,255,255,0.03)" }}
+          >
+            <Download className="h-3.5 w-3.5" />
+          </a>
           <button
             onClick={aoOcultar}
             title="Esconder da lista"
