@@ -6,6 +6,7 @@
 // continua registrado e o erro fica escrito ao lado dele.
 
 import { extrairIdDaPasta, moverArquivo, nomeDoArquivo } from "./drive";
+import { garantirPastaDoGrupo } from "./pastas";
 import { MeetApiError } from "./client";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
@@ -63,7 +64,24 @@ export async function arquivarGravacoes(sb: Sb): Promise<ResultadoArquivamento> 
   );
 
   for (const e of encontros as EncontroRow[]) {
-    const pasta = pastaPorSpace.get(e.space_name) || pastaPadrao;
+    let pasta = pastaPorSpace.get(e.space_name) || null;
+
+    // Sala sem pasta própria ganha a dela agora. Cobre as criadas antes desta
+    // funcionalidade e as que falharam ao criar no momento do cadastro.
+    if (!pasta && pastaPadrao) {
+      try {
+        const criada = await garantirPastaDoGrupo(sb, e.space_name);
+        if (criada) {
+          pasta = criada.id;
+          pastaPorSpace.set(e.space_name, criada.id);
+        }
+      } catch (err) {
+        res.erros.push(
+          `Pasta de ${e.atividade_nome || e.space_name}: ${err instanceof Error ? err.message : String(err)}`
+        );
+      }
+    }
+
     if (!pasta) {
       res.sem_pasta++;
       continue;

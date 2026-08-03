@@ -13,7 +13,8 @@ import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
-  Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
+  FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
+  UserSearch, Video, FileText, X,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -41,6 +42,7 @@ interface SpaceRow {
   access_type: "OPEN" | "TRUSTED" | "RESTRICTED";
   janela_automatica: boolean;
   duracao_min: number | null;
+  pasta_drive_url: string | null;
   ativo: boolean;
 }
 interface Excecao {
@@ -490,6 +492,30 @@ export default function MeetAdminPage() {
     }
   }
 
+  async function criarPastaDoGrupo(space: SpaceRow) {
+    setTrabalhando(space.space_name + "pasta");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/pasta", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name }),
+      });
+      const j = await lerResposta(r);
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name
+            ? { ...s, pasta_drive_url: (j.pasta_url as string) || null }
+            : s
+        )
+      );
+      toast.success(j.criada ? "Pasta do grupo criada no Drive." : "Pasta já existia.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao criar a pasta");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
   async function salvarDuracao(space: SpaceRow, minutos: number | null) {
     setTrabalhando(space.space_name + "duracao");
     try {
@@ -881,15 +907,37 @@ export default function MeetAdminPage() {
                       {slot.atividade_nome || "Sem atividade definida"}
                     </p>
                     {space?.meeting_uri && (
-                      <a
-                        href={space.meeting_uri}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1 text-xs mt-1.5"
-                        style={{ color: ROXO }}
-                      >
-                        <Link2 className="h-3 w-3" /> {space.meeting_code}
-                      </a>
+                      <div className="flex items-center gap-3 flex-wrap mt-1.5">
+                        <a
+                          href={space.meeting_uri}
+                          target="_blank"
+                          rel="noreferrer"
+                          className="inline-flex items-center gap-1 text-xs"
+                          style={{ color: ROXO }}
+                        >
+                          <Link2 className="h-3 w-3" /> {space.meeting_code}
+                        </a>
+                        {space.pasta_drive_url ? (
+                          <a
+                            href={space.pasta_drive_url}
+                            target="_blank"
+                            rel="noreferrer"
+                            title="Pasta deste grupo no Drive, onde caem as gravações e transcrições."
+                            className="inline-flex items-center gap-1 text-xs text-cream/40 hover:text-cream/70"
+                          >
+                            <FolderOpen className="h-3 w-3" /> pasta
+                          </a>
+                        ) : (
+                          <button
+                            onClick={() => criarPastaDoGrupo(space)}
+                            disabled={trabalhando === space.space_name + "pasta"}
+                            title="Cria a pasta deste grupo dentro da pasta raiz definida no Diagnóstico."
+                            className="inline-flex items-center gap-1 text-xs text-cream/30 hover:text-cream/60 disabled:opacity-40"
+                          >
+                            <FolderPlus className="h-3 w-3" /> criar pasta
+                          </button>
+                        )}
+                      </div>
                     )}
                   </div>
 

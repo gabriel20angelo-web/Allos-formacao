@@ -109,6 +109,78 @@ export async function moverArquivo(
   });
 }
 
+const MIME_PASTA = "application/vnd.google-apps.folder";
+
+/**
+ * Procura uma subpasta pelo nome exato dentro de um pai.
+ *
+ * Serve para não criar "Terça 19h" três vezes: se alguém já criou a pasta à
+ * mão, ou se uma rodada anterior criou e falhou ao salvar o identificador, a
+ * próxima reaproveita em vez de duplicar.
+ */
+export async function acharSubpasta(
+  nome: string,
+  paiId: string
+): Promise<{ id: string; name: string } | null> {
+  // Aspas simples delimitam o valor na consulta do Drive, então aspas dentro do
+  // nome precisam ser escapadas ou a consulta inteira quebra.
+  const seguro = nome.replace(/\\/g, "\\\\").replace(/'/g, "\\'");
+  const q = `mimeType='${MIME_PASTA}' and name='${seguro}' and '${paiId}' in parents and trashed=false`;
+
+  const resp = await driveFetch<{ files?: { id: string; name: string }[] }>(
+    `/files?q=${encodeURIComponent(q)}&fields=files(id,name)&pageSize=5` +
+      `&supportsAllDrives=true&includeItemsFromAllDrives=true`
+  );
+  return resp.files?.[0] || null;
+}
+
+export async function criarSubpasta(
+  nome: string,
+  paiId: string
+): Promise<{ id: string; name: string }> {
+  return driveFetch<{ id: string; name: string }>(`/files?supportsAllDrives=true&fields=id,name`, {
+    method: "POST",
+    body: JSON.stringify({ name: nome, mimeType: MIME_PASTA, parents: [paiId] }),
+  });
+}
+
+/** Acha ou cria, nessa ordem. Duas rodadas do cron não podem gerar duas pastas. */
+export async function garantirSubpasta(
+  nome: string,
+  paiId: string
+): Promise<{ id: string; name: string }> {
+  const existente = await acharSubpasta(nome, paiId);
+  if (existente) return existente;
+  return criarSubpasta(nome, paiId);
+}
+
+export function urlDaPasta(id: string): string {
+  return `https://drive.google.com/drive/folders/${id}`;
+}
+
+/**
+ * Nome da pasta de um grupo.
+ *
+ * Dia e hora primeiro porque é o que identifica o grupo de forma estável: a
+ * atividade pode ser renomeada, o horário não muda sem virar outro grupo.
+ */
+export function nomeDaPastaDoGrupo(
+  diaSemana: number | null,
+  hora: string | null,
+  atividade: string | null,
+  rotulo: string | null
+): string {
+  const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta", "Sábado", "Domingo"];
+  const limpa = (s: string) => s.replace(/[\\/:*?"<>|]/g, "-").trim();
+
+  if (diaSemana === null) return limpa(rotulo || "Sala avulsa").slice(0, 80);
+
+  const partes = [DIAS[diaSemana] || `Dia ${diaSemana}`];
+  if (hora) partes.push(hora);
+  if (atividade) partes.push(limpa(atividade));
+  return partes.join(" ").slice(0, 80);
+}
+
 /** Nome que se entende olhando a pasta seis meses depois. */
 export function nomeDoArquivo(
   data: string,

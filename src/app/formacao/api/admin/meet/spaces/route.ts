@@ -13,6 +13,7 @@ import {
   MeetApiError,
 } from "@/lib/meet/client";
 import type { AccessType } from "@/lib/meet/types";
+import { garantirPastaDoGrupo } from "@/lib/meet/pastas";
 
 export const dynamic = "force-dynamic";
 
@@ -101,6 +102,16 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // Pasta própria do grupo, criada junto com a sala. Se falhar aqui (Drive
+    // indisponível, permissão ainda não concedida), a primeira gravação tenta
+    // de novo: melhor a sala existir sem pasta do que não existir.
+    let pasta: { url: string } | null = null;
+    try {
+      pasta = await garantirPastaDoGrupo(sb, space.name);
+    } catch (e) {
+      console.warn("[meet/spaces] pasta do grupo", e);
+    }
+
     // O link do slot passa a ser o da sala nova, senão o grupo continua entrando
     // na sala antiga e o quórum não captura nada. Sala avulsa não tem slot.
     if (body.slot_id) {
@@ -110,7 +121,7 @@ export async function POST(req: NextRequest) {
         .eq("id", body.slot_id);
     }
 
-    return NextResponse.json({ ok: true, space: data });
+    return NextResponse.json({ ok: true, space: data, pasta_url: pasta?.url || null });
   } catch (e) {
     const msg = e instanceof MeetApiError ? e.message : String(e);
     const detalhe = e instanceof MeetApiError ? e.body : undefined;
