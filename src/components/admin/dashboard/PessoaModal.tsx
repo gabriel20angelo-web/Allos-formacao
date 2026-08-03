@@ -13,8 +13,11 @@ import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
 import ActivityTimeline from "./ActivityTimeline";
 import { detectarSinais, type Sinal } from "@/lib/utils/suspeita";
+import { formatDuration, getUsageTotals } from "@/lib/queries/usage";
 import type { ActivityRange, TimelineEvent } from "@/lib/utils/activity";
-import { AlertTriangle, Mail, UserCircle } from "lucide-react";
+import { AlertTriangle, Download, Mail, UserCircle } from "lucide-react";
+import { hourLabel } from "@/lib/utils/activity";
+import { TYPE_META } from "./ActivityTimeline";
 
 export interface PessoaRef {
   nome: string;
@@ -35,6 +38,9 @@ interface Dossie {
     aulas: number;
     feedbacks: number;
     horasSincronas: number;
+    /** Permanência ativa medida na plataforma (migration 042). */
+    tempoUsoSegundos: number;
+    diasComAcesso: number;
   };
   sinais: Sinal[];
 }
@@ -254,6 +260,12 @@ export default function PessoaModal({
       )
     );
 
+    // Tempo real de permanência: só existe para quem usou a plataforma depois
+    // de o rastreio entrar no ar, então zero aqui não quer dizer ausência.
+    const uso = userId
+      ? await getUsageTotals(userId)
+      : { totalSeconds: 0, sessions: 0, firstAt: null, lastAt: null, byDay: [] };
+
     const horasSincronas = subs.reduce(
       (soma, s) =>
         soma + (horasPorAtividade.get((s.atividade_nome || "").toLowerCase()) ?? 2),
@@ -274,6 +286,8 @@ export default function PessoaModal({
         aulas: aulas.length,
         feedbacks: subs.length,
         horasSincronas,
+        tempoUsoSegundos: uso.totalSeconds,
+        diasComAcesso: uso.byDay.length,
       },
       sinais: detectarSinais(eventos),
     });
@@ -284,6 +298,92 @@ export default function PessoaModal({
     if (pessoa) carregar(pessoa);
   }, [pessoa, carregar]);
 
+  /**
+   * CSV do dossiê inteiro, em blocos: identidade, resumo, sinais e o histórico
+   * completo. É o documento que se manda para a própria pessoa quando ela pede
+   * explicação — por isso sai tudo, não só a tela.
+   */
+  function baixarDossie() {
+    if (!dossie) return;
+    const esc = (v: string | number | undefined) =>
+      `"${String(v ?? "").replace(/"/g, '""').replace(/\r?\n/g, " ")}"`;
+    const linhas: string[] = [];
+
+    linhas.push("=== PESSOA ===");
+    linhas.push(`Nome,${esc(dossie.nome)}`);
+    linhas.push(`E-mail,${esc(dossie.email || "")}`);
+    linhas.push(`Papel,${esc(dossie.papel || "")}`);
+    linhas.push(
+      `Membro desde,${esc(
+        dossie.membroDesde
+          ? new Date(dossie.membroDesde).toLocaleDateString("pt-BR")
+          : ""
+      )}`
+    );
+    if (dossie.aliases.length > 0) {
+      linhas.push(`Outros nomes usados,${esc(dossie.aliases.join(" / "))}`);
+    }
+    linhas.push(
+      `Emitido em,${esc(new Date().toLocaleString("pt-BR"))}`
+    );
+
+    linhas.push("");
+    linhas.push("=== RESUMO ===");
+    linhas.push(`Matrículas,${dossie.resumo.matriculas}`);
+    linhas.push(`Cursos concluídos,${dossie.resumo.concluidos}`);
+    linhas.push(`Certificados de curso,${dossie.resumo.certificados}`);
+    linhas.push(`Aulas concluídas,${dossie.resumo.aulas}`);
+    linhas.push(`Feedbacks de certificação,${dossie.resumo.feedbacks}`);
+    linhas.push(`Horas síncronas declaradas,${dossie.resumo.horasSincronas}`);
+    linhas.push(
+      `Tempo de permanência na plataforma,${esc(formatDuration(dossie.resumo.tempoUsoSegundos))}`
+    );
+    linhas.push(`Dias com acesso registrado,${dossie.resumo.diasComAcesso}`);
+
+    if (dossie.sinais.length > 0) {
+      linhas.push("");
+      linhas.push("=== SINAIS DE ATENÇÃO ===");
+      linhas.push("Data,Ocorrência,Detalhe");
+      dossie.sinais.forEach((s) => {
+        const [y, m, d] = s.dia.split("-");
+        linhas.push(
+          [`${d}/${m}/${y}`, esc(s.titulo), esc(s.detalhe)].join(",")
+        );
+      });
+    }
+
+    linhas.push("");
+    linhas.push("=== ATIVIDADE COMPLETA ===");
+    linhas.push("Data,Hora,Tipo,Referência,Contexto,Texto,Nota");
+    dossie.eventos.forEach((e) => {
+      const d = new Date(e.timestamp);
+      linhas.push(
+        [
+          d.toLocaleDateString("pt-BR"),
+          hourLabel(e.timestamp),
+          esc(TYPE_META[e.type].label),
+          esc(e.title),
+          esc(e.detail || ""),
+          esc(e.body || ""),
+          e.score !== undefined ? `${e.score}${e.scoreSuffix || ""}` : "",
+        ].join(",")
+      );
+    });
+
+    const nomeArquivo = (dossie.email || dossie.nome)
+      .split("@")[0]
+      .replace(/[^a-zA-Z0-9]+/g, "_");
+    const blob = new Blob(["﻿" + linhas.join("\n")], {
+      type: "text/csv;charset=utf-8;",
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `dossie_${nomeArquivo}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const resumoItens = dossie
     ? [
         { label: "Matrículas", valor: dossie.resumo.matriculas },
@@ -292,6 +392,14 @@ export default function PessoaModal({
         { label: "Aulas concluídas", valor: dossie.resumo.aulas },
         { label: "Feedbacks enviados", valor: dossie.resumo.feedbacks },
         { label: "Horas síncronas", valor: `${dossie.resumo.horasSincronas}h` },
+        {
+          label: "Tempo na plataforma",
+          valor: formatDuration(dossie.resumo.tempoUsoSegundos),
+        },
+        {
+          label: "Dias com acesso",
+          valor: dossie.resumo.diasComAcesso,
+        },
       ]
     : [];
 
@@ -333,6 +441,19 @@ export default function PessoaModal({
                 })}
               </span>
             )}
+            <div className="flex-1" />
+            <button
+              onClick={baixarDossie}
+              className="font-dm text-[11px] px-2.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all hover:bg-white/[.05]"
+              style={{
+                color: "rgba(253,251,247,0.6)",
+                border: "1px solid rgba(255,255,255,0.1)",
+              }}
+              title="Baixar identidade, resumo, sinais e histórico completo"
+            >
+              <Download className="h-3 w-3" />
+              Baixar dossiê (CSV)
+            </button>
           </div>
 
           {dossie.aliases.length > 0 && (

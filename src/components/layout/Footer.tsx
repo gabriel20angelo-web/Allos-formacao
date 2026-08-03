@@ -51,6 +51,10 @@ export default function Footer() {
               <a href="https://allos.org.br/sobre" target="_blank" rel="noopener noreferrer" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors">Sobre a Allos</a>
               <a href="https://allos.org.br/faq" target="_blank" rel="noopener noreferrer" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors">FAQ</a>
               <a href="https://allos.org.br/clinica" target="_blank" rel="noopener noreferrer" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors">Clínica Social</a>
+              <Link href="/termos" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors">Termos de uso</Link>
+              <Link href="/cookies" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors">Política de cookies</Link>
+              {/* O comportamento é ligado por outro módulo através do seletor [data-cookie-prefs]. */}
+              <button type="button" data-cookie-prefs="" className="font-dm text-[rgba(253,251,247,.5)] text-sm hover:text-[#FDFBF7] transition-colors text-left bg-transparent border-0 p-0 cursor-pointer">Preferências de cookies</button>
             </nav>
           </div>
         </div>

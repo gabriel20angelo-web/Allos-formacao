@@ -2,6 +2,8 @@ import Sidebar from "@/components/layout/Sidebar";
 import TopBar from "@/components/layout/TopBar";
 import SidebarOffset from "@/components/layout/SidebarOffset";
 import FloatingQuestionButton from "@/components/ui/FloatingQuestionButton";
+import UsageTracker from "@/components/layout/UsageTracker";
+import AceiteTermos from "@/components/legal/AceiteTermos";
 import type { Metadata } from "next";
 
 // Sem force-dynamic: Sidebar/TopBar são client components e leem auth no
@@ -44,6 +46,8 @@ export default function FormacaoLayout({
         <main className="min-h-screen pb-20 md:pb-0">{children}</main>
       </SidebarOffset>
       <FloatingQuestionButton />
+      <UsageTracker />
+      <AceiteTermos />
     </>
   );
 }

@@ -10,6 +10,7 @@ import { toast } from "sonner";
 import { jsPDF } from "jspdf";
 import { Award, Download } from "lucide-react";
 import type { Certificate, Course } from "@/types";
+import CertificadoRetido, { type ReviewInfo } from "@/components/course/CertificadoRetido";
 
 function formatDatePtBR(dateStr: string) {
   const months = [
@@ -49,6 +50,8 @@ export default function CertificadoPage() {
   const slug = params.slug as string;
   const { user, profile } = useAuth();
   const [certificate, setCertificate] = useState<Certificate | null>(null);
+  // Caso de certificado retido para verificação (Termos de Uso, 8.5)
+  const [review, setReview] = useState<ReviewInfo | null>(null);
   const [course, setCourse] = useState<Course | null>(null);
   const [extraHours, setExtraHours] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -465,6 +468,11 @@ export default function CertificadoPage() {
         body: JSON.stringify({ course_id: course.id }),
       });
       const payload = await res.json().catch(() => ({}));
+      // 202 = retido para verificação (Termos de Uso, 8.5), não é erro
+      if (res.status === 202 && payload?.retido) {
+        setReview(payload.review as ReviewInfo);
+        return;
+      }
       if (!res.ok) {
         toast.error(payload?.error || "Erro ao gerar certificado.");
         return;
@@ -485,6 +493,18 @@ export default function CertificadoPage() {
         <Skeleton className="h-10 w-1/2" />
         <Skeleton className="h-64 w-full" />
       </div>
+    );
+  }
+
+  // Retido para verificação: nada de tela de emissão enquanto isso.
+  if (review && review.status !== "aprovado" && course) {
+    return (
+      <CertificadoRetido
+        review={review}
+        courseId={course.id}
+        courseSlug={slug}
+        onAtualizar={setReview}
+      />
     );
   }
 

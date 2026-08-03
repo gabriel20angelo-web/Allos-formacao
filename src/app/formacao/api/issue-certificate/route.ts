@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
 import { generateCertificateCode } from "@/lib/utils/certificate";
+import { auditarCargaHoraria } from "@/lib/certificados/auditoria";
 
 export const dynamic = "force-dynamic";
 
@@ -92,6 +93,42 @@ export async function POST(req: NextRequest) {
         { error: "Você precisa ser aprovado na prova antes" },
         { status: 403 },
       );
+    }
+  }
+
+  // ── Auditoria de carga horária (Termos de Uso, 8.4 e 8.5) ──
+  // Um caso já em análise não volta a emitir sozinho: quem decide é a pessoa
+  // que respondeu no painel.
+  const { data: reviewExistente } = await sb
+    .from("certificate_reviews")
+    .select("id, status, motivo, explicacao, resposta, created_at")
+    .eq("user_id", user.id)
+    .eq("course_id", courseId)
+    .maybeSingle();
+
+  if (reviewExistente && reviewExistente.status !== "aprovado") {
+    return NextResponse.json(
+      { retido: true, review: reviewExistente },
+      { status: 202 }
+    );
+  }
+
+  if (!reviewExistente) {
+    const auditoria = await auditarCargaHoraria(sb, user.id, courseId);
+    if (auditoria.reter) {
+      const { data: review } = await sb
+        .from("certificate_reviews")
+        .insert({
+          user_id: user.id,
+          course_id: courseId,
+          status: "retido",
+          motivo: auditoria.motivo,
+          segundos_registrados: auditoria.segundosRegistrados,
+          minutos_conteudo: auditoria.minutosConteudo,
+        })
+        .select("id, status, motivo, explicacao, resposta, created_at")
+        .single();
+      return NextResponse.json({ retido: true, review }, { status: 202 });
     }
   }
 

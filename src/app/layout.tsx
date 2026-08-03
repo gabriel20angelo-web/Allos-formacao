@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import { Playfair_Display, Inter } from "next/font/google";
 import { Toaster } from "sonner";
 import { AuthProvider } from "@/hooks/useAuth";
+import CookieConsent from "@/components/legal/CookieConsent";
 import "@/styles/globals.css";
 
 const playfair = Playfair_Display({
@@ -69,6 +70,7 @@ export default function RootLayout({
               },
             }}
           />
+          <CookieConsent />
         </AuthProvider>
       </body>
     </html>
