@@ -62,6 +62,34 @@ export class MeetApiError extends Error {
   }
 }
 
+/**
+ * Converte a recusa do Google em instrução acionável.
+ *
+ * "Meet API 403" não diz a ninguém o que fazer. As três recusas abaixo são as
+ * que aparecem de verdade ao ligar o módulo, e todas se resolvem com um clique
+ * em algum lugar específico do console ou do admin do Workspace.
+ */
+function traduzirErro(status: number, body: string): string {
+  const texto = body.toLowerCase();
+
+  if (status === 403 && texto.includes("has not been used in project")) {
+    const projeto = body.match(/project (\d+)/)?.[1];
+    return projeto
+      ? `A Google Meet API não está ativada no projeto ${projeto}. Ative em console.developers.google.com/apis/api/meet.googleapis.com/overview?project=${projeto} e tente de novo em um minuto.`
+      : "A Google Meet API não está ativada neste projeto do Google Cloud.";
+  }
+  if (status === 403 && texto.includes("insufficient")) {
+    return "A conta autorizada não tem permissão suficiente. Autorize de novo em Autorizar conta do Google, conferindo se é a conta do Workspace da Allos.";
+  }
+  if (status === 401) {
+    return "O acesso ao Google expirou ou foi revogado. Clique em Autorizar conta do Google de novo.";
+  }
+  if (status === 429) {
+    return "O Google recusou por excesso de chamadas. Espere alguns minutos e tente de novo.";
+  }
+  return `O Google recusou a operação (código ${status}).`;
+}
+
 let tokenCache: { token: string; expiraEm: number } | null = null;
 
 interface CredenciaisRow {
@@ -162,11 +190,7 @@ async function meetFetch<T>(
 
   if (!resp.ok) {
     const body = await resp.text();
-    throw new MeetApiError(
-      `Meet API ${resp.status} em ${path}`,
-      resp.status,
-      body.slice(0, 500)
-    );
+    throw new MeetApiError(traduzirErro(resp.status, body), resp.status, body.slice(0, 500));
   }
 
   if (resp.status === 204) return {} as T;

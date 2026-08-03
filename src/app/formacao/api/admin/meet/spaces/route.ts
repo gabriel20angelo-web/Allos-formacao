@@ -101,7 +101,7 @@ export async function POST(req: NextRequest) {
     const msg = e instanceof MeetApiError ? e.message : String(e);
     const detalhe = e instanceof MeetApiError ? e.body : undefined;
     console.error("[meet/spaces] criar", msg, detalhe);
-    return NextResponse.json({ error: msg, detalhe }, { status: 502 });
+    return NextResponse.json({ error: msg, detalhe }, { status: 400 });
   }
 }
 
@@ -149,7 +149,7 @@ export async function PATCH(req: NextRequest) {
       await atualizarAcesso(body.space_name, body.access_type);
     } catch (e) {
       const msg = e instanceof MeetApiError ? e.message : String(e);
-      return NextResponse.json({ error: msg }, { status: 502 });
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
   }
 
@@ -167,7 +167,7 @@ export async function PATCH(req: NextRequest) {
       await atualizarArtefatos(body.space_name, artefatos);
     } catch (e) {
       const msg = e instanceof MeetApiError ? e.message : String(e);
-      return NextResponse.json({ error: msg }, { status: 502 });
+      return NextResponse.json({ error: msg }, { status: 400 });
     }
   }
 
