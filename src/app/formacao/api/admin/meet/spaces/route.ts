@@ -6,7 +6,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { atualizarArtefatos, criarSpace, MeetApiError } from "@/lib/meet/client";
+import {
+  atualizarAcesso,
+  atualizarArtefatos,
+  criarSpace,
+  MeetApiError,
+} from "@/lib/meet/client";
+import type { AccessType } from "@/lib/meet/types";
 
 export const dynamic = "force-dynamic";
 
@@ -104,7 +110,14 @@ export async function PATCH(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  let body: { space_name?: string; gravar?: boolean; transcrever?: boolean; notas?: boolean; ativo?: boolean };
+  let body: {
+    space_name?: string;
+    gravar?: boolean;
+    transcrever?: boolean;
+    notas?: boolean;
+    ativo?: boolean;
+    access_type?: AccessType;
+  };
   try {
     body = await req.json();
   } catch {
@@ -117,12 +130,26 @@ export async function PATCH(req: NextRequest) {
   const sb = await createServiceRoleClient();
   const { data: atual } = await sb
     .from("formacao_meet_spaces")
-    .select("gravar, transcrever, notas")
+    .select("gravar, transcrever, notas, access_type")
     .eq("space_name", body.space_name)
     .maybeSingle();
 
   if (!atual) {
     return NextResponse.json({ error: "Sala não encontrada" }, { status: 404 });
+  }
+
+  // Acesso e artefatos são dois updateMask diferentes na API, então viram duas
+  // chamadas. Só mexe no acesso quem pediu explicitamente.
+  if (body.access_type && body.access_type !== atual.access_type) {
+    if (!["OPEN", "TRUSTED", "RESTRICTED"].includes(body.access_type)) {
+      return NextResponse.json({ error: "access_type inválido" }, { status: 400 });
+    }
+    try {
+      await atualizarAcesso(body.space_name, body.access_type);
+    } catch (e) {
+      const msg = e instanceof MeetApiError ? e.message : String(e);
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
   }
 
   const artefatos = {
@@ -131,20 +158,33 @@ export async function PATCH(req: NextRequest) {
     notas: body.notas ?? atual.notas,
   };
 
-  try {
-    await atualizarArtefatos(body.space_name, artefatos);
-  } catch (e) {
-    const msg = e instanceof MeetApiError ? e.message : String(e);
-    return NextResponse.json({ error: msg }, { status: 502 });
+  const mexeuEmArtefato =
+    body.gravar !== undefined || body.transcrever !== undefined || body.notas !== undefined;
+
+  if (mexeuEmArtefato) {
+    try {
+      await atualizarArtefatos(body.space_name, artefatos);
+    } catch (e) {
+      const msg = e instanceof MeetApiError ? e.message : String(e);
+      return NextResponse.json({ error: msg }, { status: 502 });
+    }
   }
 
   const { error } = await sb
     .from("formacao_meet_spaces")
-    .update({ ...artefatos, ...(body.ativo !== undefined ? { ativo: body.ativo } : {}) })
+    .update({
+      ...artefatos,
+      ...(body.access_type ? { access_type: body.access_type } : {}),
+      ...(body.ativo !== undefined ? { ativo: body.ativo } : {}),
+    })
     .eq("space_name", body.space_name);
 
   if (error) {
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
-  return NextResponse.json({ ok: true, ...artefatos });
+  return NextResponse.json({
+    ok: true,
+    ...artefatos,
+    access_type: body.access_type ?? atual.access_type,
+  });
 }

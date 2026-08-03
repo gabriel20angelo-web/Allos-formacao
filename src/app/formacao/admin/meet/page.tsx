@@ -12,8 +12,8 @@ import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { toast } from "sonner";
 import {
-  AlertTriangle, CalendarClock, CheckCircle2, Link2, Loader2, Mic,
-  RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
+  AlertTriangle, CalendarClock, CheckCircle2, DoorClosed, DoorOpen, Link2,
+  Loader2, Mic, RefreshCw, ShieldCheck, UserSearch, Video, FileText, X,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -37,6 +37,7 @@ interface SpaceRow {
   gravar: boolean;
   transcrever: boolean;
   notas: boolean;
+  access_type: "OPEN" | "TRUSTED" | "RESTRICTED";
   ativo: boolean;
 }
 interface Excecao {
@@ -158,6 +159,34 @@ export default function MeetAdminPage() {
       await carregar();
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro ao criar sala");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  async function alternarAcesso(space: SpaceRow) {
+    const novo = space.access_type === "OPEN" ? "TRUSTED" : "OPEN";
+    setTrabalhando(space.space_name + "acesso");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/spaces", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ space_name: space.space_name, access_type: novo }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Falhou");
+      setSpaces((atual) =>
+        atual.map((s) =>
+          s.space_name === space.space_name ? { ...s, access_type: novo } : s
+        )
+      );
+      toast.success(
+        novo === "OPEN"
+          ? "Entrada livre: ninguém precisa ser admitido."
+          : "Só gente do domínio entra direto; o resto bate à porta."
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro ao alterar acesso");
     } finally {
       setTrabalhando(null);
     }
@@ -425,6 +454,31 @@ export default function MeetAdminPage() {
                           <Icone className="h-3 w-3" /> {label}
                         </button>
                       ))}
+                      <button
+                        onClick={() => alternarAcesso(space)}
+                        disabled={trabalhando === space.space_name + "acesso"}
+                        title={
+                          space.access_type === "OPEN"
+                            ? "Qualquer pessoa com o link entra direto, sem ninguém admitir."
+                            : "Quem é de fora do domínio precisa ser admitido. Clique para reabrir."
+                        }
+                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
+                        style={{
+                          background:
+                            space.access_type === "OPEN"
+                              ? "rgba(34,197,94,0.12)"
+                              : "rgba(245,158,11,0.12)",
+                          color: space.access_type === "OPEN" ? "#22C55E" : "#F59E0B",
+                          border: `1px solid ${space.access_type === "OPEN" ? "rgba(34,197,94,0.3)" : "rgba(245,158,11,0.3)"}`,
+                        }}
+                      >
+                        {space.access_type === "OPEN" ? (
+                          <DoorOpen className="h-3 w-3" />
+                        ) : (
+                          <DoorClosed className="h-3 w-3" />
+                        )}
+                        {space.access_type === "OPEN" ? "Entrada livre" : "Porta fechada"}
+                      </button>
                       <button
                         onClick={() => setExcecaoAberta(excecaoAberta === slot.id ? null : slot.id)}
                         className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs text-cream/40 hover:text-cream/70"

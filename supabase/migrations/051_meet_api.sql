@@ -31,6 +31,12 @@ CREATE TABLE IF NOT EXISTS formacao_meet_spaces (
   gravar BOOLEAN NOT NULL DEFAULT false,
   transcrever BOOLEAN NOT NULL DEFAULT true,
   notas BOOLEAN NOT NULL DEFAULT false,
+  -- OPEN: quem tem o link entra direto, sem ninguém admitir. É o que faz
+  -- sentido para grupo aberto com gente de fora do domínio. Fica no banco
+  -- porque o condutor pode desligar "acesso rápido" dentro da reunião e
+  -- fechar a sala sem querer; o painel precisa poder reabrir.
+  access_type TEXT NOT NULL DEFAULT 'OPEN'
+    CHECK (access_type IN ('OPEN', 'TRUSTED', 'RESTRICTED')),
   ativo BOOLEAN NOT NULL DEFAULT true,
   criado_por UUID REFERENCES profiles(id) ON DELETE SET NULL,
   created_at TIMESTAMPTZ DEFAULT now(),

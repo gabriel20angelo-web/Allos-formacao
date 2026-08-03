@@ -10,6 +10,7 @@
 // do vencimento.
 
 import type {
+  AccessType,
   ArtefatosDesejados,
   MeetConferenceRecord,
   MeetParticipant,
@@ -221,6 +222,25 @@ export async function atualizarArtefatos(
   return meetFetch<MeetSpace>(`/${spaceName}?updateMask=${mask}`, {
     method: "PATCH",
     body: JSON.stringify({ config: montarArtifactConfig(a) }),
+  });
+}
+
+/**
+ * Reabre (ou fecha) a porta da sala.
+ *
+ * OPEN é o que o Google chama de entrar sem knocking: quem tem o link entra
+ * direto, sem ninguém admitir. Existe como operação própria porque o condutor
+ * pode fechar a sala sem querer pelos controles de anfitrião dentro da
+ * reunião, e aí alguém precisa reabrir de fora.
+ */
+export async function atualizarAcesso(
+  spaceName: string,
+  accessType: AccessType
+): Promise<MeetSpace> {
+  const mask = encodeURIComponent("config.accessType");
+  return meetFetch<MeetSpace>(`/${spaceName}?updateMask=${mask}`, {
+    method: "PATCH",
+    body: JSON.stringify({ config: { accessType } }),
   });
 }
 

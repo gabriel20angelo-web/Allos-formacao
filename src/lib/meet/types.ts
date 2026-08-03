@@ -78,3 +78,5 @@ export interface ArtefatosDesejados {
   transcrever: boolean;
   notas: boolean;
 }
+
+export type AccessType = "OPEN" | "TRUSTED" | "RESTRICTED";
