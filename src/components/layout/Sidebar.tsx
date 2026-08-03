@@ -34,7 +34,18 @@ const externalNav = [
 
 export default function Sidebar() {
   const pathname = usePathname();
-  const { user, profile, isAdmin, isInstructor, isAssociado, signOut } = useAuth();
+  const { user, profile, isAdmin, isInstructor, isAssociado, isEventos, isCondutor, signOut } =
+    useAuth();
+
+  // Quem tem cargo restrito precisa da MESMA porta: sem este link, a pessoa de
+  // eventos nao tinha como chegar na propria area — a porta so existia para
+  // admin e instrutor, e ela via um site sem nada dela dentro.
+  const temPainel = isAdmin || isInstructor || isEventos || isCondutor;
+  const destinoPainel = isEventos
+    ? "/formacao/admin/eventos"
+    : isCondutor
+      ? "/formacao/admin/meu-grupo"
+      : "/formacao/admin";
   const [collapsed, setCollapsed] = useState(false);
 
   useEffect(() => {
@@ -181,9 +192,9 @@ export default function Sidebar() {
           })}
 
           {/* Admin link */}
-          {(isAdmin || isInstructor) && (
+          {temPainel && (
             <Link
-              href="/formacao/admin"
+              href={destinoPainel}
               className={`group flex items-center gap-3 rounded-xl px-3 py-2.5 transition-all duration-200 ${
                 pathname.startsWith("/formacao/admin")
                   ? "text-white"
@@ -342,9 +353,9 @@ export default function Sidebar() {
             </Link>
           );
         })}
-        {(isAdmin || isInstructor) && (
+        {temPainel && (
           <Link
-            href="/formacao/admin"
+            href={destinoPainel}
             className={`flex flex-col items-center gap-1 px-3 py-1.5 rounded-xl transition-colors ${
               pathname.startsWith("/formacao/admin") ? "text-accent" : "text-cream/40"
             }`}

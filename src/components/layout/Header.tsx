@@ -8,7 +8,15 @@ import Badge from "@/components/ui/Badge";
 import { LogOut, User, LayoutDashboard, BookOpen } from "lucide-react";
 
 export default function Header() {
-  const { user, profile, loading, signOut, isAdmin, isInstructor } = useAuth();
+  const { user, profile, loading, signOut, isAdmin, isInstructor, isEventos, isCondutor } =
+    useAuth();
+
+  const temPainel = isAdmin || isInstructor || isEventos || isCondutor;
+  const destinoPainel = isEventos
+    ? "/formacao/admin/eventos"
+    : isCondutor
+      ? "/formacao/admin/meu-grupo"
+      : "/formacao/admin";
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -79,9 +87,9 @@ export default function Header() {
                   <BookOpen className="h-4 w-4" />
                   Meus cursos
                 </Link>
-                {(isAdmin || isInstructor) && (
+                {temPainel && (
                   <Link
-                    href="/formacao/admin"
+                    href={destinoPainel}
                     className="flex items-center gap-1.5 text-sm text-[rgba(253,251,247,0.5)] hover:text-[#C84B31] transition-colors duration-200"
                   >
                     <LayoutDashboard className="h-4 w-4" />
@@ -187,9 +195,9 @@ export default function Header() {
                       >
                         Meus cursos
                       </Link>
-                      {(isAdmin || isInstructor) && (
+                      {temPainel && (
                         <Link
-                          href="/formacao/admin"
+                          href={destinoPainel}
                           className="block text-sm text-cream/70"
                           onClick={() => setOpen(false)}
                         >
