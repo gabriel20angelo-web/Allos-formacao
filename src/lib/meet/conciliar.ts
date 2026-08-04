@@ -59,8 +59,21 @@ export async function conciliarPendentes(sb: Sb): Promise<ResultadoConciliacao> 
     })
   );
 
+  // Nome que já tem alias está resolvido, mesmo sem conta ligada: desde a
+  // identificação pelo formulário de certificado, um alias pode guardar quem a
+  // pessoa é sem apontar para nenhum perfil. Sem esta guarda, a semelhança de
+  // nomes voltaria a chutar um perfil por cima de uma identidade que veio de
+  // um e-mail declarado pela própria pessoa.
+  const { data: aliasRows } = await sb
+    .from("formacao_meet_aliases")
+    .select("display_name_norm");
+  const jaTemDono = new Set(
+    (aliasRows || []).map((a: { display_name_norm: string }) => a.display_name_norm)
+  );
+
   for (const [norm, display] of Array.from(nomes.entries())) {
     if (ehContaDaCasa(display)) continue;
+    if (jaTemDono.has(norm)) continue;
 
     const { automatico } = sugerirAluno(display, candidatos);
     if (!automatico) {
@@ -69,7 +82,13 @@ export async function conciliarPendentes(sb: Sb): Promise<ResultadoConciliacao> 
     }
 
     await sb.from("formacao_meet_aliases").upsert(
-      { display_name_norm: norm, display_name: display, aluno_id: automatico },
+      {
+        display_name_norm: norm,
+        display_name: display,
+        aluno_id: automatico,
+        origem: "automatico",
+        evidencia: "Nome de tela muito parecido com o de uma pessoa cadastrada.",
+      },
       { onConflict: "display_name_norm" }
     );
 

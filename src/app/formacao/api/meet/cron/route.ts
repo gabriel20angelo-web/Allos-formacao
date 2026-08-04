@@ -25,6 +25,7 @@ import { arquivarGravacoes } from "@/lib/meet/arquivar";
 import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
 import { publicarProximoVideo } from "@/lib/meet/publicar-video";
 import { conciliarPendentes } from "@/lib/meet/conciliar";
+import { identificarPorCertificado } from "@/lib/meet/certificados";
 import { processarClipes } from "@/lib/meet/clipes";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
@@ -141,6 +142,12 @@ export async function GET(req: NextRequest) {
   // Volta nos nomes que ficaram na fila: aluno novo pode ter se cadastrado
   // desde a última tentativa, e o que era ambíguo ontem pode não ser mais.
   await executar("nomes", () => conciliarPendentes(sb));
+
+  // Depois da conciliação por perfil, de propósito: aquela resolve o caso
+  // fácil (nome de tela igual ao nome cadastrado) e esta pega o caso comum,
+  // que é a pessoa sem conta nenhuma se identificando no formulário de
+  // certificado logo depois do encontro.
+  await executar("certificados", () => identificarPorCertificado(sb));
 
   // Sugere, não publica. A aula só existe quando alguém aprovar.
   await executar("aulas", () => sugerirAulasDeGravacoes(sb));

@@ -10,8 +10,14 @@
 // O que decide onde o material vai parar (YouTube, curso, pasta) continua fora
 // daqui de propósito: é escolha de quem responde pela plataforma.
 
+import { useState } from "react";
 import Card from "@/components/ui/Card";
+import FichaPessoa from "@/components/meet/FichaPessoa";
+import ListaParticipacoes from "@/components/meet/ListaParticipacoes";
+import type { ParticipacaoUI } from "@/components/meet/tipos";
 import {
+  ChevronDown,
+  ChevronRight,
   Clock3,
   DoorClosed,
   DoorOpen,
@@ -26,6 +32,14 @@ import {
 import LembreteDoEncontro from "./LembreteDoEncontro";
 import { DIAS, ROXO, type SalaC } from "./tipos";
 
+/** A lista de um encontro, do pedido até a resposta. */
+interface Presenca {
+  estado: "carregando" | "pronta" | "erro";
+  tolerancia: number;
+  participacoes: ParticipacaoUI[];
+  erro: string | null;
+}
+
 export default function AbaEncontro({
   salas,
   trabalhando,
@@ -39,6 +53,74 @@ export default function AbaEncontro({
   aoEncerrar: (sala: SalaC) => void;
   aoVerCortes: () => void;
 }) {
+  // Um por vez: duas listas de setenta nomes abertas ao mesmo tempo transformam
+  // a aba num rolo em que não se acha mais o encontro de cima.
+  const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
+  // A lista fica guardada por encontro para recolher e reabrir sair de graça.
+  const [presencas, setPresencas] = useState<Record<string, Presenca>>({});
+  // Guarda o nome de tela junto para o título da ficha não piscar vazio
+  // enquanto a rota responde.
+  const [pessoaAberta, setPessoaAberta] = useState<{
+    norm: string;
+    aluno_id: string | null;
+    nome: string;
+  } | null>(null);
+
+  async function alternarEncontro(id: string) {
+    if (encontroAberto === id) {
+      setEncontroAberto(null);
+      return;
+    }
+    setEncontroAberto(id);
+
+    // Erro guardado não vale como resposta: se foi queda de rede ou sessão
+    // vencida, reabrir é justamente o gesto de tentar de novo.
+    const guardada = presencas[id];
+    if (guardada && guardada.estado !== "erro") return;
+
+    setPresencas((m) => ({
+      ...m,
+      [id]: { estado: "carregando", tolerancia: 7, participacoes: [], erro: null },
+    }));
+
+    try {
+      const r = await fetch(
+        `/formacao/api/condutor/presencas?encontro_id=${encodeURIComponent(id)}`
+      );
+      // Quando a rota não existe no servidor aberto, o Next devolve a página de
+      // erro em HTML, e um .json() cru derrubaria a aba inteira.
+      const tipo = r.headers.get("content-type") || "";
+      if (!tipo.includes("application/json")) {
+        throw new Error("O servidor respondeu uma página em vez de dados. Recarregue a aba.");
+      }
+      const j = (await r.json()) as {
+        tolerancia?: number;
+        participacoes?: ParticipacaoUI[];
+        error?: string;
+      };
+      if (!r.ok) throw new Error(j.error || "Não consegui abrir a lista de presença.");
+      setPresencas((m) => ({
+        ...m,
+        [id]: {
+          estado: "pronta",
+          tolerancia: j.tolerancia ?? 7,
+          participacoes: j.participacoes || [],
+          erro: null,
+        },
+      }));
+    } catch (e) {
+      setPresencas((m) => ({
+        ...m,
+        [id]: {
+          estado: "erro",
+          tolerancia: 7,
+          participacoes: [],
+          erro: e instanceof Error ? e.message : "Não consegui abrir a lista de presença.",
+        },
+      }));
+    }
+  }
+
   if (!salas.length) return null;
 
   return (
@@ -170,50 +252,98 @@ export default function AbaEncontro({
 
             {/* Os encontros passados: quando foram, quanto duraram, quem veio.
                 Os cortes ficam na outra aba — daqui sai só o atalho, porque
-                avaliar quarenta cortes não é coisa que se faça de passagem. */}
+                avaliar quarenta cortes não é coisa que se faça de passagem.
+
+                A lista de quem veio só é buscada ao abrir o encontro: sessenta
+                encontros de setenta e sete pessoas seriam quatro mil linhas
+                carregadas para mostrar as trinta que alguém quer ver. */}
             <div className="mt-4 space-y-1.5">
               {sala.encontros.length === 0 && (
                 <p className="text-xs text-cream/30">Nenhum encontro capturado ainda.</p>
               )}
 
-              {sala.encontros.slice(0, 8).map((e) => (
-                <div
-                  key={e.id}
-                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 rounded-xl px-3 py-2"
-                  style={{
-                    background: "rgba(255,255,255,0.02)",
-                    border: "1px solid rgba(255,255,255,0.05)",
-                  }}
-                >
-                  <span className="text-xs text-cream/80">
-                    {new Date(e.inicio).toLocaleDateString("pt-BR", {
-                      day: "2-digit",
-                      month: "long",
-                    })}
-                    <span className="text-cream/35">
-                      {e.total_participantes ? ` · ${e.total_participantes} presentes` : ""}
-                      {e.duracao_min ? ` · ${e.duracao_min} min` : ""}
-                    </span>
-                  </span>
+              {sala.encontros.slice(0, 8).map((e) => {
+                const aberto = encontroAberto === e.id;
+                const presenca = presencas[e.id];
 
-                  <span className="flex items-center gap-3 text-[11px]">
-                    {e.youtube_video_id && (
-                      <a
-                        href={`https://www.youtube.com/watch?v=${e.youtube_video_id}`}
-                        target="_blank"
-                        rel="noreferrer"
-                        className="inline-flex items-center gap-1"
-                        style={{ color: "#FF4D4D" }}
+                return (
+                  <div
+                    key={e.id}
+                    className="rounded-xl overflow-hidden"
+                    style={{
+                      background: "rgba(255,255,255,0.02)",
+                      border: "1px solid rgba(255,255,255,0.05)",
+                    }}
+                  >
+                    <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+                      {/* A linha inteira abre, e não só a seta: no celular um
+                          alvo de doze pixels custa três tentativas. */}
+                      <button
+                        onClick={() => alternarEncontro(e.id)}
+                        aria-expanded={aberto}
+                        className="flex items-center gap-1.5 flex-1 min-w-0 text-left px-3 py-2.5 min-h-[44px] sm:py-2 sm:min-h-0"
                       >
-                        <Youtube className="h-3.5 w-3.5" /> inteiro
-                      </a>
+                        {aberto ? (
+                          <ChevronDown className="h-3.5 w-3.5 shrink-0 text-cream/40" />
+                        ) : (
+                          <ChevronRight className="h-3.5 w-3.5 shrink-0 text-cream/25" />
+                        )}
+                        <span className="text-xs text-cream/80">
+                          {new Date(e.inicio).toLocaleDateString("pt-BR", {
+                            day: "2-digit",
+                            month: "long",
+                          })}
+                          <span className="text-cream/35">
+                            {e.total_participantes ? ` · ${e.total_participantes} presentes` : ""}
+                            {e.duracao_min ? ` · ${e.duracao_min} min` : ""}
+                          </span>
+                        </span>
+                      </button>
+
+                      {/* Fora do botão de propósito: link dentro de botão é
+                          HTML inválido e o clique fica ambíguo. */}
+                      <span className="flex items-center gap-3 text-[11px] px-3 pb-2 pl-8 sm:pl-3 sm:pb-0">
+                        {e.youtube_video_id && (
+                          <a
+                            href={`https://www.youtube.com/watch?v=${e.youtube_video_id}`}
+                            target="_blank"
+                            rel="noreferrer"
+                            className="inline-flex items-center gap-1"
+                            style={{ color: "#FF4D4D" }}
+                          >
+                            <Youtube className="h-3.5 w-3.5" /> inteiro
+                          </a>
+                        )}
+                        <span className="text-cream/35">
+                          {e.clipes.length ? `${e.clipes.length} cortes` : "sem cortes"}
+                        </span>
+                      </span>
+                    </div>
+
+                    {aberto && (
+                      <div className="px-3 pb-3 pt-2.5 border-t border-white/5">
+                        {!presenca || presenca.estado === "carregando" ? (
+                          <p className="text-xs text-cream/30">carregando a lista…</p>
+                        ) : presenca.estado === "erro" ? (
+                          <p className="text-xs text-amber-400/70">{presenca.erro}</p>
+                        ) : (
+                          <ListaParticipacoes
+                            participacoes={presenca.participacoes}
+                            tolerancia={presenca.tolerancia}
+                            aoAbrirPessoa={(p: ParticipacaoUI) =>
+                              setPessoaAberta({
+                                norm: p.display_name_norm,
+                                aluno_id: p.aluno_id,
+                                nome: p.pessoa_nome || p.display_name,
+                              })
+                            }
+                          />
+                        )}
+                      </div>
                     )}
-                    <span className="text-cream/35">
-                      {e.clipes.length ? `${e.clipes.length} cortes` : "sem cortes"}
-                    </span>
-                  </span>
-                </div>
-              ))}
+                  </div>
+                );
+              })}
 
               {sala.encontros.length > 8 && (
                 <p className="text-[11px] text-cream/25 px-3">
@@ -239,6 +369,17 @@ export default function AbaEncontro({
           </Card>
         );
       })}
+
+      {/* Uma só, fora do laço: um modal por linha seria um componente por
+          participante em memória, e todos disputando o foco ao abrir. */}
+      <FichaPessoa
+        aberta={!!pessoaAberta}
+        aoFechar={() => setPessoaAberta(null)}
+        endpoint="/formacao/api/condutor/pessoa"
+        norm={pessoaAberta?.norm}
+        alunoId={pessoaAberta?.aluno_id}
+        nomeProvisorio={pessoaAberta?.nome}
+      />
     </div>
   );
 }

@@ -16,6 +16,7 @@ export const dynamic = "force-dynamic";
 interface ParticipacaoRow {
   encontro_id: string;
   display_name: string;
+  display_name_norm: string;
   aluno_id: string | null;
   minutos_presentes: number;
   permanencia_pct: number | null;
@@ -244,14 +245,75 @@ export async function GET(req: NextRequest) {
   const { data: parts } = await sb
     .from("formacao_meet_participacoes")
     .select(
-      "encontro_id, display_name, aluno_id, minutos_presentes, permanencia_pct, atraso_min, minutos_fala, n_turnos_fala, n_sessoes, eh_condutor"
+      "encontro_id, display_name, display_name_norm, aluno_id, minutos_presentes, permanencia_pct, atraso_min, minutos_fala, n_turnos_fala, n_sessoes, eh_condutor"
     )
     .in("encontro_id", ids)
+    // Ordem de fala já daqui, que é a pergunta principal da tela: quem falou,
+    // e por quanto tempo. A presença vira o critério de desempate e continua
+    // disponível como ordenação alternativa do outro lado.
+    .order("minutos_fala", { ascending: false, nullsFirst: false })
     .order("minutos_presentes", { ascending: false });
 
-  const porEncontro = new Map<string, ParticipacaoRow[]>();
-  for (const p of (parts || []) as ParticipacaoRow[]) {
-    porEncontro.set(p.encontro_id, [...(porEncontro.get(p.encontro_id) || []), p]);
+  const participacoes = (parts || []) as ParticipacaoRow[];
+
+  // Quem é cada nome de tela. Duas origens, e nem sempre as duas existem: o
+  // perfil, quando a pessoa tem conta, e o alias, que desde a identificação
+  // pelo formulário de certificado guarda nome e e-mail de quem não tem.
+  const alunoIds = Array.from(
+    new Set(participacoes.map((p) => p.aluno_id).filter(Boolean) as string[])
+  );
+  const norms = Array.from(new Set(participacoes.map((p) => p.display_name_norm)));
+
+  const [{ data: perfis }, { data: aliases }] = await Promise.all([
+    alunoIds.length
+      ? sb.from("profiles").select("id, full_name, email").in("id", alunoIds)
+      : Promise.resolve({ data: [] as { id: string; full_name: string; email: string | null }[] }),
+    // `*` de propósito, e não a lista de colunas: enquanto a migration 083 não
+    // for aplicada, pedir `pessoa_nome` pelo nome faz o PostgREST recusar a
+    // consulta inteira e a tela de encontros fica vazia. Com `*`, os campos
+    // novos chegam indefinidos e a tela volta a se comportar como antes.
+    norms.length
+      ? sb.from("formacao_meet_aliases").select("*").in("display_name_norm", norms)
+      : Promise.resolve({ data: [] as never[] }),
+  ]);
+
+  const perfilPorId = new Map(
+    ((perfis || []) as { id: string; full_name: string; email: string | null }[]).map((p) => [
+      p.id,
+      p,
+    ])
+  );
+  const aliasPorNorm = new Map(
+    ((aliases || []) as {
+      display_name_norm: string;
+      pessoa_nome: string | null;
+      pessoa_email: string | null;
+      origem: string;
+      evidencia: string | null;
+    }[]).map((a) => [a.display_name_norm, a])
+  );
+
+  const porEncontro = new Map<string, unknown[]>();
+  for (const p of participacoes) {
+    const perfil = p.aluno_id ? perfilPorId.get(p.aluno_id) : null;
+    const alias = aliasPorNorm.get(p.display_name_norm);
+    const nomeReal = perfil?.full_name || alias?.pessoa_nome || null;
+
+    porEncontro.set(p.encontro_id, [
+      ...(porEncontro.get(p.encontro_id) || []),
+      {
+        ...p,
+        // `identificada` é o que a tela usa para decidir se o nome vira link.
+        // Vale tanto para quem tem conta quanto para quem só se identificou no
+        // formulário: nos dois casos sabemos de quem é aquela presença.
+        identificada: !!(p.aluno_id || alias?.pessoa_email || alias?.pessoa_nome),
+        pessoa_nome: nomeReal,
+        pessoa_email: perfil?.email || alias?.pessoa_email || null,
+        tem_conta: !!p.aluno_id,
+        origem_identidade: alias?.origem || (p.aluno_id ? "automatico" : null),
+        evidencia: alias?.evidencia || null,
+      },
+    ]);
   }
 
   return NextResponse.json({

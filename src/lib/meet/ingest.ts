@@ -225,10 +225,18 @@ export async function ingerir(opts?: {
     .from("formacao_meet_aliases")
     .select("display_name_norm, aluno_id");
   const aliases = new Map(
-    (aliasRows || []).map((a: { display_name_norm: string; aluno_id: string }) => [
+    (aliasRows || []).map((a: { display_name_norm: string; aluno_id: string | null }) => [
       a.display_name_norm,
       a.aluno_id,
     ])
+  );
+
+  // Nome já resolvido, inclusive quando a resolução não aponta para conta
+  // nenhuma: desde a identificação pelo formulário de certificado, um alias
+  // pode dizer quem a pessoa é sem que ela tenha perfil. O `Map` acima não
+  // serve para essa pergunta, porque o valor nesses casos é nulo.
+  const nomesResolvidos = new Set(
+    (aliasRows || []).map((a: { display_name_norm: string }) => a.display_name_norm)
   );
 
   // ── varredura ──
@@ -428,7 +436,7 @@ export async function ingerir(opts?: {
           const daCasa = ehContaDaCasa(nome);
 
           let alunoId = daCasa ? null : aliases.get(norm) || null;
-          if (!alunoId && !daCasa) {
+          if (!alunoId && !daCasa && !nomesResolvidos.has(norm)) {
             const { automatico } = sugerirAluno(nome, candidatos);
             alunoId = automatico;
             if (automatico) {
@@ -439,6 +447,8 @@ export async function ingerir(opts?: {
                   display_name: nome,
                   aluno_id: automatico,
                   google_user_id: userId,
+                  origem: "automatico",
+                  evidencia: "Nome de tela muito parecido com o de uma pessoa cadastrada.",
                 },
                 { onConflict: "display_name_norm" }
               );

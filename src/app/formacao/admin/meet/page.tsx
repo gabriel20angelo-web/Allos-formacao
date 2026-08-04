@@ -10,6 +10,9 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
+import ListaParticipacoes from "@/components/meet/ListaParticipacoes";
+import FichaPessoa from "@/components/meet/FichaPessoa";
+import type { ParticipacaoUI } from "@/components/meet/tipos";
 import { toast } from "sonner";
 import {
   AlertTriangle, CalendarClock, CheckCircle2, Clock3, DoorClosed, DoorOpen, Link2,
@@ -103,25 +106,24 @@ interface Status {
     horas_desde_ultima_ingestao: number | null;
   };
 }
+interface PessoaDoCertificado {
+  nome: string;
+  email: string | null;
+  aluno_id: string | null;
+  score: number;
+}
+
 interface ItemFila {
   display_name: string;
   display_name_norm: string;
   ocorrencias: number;
   minutos_totais: number;
   sugestoes: { aluno_id: string; full_name: string; score: number }[];
+  /** Quem preencheu o certificado dos mesmos encontros e ainda não tem dono. */
+  do_certificado: PessoaDoCertificado[];
 }
 
-interface Participacao {
-  display_name: string;
-  aluno_id: string | null;
-  minutos_presentes: number;
-  permanencia_pct: number | null;
-  atraso_min: number | null;
-  minutos_fala: number | null;
-  n_turnos_fala: number | null;
-  n_sessoes: number;
-  eh_condutor: boolean;
-}
+type Participacao = ParticipacaoUI;
 interface Encontro {
   id: string;
   atividade_nome: string | null;
@@ -143,6 +145,11 @@ interface Vinculo {
   display_name: string;
   display_name_norm: string;
   aluno_nome: string | null;
+  /** Nome de documento de quem se identificou sem ter conta. */
+  pessoa_nome?: string | null;
+  tem_conta?: boolean;
+  origem?: string | null;
+  evidencia?: string | null;
   ignorado: boolean;
 }
 
@@ -257,6 +264,13 @@ export default function MeetAdminPage() {
   const [fila, setFila] = useState<ItemFila[]>([]);
   const [encontros, setEncontros] = useState<Encontro[]>([]);
   const [encontroAberto, setEncontroAberto] = useState<string | null>(null);
+  // Quem está com a ficha aberta. Guarda o nome de tela junto para o título do
+  // modal não piscar vazio enquanto a rota responde.
+  const [pessoaAberta, setPessoaAberta] = useState<{
+    norm: string;
+    aluno_id: string | null;
+    nome: string;
+  } | null>(null);
   const [verDescartados, setVerDescartados] = useState(false);
   const [cursos, setCursos] = useState<CursoOpcao[]>([]);
   const [aulas, setAulas] = useState<AulaSugerida[]>([]);
@@ -1192,6 +1206,41 @@ export default function MeetAdminPage() {
     }
   }
 
+  /**
+   * Liga o nome de tela a quem preencheu o certificado daquele encontro.
+   *
+   * Vale mesmo quando a pessoa não tem conta: identificar não é a mesma coisa
+   * que cadastrar, e a maior parte de quem frequenta os grupos nunca criou
+   * conta. Se por acaso houver perfil com aquele e-mail, o servidor liga as
+   * duas coisas sozinho e o histórico vem junto.
+   */
+  async function conciliarPeloCertificado(item: ItemFila, pessoa: PessoaDoCertificado) {
+    setTrabalhando(item.display_name_norm);
+    try {
+      const r = await fetch("/formacao/api/admin/meet/aliases", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          display_name: item.display_name,
+          pessoa_nome: pessoa.nome,
+          pessoa_email: pessoa.email,
+          aluno_id: pessoa.aluno_id || undefined,
+        }),
+      });
+      const j = await lerResposta(r);
+      toast.success(
+        j.sem_conta
+          ? `${item.display_name} agora é ${pessoa.nome}, sem conta na plataforma.`
+          : `${j.participacoes_atualizadas} participações ligadas a ${pessoa.nome}.`
+      );
+      setFila((f) => f.filter((x) => x.display_name_norm !== item.display_name_norm));
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
   async function ingerirAgora() {
     setTrabalhando("ingestao");
     toast.info("Buscando encontros no Google. Pode levar um minuto.");
@@ -1963,6 +2012,14 @@ export default function MeetAdminPage() {
                       <span className="text-cream/60">
                         <strong className="text-cream">{presentes.length}</strong> presentes
                       </span>
+                      {/* Quantos desses sabemos quem são. O número separado do
+                          total é o que mostra se a conciliação está em dia sem
+                          precisar abrir a aba de nomes. */}
+                      {presentes.length > 0 && (
+                        <span className="text-cream/40">
+                          {presentes.filter((p) => p.identificada).length} identificados
+                        </span>
+                      )}
                       <span className="text-cream/40">{e.duracao_min ?? "—"} min</span>
                       {e.vozes_ativas_pct !== null && (
                         <span className="text-cream/40">
@@ -2023,94 +2080,17 @@ export default function MeetAdminPage() {
 
                   {aberto && (
                     <div className="mt-3 pt-3 border-t border-white/5">
-                      {/* Tabela só no desktop; no celular vira cards, mesmos dados */}
-                      <div className="hidden md:block overflow-x-auto">
-                        <table className="w-full text-xs">
-                          <thead>
-                            <tr className="text-cream/30 text-left">
-                              <th className="pb-2 font-normal">Pessoa</th>
-                              <th className="pb-2 font-normal">Minutos</th>
-                              <th className="pb-2 font-normal">Do encontro</th>
-                              <th className="pb-2 font-normal">Chegou</th>
-                              <th className="pb-2 font-normal">Falou</th>
-                            </tr>
-                          </thead>
-                          <tbody>
-                            {e.participacoes.map((p, i) => (
-                              <tr key={i} className="border-t border-white/5">
-                                <td className="py-1.5 text-cream/70">
-                                  {p.display_name}
-                                  {p.eh_condutor && (
-                                    <span className="ml-1.5 text-cream/30">condutor</span>
-                                  )}
-                                  {!p.aluno_id && !p.eh_condutor && (
-                                    <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
-                                  )}
-                                </td>
-                                <td className="py-1.5 text-cream/50">{p.minutos_presentes}</td>
-                                <td className="py-1.5 text-cream/50">
-                                  {p.permanencia_pct !== null ? `${p.permanencia_pct}%` : "—"}
-                                </td>
-                                <td className="py-1.5 text-cream/50">
-                                  {p.atraso_min === null
-                                    ? "—"
-                                    : p.atraso_min <= tolerancia
-                                      ? "no horário"
-                                      : `${p.atraso_min} min depois`}
-                                </td>
-                                <td className="py-1.5 text-cream/50">
-                                  {p.minutos_fala === null
-                                    ? "—"
-                                    : p.minutos_fala === 0
-                                      ? "não falou"
-                                      : `${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala} vezes`}
-                                </td>
-                              </tr>
-                            ))}
-                          </tbody>
-                        </table>
-                      </div>
-                      <div className="md:hidden space-y-2">
-                        {e.participacoes.map((p, i) => (
-                          <div
-                            key={i}
-                            className="rounded-[14px] p-3.5"
-                            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
-                          >
-                            <p className="text-xs text-cream/70 break-words">
-                              {p.display_name}
-                              {p.eh_condutor && (
-                                <span className="ml-1.5 text-cream/30">condutor</span>
-                              )}
-                              {!p.aluno_id && !p.eh_condutor && (
-                                <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
-                              )}
-                            </p>
-                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-cream/50">
-                              <span>{p.minutos_presentes} min presentes</span>
-                              <span>
-                                {p.permanencia_pct !== null
-                                  ? `${p.permanencia_pct}% do encontro`
-                                  : "—"}
-                              </span>
-                              <span>
-                                {p.atraso_min === null
-                                  ? "—"
-                                  : p.atraso_min <= tolerancia
-                                    ? "chegou no horário"
-                                    : `chegou ${p.atraso_min} min depois`}
-                              </span>
-                              <span>
-                                {p.minutos_fala === null
-                                  ? "—"
-                                  : p.minutos_fala === 0
-                                    ? "não falou"
-                                    : `falou ${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala}x`}
-                              </span>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                      <ListaParticipacoes
+                        participacoes={e.participacoes}
+                        tolerancia={tolerancia}
+                        aoAbrirPessoa={(p) =>
+                          setPessoaAberta({
+                            norm: p.display_name_norm,
+                            aluno_id: p.aluno_id,
+                            nome: p.pessoa_nome || p.display_name,
+                          })
+                        }
+                      />
                     </div>
                   )}
                 </Card>
@@ -2629,6 +2609,12 @@ export default function MeetAdminPage() {
             todos os encontros daquele nome, passados e futuros, contarem no histórico dela.
             Errar contamina duas histórias ao mesmo tempo, então tudo aqui é reversível.
           </p>
+          <p className="text-xs text-cream/40">
+            A cada rodada da captura, quem sobra aqui é comparado com as pessoas que preencheram o
+            formulário de certificado daquele mesmo encontro. É de lá que sai a identificação de
+            quem participa dos grupos sem ter conta na plataforma, que é a maioria. As sugestões
+            marcadas em roxo vêm desse cruzamento.
+          </p>
 
           {vinculos.length > 0 && (
             <Card className="p-4">
@@ -2637,15 +2623,23 @@ export default function MeetAdminPage() {
                 {vinculos.map((v) => (
                   <div
                     key={v.display_name_norm}
-                    className="flex items-center justify-between gap-2 text-xs"
+                    className="flex items-start justify-between gap-2 text-xs"
                   >
-                    <span className="text-cream/60">
+                    <span className="text-cream/60 min-w-0">
                       {v.display_name}
                       <span className="text-cream/30"> vira </span>
                       {v.ignorado ? (
                         <span className="text-amber-400/70">não é aluno</span>
                       ) : (
-                        <span className="text-cream">{v.aluno_nome}</span>
+                        <span className="text-cream">
+                          {v.aluno_nome || v.pessoa_nome || "pessoa sem nome"}
+                        </span>
+                      )}
+                      {!v.ignorado && !v.tem_conta && (
+                        <span className="text-cream/30"> · sem conta</span>
+                      )}
+                      {v.origem === "certificado" && (
+                        <span style={{ color: ROXO }}> · pelo certificado</span>
                       )}
                     </span>
                     <button
@@ -2690,9 +2684,13 @@ export default function MeetAdminPage() {
                   </div>
 
                   <div className="flex flex-wrap gap-1.5 items-center">
-                    {item.sugestoes.length === 0 && (
-                      <span className="text-xs text-cream/30">Nenhum nome parecido no cadastro</span>
+                    {item.sugestoes.length === 0 && item.do_certificado.length === 0 && (
+                      <span className="text-xs text-cream/30">
+                        Nem no cadastro nem no formulário de certificado
+                      </span>
                     )}
+
+                    {/* Do cadastro: quem tem conta e entrou com o nome dela */}
                     {item.sugestoes.map((s) => (
                       <button
                         key={s.aluno_id}
@@ -2700,15 +2698,44 @@ export default function MeetAdminPage() {
                         disabled={trabalhando === item.display_name_norm}
                         className="px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
                         style={{
+                          background: "rgba(255,255,255,0.04)",
+                          color: "rgba(253,251,247,0.7)",
+                          border: "1px solid rgba(255,255,255,0.08)",
+                        }}
+                      >
+                        {s.full_name}{" "}
+                        <span className="opacity-40">{Math.round(s.score * 100)}%</span>
+                      </button>
+                    ))}
+
+                    {/* Do certificado: quem esteve no mesmo encontro e se
+                        identificou por conta própria. Fica em roxo porque é a
+                        sugestão de dentro do encontro, e não de dentro do
+                        cadastro inteiro: erra muito menos. */}
+                    {item.do_certificado.map((c) => (
+                      <button
+                        key={c.email || c.nome}
+                        onClick={() => conciliarPeloCertificado(item, c)}
+                        disabled={trabalhando === item.display_name_norm}
+                        title={
+                          c.aluno_id
+                            ? "Preencheu o certificado deste encontro e tem conta na plataforma."
+                            : "Preencheu o certificado deste encontro. Ainda não tem conta na plataforma."
+                        }
+                        className="px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                        style={{
                           background: "rgba(108,92,231,0.12)",
                           color: ROXO,
                           border: "1px solid rgba(108,92,231,0.3)",
                         }}
                       >
-                        {s.full_name}{" "}
-                        <span className="opacity-50">{Math.round(s.score * 100)}%</span>
+                        {c.nome}{" "}
+                        <span className="opacity-50">
+                          {Math.round(c.score * 100)}%{c.aluno_id ? " · tem conta" : ""}
+                        </span>
                       </button>
                     ))}
+
                     <button
                       onClick={() => conciliar(item, null)}
                       disabled={trabalhando === item.display_name_norm}
@@ -2957,6 +2984,16 @@ export default function MeetAdminPage() {
           </div>
         </div>
       )}
+
+      {/* A pessoa por trás do nome de tela, aberta de qualquer lista */}
+      <FichaPessoa
+        aberta={!!pessoaAberta}
+        aoFechar={() => setPessoaAberta(null)}
+        endpoint="/formacao/api/admin/meet/pessoa"
+        norm={pessoaAberta?.norm}
+        alunoId={pessoaAberta?.aluno_id}
+        nomeProvisorio={pessoaAberta?.nome}
+      />
     </div>
   );
 }
