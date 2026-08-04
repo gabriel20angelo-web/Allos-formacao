@@ -31,6 +31,7 @@ import { sincronizarExcecoes } from "@/lib/meet/excecoes";
 import { aplicarJanelaDeAcesso } from "@/lib/meet/janela";
 import { ingerir } from "@/lib/meet/ingest";
 import { atualizarStatusSlots, fecharSemanaSePreciso } from "@/lib/meet/status-slots";
+import { avisarSeRodadaFalhou } from "@/lib/avisos";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 300;
@@ -152,6 +153,12 @@ export async function GET(req: NextRequest) {
     processarClipes(sb, "https://allos.org.br", inicio + 240_000)
   );
 
+  // Fora da lista numerada porque não é trabalho da captura: é a rodada
+  // contando o que aconteceu com ela. Fica por último para enxergar todas as
+  // etapas, e não entra no `executar` para que uma falha ao avisar não vire
+  // mais um erro na lista que ela mesma reporta.
+  const aviso = await avisarSeRodadaFalhou(sb as never, erros);
+
   // 200 mesmo com etapa quebrada, de propósito: o agendador trata 4xx e 5xx
   // como job falho e pararia de distinguir "o pipeline rodou e uma etapa
   // reclamou" de "a rota não respondeu". A distinção fica no corpo, em `ok` e
@@ -161,5 +168,6 @@ export async function GET(req: NextRequest) {
     duracao_ms: Date.now() - inicio,
     etapas,
     erros,
+    aviso,
   });
 }
