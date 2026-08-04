@@ -149,13 +149,23 @@ export async function atualizarStatusSlots(
   );
 
   // Encontros capturados desta semana, agrupados por slot.
-  const { data: encontros } = await sb
+  const { data: encontros, error: errEncontros } = await sb
     .from("formacao_meet_encontros")
     .select("slot_id, data_reuniao, total_participantes")
     .gte("data_reuniao", inicioSemana)
     .lte("data_reuniao", fimSemana)
     .eq("descartado", false) // alguém testando o link não prova que houve encontro
     .not("slot_id", "is", null);
+
+  // Uma falha aqui devolve lista vazia, que é indistinguível de "não houve
+  // encontro nenhum" — e como a ausência de encontro agora DESFAZ o status
+  // conduzido, um erro de rede zeraria a semana inteira. Melhor não decidir
+  // nada nesta rodada.
+  if (errEncontros) {
+    res.motivo_pulo = `Não consegui ler os encontros da semana: ${errEncontros.message}`;
+    res.pulado_por_saude = true;
+    return res;
+  }
 
   const encontroPorSlot = new Map<string, { data_reuniao: string; total_participantes: number }>();
   for (const e of (encontros || []) as {
@@ -211,6 +221,39 @@ export async function atualizarStatusSlots(
     }
 
     // ── daqui para baixo: sem registro do encontro ──
+
+    // O que o sistema concluiu, o sistema desfaz.
+    //
+    // "Conduzido" automático era um caminho de mão única: marcava e nunca mais
+    // revisitava. Quando o encontro que sustentava a marcação era descartado,
+    // por ser teste ou por decisão do administrador, o slot continuava
+    // conduzido para sempre, e o fechamento de segunda congelava esse número
+    // no histórico, onde não há como corrigir. Foi assim que a tela de
+    // Estatísticas passou a mostrar dois encontros conduzidos e dois
+    // condutores com 100% de aproveitamento, sem que existisse um único
+    // encontro válido no banco.
+    //
+    // Decisão de gente não entra aqui: `marcadoPorPessoa` já saiu no topo do
+    // laço, então o que sobra com status diferente de pendente foi este código
+    // que escreveu.
+    if (slot.status === "conduzido") {
+      await sb
+        .from("formacao_slots")
+        .update({ status: "pendente", status_automatico_em: null })
+        .eq("id", slot.id);
+      await registrarLog(
+        sb,
+        slot.id,
+        slot.status,
+        "pendente",
+        slot.atividade_nome,
+        "correcao",
+        "O encontro que marcou este horário como conduzido foi descartado."
+      );
+      res.corrigidos++;
+      continue;
+    }
+
     if (slot.status === "nao_conduzido") continue;
     if (slot.status !== "pendente") continue;
 

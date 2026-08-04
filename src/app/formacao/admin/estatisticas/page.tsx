@@ -39,6 +39,20 @@ interface SlotLog {
   changed_at: string;
 }
 
+/**
+ * A segunda-feira da semana de uma data, como chave de agrupamento.
+ *
+ * É a unidade real do calendário da formação: cada horário acontece uma vez por
+ * semana. Sem ela, o ranking conta linhas de auditoria, e a rotina de captura
+ * escreve várias por encontro.
+ */
+function segundaDaSemanaDe(iso: string): string {
+  const d = new Date(iso);
+  const desdeSegunda = (d.getDay() + 6) % 7; // getDay: 0 é domingo
+  d.setDate(d.getDate() - desdeSegunda);
+  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
+}
+
 interface MeetPresenca {
   id: string;
   condutor_nome: string;
@@ -168,10 +182,29 @@ export default function EstatisticasPage() {
   }, [presencas]);
 
   // Conductor ranking from slot logs
+  //
+  // A unidade é o horário na semana, não a linha de log. `formacao_slot_logs` é
+  // uma tabela de auditoria: ela guarda cada VEZ que o status foi escrito, e a
+  // rotina de captura escreve de novo a cada rodada em que encontra o encontro.
+  // Contando linha a linha, o mesmo encontro rendia um ponto por rodada, e dois
+  // condutores apareciam com três conduções e 100% de aproveitamento num mês em
+  // que houve dois horários marcados e nenhum encontro válido.
+  //
+  // Pegar a última escrita de cada semana também é o que faz a correção valer:
+  // quando o encontro que marcou o horário é descartado, a rotina grava
+  // "pendente" por cima, e é essa palavra final que conta.
   const conductorStats = useMemo(() => {
     const map: Record<string, { total: number; conduzidos: number; cancelados: number; desmarcados: number }> = {};
 
+    // Os logs chegam do mais recente para o mais antigo, então o primeiro de
+    // cada horário-semana é a palavra final dela.
+    const ultimoDaSemana = new Map<string, SlotLog>();
     logs.forEach((l) => {
+      const chave = `${l.slot_id}|${segundaDaSemanaDe(l.changed_at)}`;
+      if (!ultimoDaSemana.has(chave)) ultimoDaSemana.set(chave, l);
+    });
+
+    ultimoDaSemana.forEach((l) => {
       if (l.status_novo === "pendente") return;
       (l.condutor_ids || []).forEach((cid) => {
         const nome = condutores.find((c) => c.id === cid)?.nome || cid;
