@@ -367,7 +367,10 @@ export default function AdminLayout({
           </div>
 
           <div className="flex items-center gap-3">
-            <div className="text-right">
+            {/* No celular o nome mais as pílulas de cargo tomavam duas linhas e
+                empurravam o cabeçalho por cima do botão de menu. Quem precisa
+                conferir o cargo abre o menu; aqui ficam avatar e sair. */}
+            <div className="hidden sm:block text-right">
               <p className="text-sm font-medium text-cream">
                 {profile.full_name}
               </p>
@@ -410,7 +413,7 @@ export default function AdminLayout({
             </div>
             <button
               onClick={signOut}
-              className="p-2 text-cream/40 hover:text-accent transition-colors"
+              className="flex items-center justify-center h-10 w-10 sm:h-auto sm:w-auto sm:p-2 text-cream/40 hover:text-accent transition-colors"
               aria-label="Sair"
             >
               <LogOut className="h-4 w-4" />

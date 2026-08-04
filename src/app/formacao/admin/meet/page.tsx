@@ -1333,7 +1333,7 @@ export default function MeetAdminPage() {
           <button
             key={id}
             onClick={() => setAba(id)}
-            className="shrink-0 font-dm text-xs px-3 py-1.5 rounded-full transition-all"
+            className="shrink-0 font-dm text-xs px-3 py-2.5 md:py-1.5 min-h-[40px] md:min-h-0 rounded-full transition-all"
             style={{
               backgroundColor: aba === id ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
               color: aba === id ? ROXO : "rgba(253,251,247,0.35)",

@@ -1870,7 +1870,7 @@ export default function CalendarioPage() {
                           ) : (
                             <button
                               onClick={() => { setMeetEditSlotId(slot.id); setMeetLinkDraft(slot.meet_link || ""); }}
-                              className="flex items-center gap-1.5 text-xs font-dm py-1 transition-colors hover:opacity-80"
+                              className="flex items-center gap-1.5 text-xs font-dm py-2.5 md:py-1 min-h-[40px] md:min-h-0 transition-colors hover:opacity-80"
                               style={{ color: slot.meet_link ? "#60a5fa" : "rgba(253,251,247,0.3)" }}
                             >
                               <LinkIcon className="h-3.5 w-3.5" />
@@ -1945,7 +1945,7 @@ export default function CalendarioPage() {
                                   setQuorumEditId(null);
                                   setQuorumDraftValue("");
                                 }}
-                                className="flex items-center gap-1.5 text-xs font-dm py-1 w-fit transition-colors hover:opacity-80"
+                                className="flex items-center gap-1.5 text-xs font-dm py-2.5 md:py-1 min-h-[40px] md:min-h-0 w-fit transition-colors hover:opacity-80"
                                 style={{ color: "rgba(34,197,94,0.8)" }}
                               >
                                 <UserCheck className="h-3.5 w-3.5" />

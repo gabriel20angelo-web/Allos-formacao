@@ -160,7 +160,7 @@ export default function EventosTab() {
             onChange={(e) =>
               setEventoForm((f) => ({ ...f, titulo: e.target.value }))
             }
-            className="px-3 py-2 rounded-lg text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
+            className="px-3 py-2.5 md:py-2 rounded-lg text-base md:text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
           />
           <input
             type="text"
@@ -169,7 +169,7 @@ export default function EventosTab() {
             onChange={(e) =>
               setEventoForm((f) => ({ ...f, descricao: e.target.value }))
             }
-            className="px-3 py-2 rounded-lg text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
+            className="px-3 py-2.5 md:py-2 rounded-lg text-base md:text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
           />
           <input
             type="url"
@@ -178,7 +178,7 @@ export default function EventosTab() {
             onChange={(e) =>
               setEventoForm((f) => ({ ...f, link: e.target.value }))
             }
-            className="px-3 py-2 rounded-lg text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
+            className="px-3 py-2.5 md:py-2 rounded-lg text-base md:text-sm font-dm col-span-full bg-white/5 border border-white/10 text-cream"
           />
           <div className="space-y-1">
             <label className="text-xs font-dm text-cream-40">Início</label>
@@ -188,7 +188,7 @@ export default function EventosTab() {
               onChange={(e) =>
                 setEventoForm((f) => ({ ...f, data_inicio: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg text-sm font-dm bg-white/5 border border-white/10 text-cream"
+              className="w-full px-3 py-2.5 md:py-2 rounded-lg text-base md:text-sm font-dm bg-white/5 border border-white/10 text-cream"
               style={{ colorScheme: "dark" }}
             />
           </div>
@@ -200,7 +200,7 @@ export default function EventosTab() {
               onChange={(e) =>
                 setEventoForm((f) => ({ ...f, data_fim: e.target.value }))
               }
-              className="w-full px-3 py-2 rounded-lg text-sm font-dm bg-white/5 border border-white/10 text-cream"
+              className="w-full px-3 py-2.5 md:py-2 rounded-lg text-base md:text-sm font-dm bg-white/5 border border-white/10 text-cream"
               style={{ colorScheme: "dark" }}
             />
           </div>
@@ -288,7 +288,7 @@ export default function EventosTab() {
                     ? "Permanente: não desativa quando o horário acabar"
                     : "Marcar como permanente (não desativa automaticamente)"
                 }
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors border ${
+                className={`flex items-center gap-1.5 px-2.5 py-2 md:py-1 min-h-[40px] md:min-h-0 rounded-lg text-xs font-dm transition-colors border ${
                   evento.permanente
                     ? "bg-amber-400/15 text-amber-300 border-amber-400/30"
                     : "bg-white/5 text-cream-40 border-border-soft"
@@ -299,7 +299,7 @@ export default function EventosTab() {
               </button>
               <button
                 onClick={() => toggleEvento(evento.id, !evento.ativo)}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors border border-border-soft ${
+                className={`flex items-center gap-1.5 px-2.5 py-2 md:py-1 min-h-[40px] md:min-h-0 rounded-lg text-xs font-dm transition-colors border border-border-soft ${
                   evento.ativo
                     ? "bg-emerald-500/15 text-emerald-400"
                     : "bg-white/5 text-cream-40"
@@ -314,7 +314,7 @@ export default function EventosTab() {
               </button>
               <button
                 onClick={() => setDeleteTarget(evento)}
-                className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                className="flex items-center justify-center h-10 w-10 md:h-auto md:w-auto md:p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                 aria-label="Remover evento"
               >
                 <Trash2 className="h-4 w-4 text-red-400/60" />
