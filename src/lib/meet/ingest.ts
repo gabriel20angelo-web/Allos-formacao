@@ -398,20 +398,30 @@ export async function ingerir(opts?: {
         const condutoresNorm = nomesCondutores.map(normalizarNome);
 
         const calculadas: ParticipacaoCalculada[] = [];
-        const janelas: { inicio: Date; fim: Date }[] = [];
+        // Por participante, e não numa lista só: quando o Google repete a mesma
+        // pessoa, a lista corrida entra duplicada no cálculo do pico. A chave
+        // aqui é a mesma que deduplica as participações logo abaixo, então as
+        // duas contas passam a enxergar o mesmo conjunto de gente.
+        const janelasPorParticipante = new Map<string, { inicio: Date; fim: Date }[]>();
 
         for (const { participante, sessoes } of sessoesPorParticipante) {
           const { nome, tipo, userId } = nomeDoParticipante(participante);
           const norm = normalizarNome(nome);
           const m = medirSessoes(sessoes, fim);
 
-          for (const s of sessoes) {
-            if (!s.startTime) continue;
-            janelas.push({
-              inicio: new Date(s.startTime),
-              fim: s.endTime ? new Date(s.endTime) : fim,
-            });
-          }
+          janelasPorParticipante.set(
+            participante.name,
+            sessoes.flatMap((s) =>
+              s.startTime
+                ? [
+                    {
+                      inicio: new Date(s.startTime),
+                      fim: s.endTime ? new Date(s.endTime) : fim,
+                    },
+                  ]
+                : []
+            )
+          );
 
           // A conta da associação hospeda os encontros e nunca é aluno. Sai da
           // conciliação e não entra na contagem de participantes.
@@ -473,6 +483,13 @@ export async function ingerir(opts?: {
         // as linhas por pessoa saem certas: número errado sem nenhum erro.
         const unicas = Array.from(
           new Map(calculadas.map((c) => [c.participant_api_id, c])).values()
+        );
+
+        // O pico sai daqui, e não da varredura acima, pelo mesmo motivo: contar
+        // as sessões antes de deduplicar dobrava a lotação de quem o Google
+        // devolveu duas vezes, e o número saía inflado sem nenhum erro.
+        const janelas = unicas.flatMap(
+          (c) => janelasPorParticipante.get(c.participant_api_id) || []
         );
 
         // ── agregados do encontro ──
@@ -663,6 +680,19 @@ export async function ingerir(opts?: {
             .from("formacao_meet_presencas")
             .delete()
             .eq("conference_record_id", conf.name);
+
+          // O carimbo também vale para o lixo. Sem ele, o encontro descartado
+          // nunca ficava "pronto" e voltava para a varredura a cada quinze
+          // minutos, para sempre: participantes, sessões e transcrição pedidos
+          // de novo ao Google a cada rodada, para no fim ser jogado fora outra
+          // vez. Hoje são doze dos catorze encontros do banco.
+          if (transcricaoPronta) {
+            await sb
+              .from("formacao_meet_encontros")
+              .update({ transcricao_ingerida: true })
+              .eq("id", encontroSalvo.id);
+          }
+
           if (existente) res.encontros_atualizados++;
           else res.encontros_novos++;
           continue;

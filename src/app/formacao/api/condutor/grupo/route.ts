@@ -38,6 +38,9 @@ const CAMPOS_DO_CONDUTOR = [
   "duracao_min",
 ] as const;
 
+/** Os dois tipos de acesso que o Meet conhece. */
+const ACESSOS: AccessType[] = ["OPEN", "TRUSTED", "RESTRICTED"];
+
 export async function GET() {
   const quem = await identificar();
   if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
@@ -238,9 +241,34 @@ export async function PATCH(req: NextRequest) {
     }
   }
 
+  // O tipo de acesso entrava sem conferência nenhuma. Um valor que o Meet não
+  // conhece era gravado aqui e recusado lá, e como a gravação vem antes da
+  // chamada ao Google, a sala ficava com um estado que não existe do outro
+  // lado — com a janela automática desligada na linha seguinte, ninguém
+  // corrigiria depois.
+  if (
+    mudancas.access_type !== undefined &&
+    !ACESSOS.includes(mudancas.access_type as AccessType)
+  ) {
+    return NextResponse.json(
+      { error: `Tipo de acesso inválido. Use ${ACESSOS.join(", ")}.` },
+      { status: 400 }
+    );
+  }
+
   // Abrir ou fechar a sala à mão desliga a janela automática: senão a rotina
   // reverteria a escolha no minuto seguinte, e ninguém entenderia por quê.
   if (mudancas.access_type !== undefined) mudancas.janela_automatica = false;
+
+  // O estado de antes, para poder voltar atrás. Sem isto, uma recusa do Google
+  // deixava o banco adiantado em relação à sala: a tela mostrava "gravando" e
+  // o Meet não estava gravando, que é a diferença mais cara de perceber, porque
+  // só aparece quando alguém procura o vídeo do encontro e ele não existe.
+  const { data: antes } = await sb
+    .from("formacao_meet_spaces")
+    .select("gravar, transcrever, notas, access_type, janela_automatica, duracao_min")
+    .eq("space_name", spaceName)
+    .single();
 
   const { error } = await sb
     .from("formacao_meet_spaces")
@@ -272,8 +300,16 @@ export async function PATCH(req: NextRequest) {
     }
   } catch (e) {
     const msg = e instanceof MeetApiError ? e.message : String(e);
+
+    // Volta ao que era. A alternativa é deixar a tela dizendo uma coisa e a
+    // sala fazendo outra, e quem conduz não tem como desconfiar: o interruptor
+    // aparece ligado.
+    if (antes) {
+      await sb.from("formacao_meet_spaces").update(antes).eq("space_name", spaceName);
+    }
+
     return NextResponse.json(
-      { error: `Salvo aqui, mas o Google recusou: ${msg}` },
+      { error: `O Google recusou a mudança, então nada foi alterado: ${msg}` },
       { status: 502 }
     );
   }
