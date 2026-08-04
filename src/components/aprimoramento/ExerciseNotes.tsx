@@ -75,7 +75,7 @@ export default function ExerciseNotes({ slug, color, tint, border }: Props) {
 
   return (
     <section
-      className="mt-12 print-hide"
+      className="mt-12 mb-20 md:mb-0 print-hide"
       aria-labelledby="exercise-notes-heading"
     >
       <header className="flex items-center justify-between gap-3 mb-2">
@@ -110,7 +110,7 @@ export default function ExerciseNotes({ slug, color, tint, border }: Props) {
             ? "Faça login para escrever notas privadas"
             : "Escreva o que ficou marcante, dúvidas, ajustes pra próxima…"
         }
-        className="font-dm text-[14px] leading-relaxed w-full rounded-2xl p-4 text-cream placeholder:text-cream/30 resize-none transition-all focus:outline-none focus:ring-1"
+        className="font-dm text-[16px] md:text-[14px] leading-relaxed w-full rounded-2xl p-4 text-cream placeholder:text-cream/30 resize-none transition-all focus:outline-none focus:ring-1"
         style={
           {
             background: "rgba(255,255,255,0.025)",

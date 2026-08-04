@@ -144,13 +144,13 @@ export default async function CategoriaPage({ params }: PageProps) {
       </ol>
 
       <div
-        className="mt-14 pt-8 grid grid-cols-2 gap-3"
+        className="mt-10 pt-6 md:mt-14 md:pt-8 grid grid-cols-2 gap-3"
         style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
       >
         {prev ? (
           <Link
             href={`/formacao/aprimoramento-dinamicas/categoria/${prev.slug}`}
-            className="group rounded-2xl p-4 transition-all hover:bg-white/[0.04]"
+            className="group min-w-0 rounded-2xl p-4 transition-all hover:bg-white/[0.04]"
             style={{ border: "1px solid rgba(255,255,255,0.07)" }}
           >
             <p className="font-dm text-[10px] font-semibold tracking-widest uppercase text-cream/40 mb-1.5">
@@ -166,7 +166,7 @@ export default async function CategoriaPage({ params }: PageProps) {
         {next ? (
           <Link
             href={`/formacao/aprimoramento-dinamicas/categoria/${next.slug}`}
-            className="group rounded-2xl p-4 text-right transition-all hover:bg-white/[0.04]"
+            className="group min-w-0 rounded-2xl p-4 text-right transition-all hover:bg-white/[0.04]"
             style={{ border: "1px solid rgba(255,255,255,0.07)" }}
           >
             <p className="font-dm text-[10px] font-semibold tracking-widest uppercase text-cream/40 mb-1.5">

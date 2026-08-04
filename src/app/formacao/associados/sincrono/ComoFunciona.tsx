@@ -40,17 +40,18 @@ export default function ComoFunciona({
     <Card className="p-4">
       <button
         onClick={() => setAberto(!aberto)}
-        className="w-full flex items-center gap-2 text-left"
+        className="w-full flex items-center gap-2 text-left py-2 min-h-[44px] md:py-0 md:min-h-0"
       >
         {aberto ? (
           <ChevronDown className="h-4 w-4 text-cream/40 shrink-0" />
         ) : (
           <ChevronRight className="h-4 w-4 text-cream/40 shrink-0" />
         )}
-        <span className="text-sm text-cream font-semibold">
+        <span className="text-sm text-cream font-semibold flex-1 min-w-0">
           Como funciona o seu grupo
         </span>
-        <span className="text-xs text-cream/30 ml-auto">
+        {/* No celular a dica curta some: junto com o título ela estoura os 360px. */}
+        <span className="hidden sm:inline text-xs text-cream/30 ml-auto">
           {aberto ? "fechar" : "o combinado, em um minuto"}
         </span>
       </button>
@@ -176,7 +177,7 @@ export default function ComoFunciona({
                   navigator.clipboard.writeText(DESCRICAO_DO_GRUPO);
                   toast.success("Descrição copiada.");
                 }}
-                className="absolute top-2 right-2 p-1.5 rounded-lg text-cream/40 hover:text-cream/70"
+                className="absolute top-2 right-2 flex items-center justify-center h-10 w-10 md:h-auto md:w-auto md:p-1.5 rounded-lg text-cream/40 hover:text-cream/70"
                 style={{ background: "rgba(255,255,255,0.05)" }}
                 title="Copiar"
               >

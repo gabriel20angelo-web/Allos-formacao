@@ -101,7 +101,7 @@ export default function CortesDosCursos({
               className="w-full flex items-center justify-between gap-3 px-3 py-2.5 rounded-xl text-left hover:bg-white/[0.03] transition-colors"
               style={{ border: "1px solid rgba(255,255,255,0.06)" }}
             >
-              <span className="text-sm text-cream/80">{c.title}</span>
+              <span className="text-sm text-cream/80 min-w-0 break-words">{c.title}</span>
               <span className="text-xs text-cream/30 shrink-0">
                 {c.videos} {c.videos === 1 ? "encontro" : "encontros"}
               </span>
@@ -137,9 +137,9 @@ export default function CortesDosCursos({
             >
               <button
                 onClick={() => setAbertoId(aberto ? null : e.job_id)}
-                className="w-full flex items-center justify-between gap-3 text-left flex-wrap"
+                className="w-full flex items-center justify-between gap-3 text-left flex-wrap py-1.5 sm:py-0 min-h-[44px] sm:min-h-0"
               >
-                <span className="text-xs text-cream/80">{e.titulo}</span>
+                <span className="text-xs text-cream/80 min-w-0 break-words">{e.titulo}</span>
                 <span className="text-[11px] text-cream/35 shrink-0">
                   {e.clipes.length
                     ? `${e.clipes.length} cortes${porVer ? ` · ${porVer} por ver` : ""}`

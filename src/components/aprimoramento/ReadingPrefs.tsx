@@ -107,7 +107,7 @@ export default function ReadingPrefs() {
       {open && (
         <div
           ref={popoverRef}
-          className="absolute right-0 mt-2 z-50 rounded-2xl p-4 w-64"
+          className="absolute right-0 mt-2 z-[200] rounded-2xl p-4 w-64 max-w-[calc(100vw-2rem)]"
           style={{
             background: "rgba(20,20,20,0.96)",
             border: "1px solid rgba(255,255,255,0.08)",

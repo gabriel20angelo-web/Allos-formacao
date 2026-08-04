@@ -96,7 +96,7 @@ export default async function AprimoramentoPage() {
         </header>
 
         {/* Stat strip + Featured */}
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 mb-6">
+        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-4 md:gap-6 mb-4 md:mb-6">
           {/* Coluna esquerda: stats + atalhos + sugerir */}
           <div className="space-y-4">
             <StatStrip stats={stats} exercises={exercises} />

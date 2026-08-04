@@ -94,7 +94,7 @@ export default function AbaCortes({
                 key={f.id}
                 onClick={() => setFiltro(f.id)}
                 disabled={n === 0 && !ativo}
-                className="px-3 py-1.5 rounded-lg text-xs transition-all disabled:opacity-30"
+                className="px-3 py-2 sm:py-1.5 rounded-lg text-xs transition-all disabled:opacity-30"
                 style={{
                   background: ativo ? "rgba(200,75,49,0.14)" : "rgba(255,255,255,0.03)",
                   color: ativo ? "#E8836A" : "rgba(253,251,247,0.4)",

@@ -181,7 +181,7 @@ export default function TelaDoGrupo() {
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-fraunces font-bold text-2xl text-cream mb-1">Meu grupo</h1>
+        <h1 className="font-fraunces font-bold text-xl md:text-2xl text-cream mb-1">Meu grupo</h1>
         <p className="text-sm text-cream/50">
           {profile?.full_name ? `${profile.full_name}, aqui` : "Aqui"} você ajusta o que acontece
           no seu encontro e olha o que saiu dele.
@@ -190,25 +190,25 @@ export default function TelaDoGrupo() {
 
       {/* As abas. O contador fica no que costuma ter trabalho esperando — sem
           ele, a fila de cortes só é descoberta por quem for procurar. */}
-      <div className="flex items-center gap-1.5 flex-wrap">
+      <div className="grid grid-cols-3 gap-1.5 md:flex md:flex-wrap md:items-center">
         {ABAS.map(({ id, rotulo, icone: Icone }) => {
           const ativa = aba === id;
           return (
             <button
               key={id}
               onClick={() => setAba(id)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-medium transition-all"
+              className="w-full md:w-auto flex flex-col md:flex-row items-center justify-center md:justify-start gap-0.5 md:gap-1.5 px-1.5 md:px-3 py-2.5 md:py-2 min-h-[44px] md:min-h-0 rounded-xl text-[10px] md:text-xs font-medium text-center md:text-left leading-tight transition-all"
               style={{
                 background: ativa ? "rgba(200,75,49,0.14)" : "rgba(255,255,255,0.03)",
                 color: ativa ? "#E8836A" : "rgba(253,251,247,0.45)",
                 border: `1px solid ${ativa ? "rgba(200,75,49,0.32)" : "rgba(255,255,255,0.07)"}`,
               }}
             >
-              <Icone className="h-3.5 w-3.5" />
-              {rotulo}
+              <Icone className="h-3.5 w-3.5 shrink-0" />
+              <span>{rotulo}</span>
               {id === "cortes" && porVer > 0 && (
                 <span
-                  className="ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
+                  className="mt-0.5 md:mt-0 md:ml-0.5 px-1.5 py-0.5 rounded-full text-[10px] font-bold"
                   style={{
                     background: ativa ? "rgba(255,255,255,0.16)" : "rgba(212,168,87,0.14)",
                     color: ativa ? "#FDFBF7" : "#D4A857",

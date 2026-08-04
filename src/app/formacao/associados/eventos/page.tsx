@@ -28,10 +28,10 @@ export default async function PaginaEventos() {
 
   return (
     <div>
-      <div className="mb-8">
+      <div className="mb-6 md:mb-8">
         <div className="flex items-center gap-2.5">
-          <CalendarDays className="h-5 w-5" style={{ color: "#C84B31" }} />
-          <h1 className="font-fraunces font-bold text-2xl text-cream tracking-tight">
+          <CalendarDays className="h-5 w-5 shrink-0" style={{ color: "#C84B31" }} />
+          <h1 className="font-fraunces font-bold text-xl md:text-2xl text-cream tracking-tight">
             Eventos
           </h1>
         </div>

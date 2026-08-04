@@ -291,7 +291,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Buscar por título, tema ou tag…"
-            className="font-dm text-sm w-full pl-11 pr-10 py-3 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-all"
+            className="font-dm text-base md:text-sm w-full pl-11 pr-10 py-3 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50 transition-all"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.08)",
@@ -336,7 +336,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
         <button
           type="button"
           onClick={() => setShowMore((v) => !v)}
-          className="font-dm text-[12px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-cream/60 hover:text-cream hover:bg-white/[0.04] transition-colors"
+          className="font-dm text-[12px] inline-flex items-center gap-1.5 px-2.5 py-2.5 md:py-1 rounded-md text-cream/60 hover:text-cream hover:bg-white/[0.04] transition-colors"
           aria-expanded={showMore}
         >
           <ChevronDown
@@ -371,7 +371,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
           <select
             value={sortKey}
             onChange={(e) => setSortKey(e.target.value as SortKey)}
-            className="font-dm text-[12px] bg-transparent text-cream/85 focus:outline-none focus:ring-1 focus:ring-accent/40 rounded px-1 py-0.5 cursor-pointer"
+            className="font-dm text-base md:text-[12px] bg-transparent text-cream/85 focus:outline-none focus:ring-1 focus:ring-accent/40 rounded px-1 py-1.5 md:py-0.5 cursor-pointer"
             aria-label="Ordenar"
           >
             <option value="ordem">Ordem original</option>
@@ -386,7 +386,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
           <select
             value={groupKey}
             onChange={(e) => setGroupKey(e.target.value as GroupKey)}
-            className="font-dm text-[12px] bg-transparent text-cream/85 focus:outline-none focus:ring-1 focus:ring-accent/40 rounded px-1 py-0.5 cursor-pointer"
+            className="font-dm text-base md:text-[12px] bg-transparent text-cream/85 focus:outline-none focus:ring-1 focus:ring-accent/40 rounded px-1 py-1.5 md:py-0.5 cursor-pointer"
             aria-label="Agrupar"
           >
             <option value="categoria">Por categoria</option>
@@ -401,7 +401,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
           type="button"
           onClick={suggestRandom}
           disabled={sorted.length === 0}
-          className="font-dm text-[12px] inline-flex items-center gap-1.5 px-2.5 py-1 rounded-md text-cream/60 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-cream/60 disabled:hover:bg-transparent"
+          className="font-dm text-[12px] inline-flex items-center gap-1.5 px-2.5 py-2.5 md:py-1 rounded-md text-cream/60 hover:text-accent hover:bg-accent/10 transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:text-cream/60 disabled:hover:bg-transparent"
           aria-label="Sugerir exercício aleatório"
           title={
             sorted.length === 0
@@ -417,7 +417,7 @@ export default function ExerciseCatalog({ exercises }: Props) {
           <button
             type="button"
             onClick={clearAll}
-            className="font-dm text-[12px] text-cream/40 hover:text-accent transition-colors px-2 py-1"
+            className="font-dm text-[12px] text-cream/40 hover:text-accent transition-colors px-2 py-2.5 md:py-1"
           >
             Limpar tudo
           </button>
@@ -632,7 +632,7 @@ function Chip({
       type="button"
       onClick={onClick}
       title={hint}
-      className="font-dm text-xs font-medium px-3 py-1.5 rounded-full transition-all hover:translate-y-[-1px]"
+      className="font-dm text-xs font-medium px-3 py-2.5 md:py-1.5 rounded-full transition-all hover:translate-y-[-1px]"
       style={{
         color: active ? c : "rgba(253,251,247,0.55)",
         background: active ? t : "rgba(255,255,255,0.025)",
@@ -661,7 +661,7 @@ function ExerciseCard({
   return (
     <Link
       href={`/formacao/aprimoramento-dinamicas/${exercise.slug}`}
-      className="group block rounded-2xl p-5 transition-all duration-200 hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 relative"
+      className="group block rounded-2xl p-4 sm:p-5 transition-all duration-200 hover:translate-y-[-1px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 relative"
       style={
         {
           background: "rgba(255,255,255,0.025)",
@@ -710,7 +710,11 @@ function ExerciseCard({
         />
       </div>
 
-      <div className="flex flex-wrap items-center gap-1.5 mt-3 pl-13">
+      {/* 52px = o quadrado do número (w-9) mais o gap-4, para as etiquetas
+          alinharem com o título. Estava escrito `pl-13`, que não existe na
+          escala do Tailwind e por isso nunca valeu nada. No celular fica sem
+          recuo mesmo: a largura ali é curta demais para doar 52px. */}
+      <div className="flex flex-wrap items-center gap-1.5 mt-3 sm:pl-[52px]">
         <CardBadge color={cat.color} tint={cat.tint} border={cat.border}>
           {primaryFormato.label}
         </CardBadge>

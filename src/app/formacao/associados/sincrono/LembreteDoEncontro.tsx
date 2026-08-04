@@ -69,7 +69,7 @@ export default function LembreteDoEncontro({
           {linkDoMeet && (
             <button
               onClick={() => copiar(linkDoMeet, "Link do Meet")}
-              className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all hover:opacity-80"
+              className="flex items-center gap-1.5 mt-1.5 px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 break-all"
               style={{
                 background: "rgba(212,168,87,0.12)",
                 color: "#D4A857",
@@ -90,7 +90,7 @@ export default function LembreteDoEncontro({
           certificado da pessoa, e depois do encontro não há como recuperar.
           <button
             onClick={() => copiar(LINK_CERTIFICADO, "Link do certificado")}
-            className="flex items-center gap-1.5 mt-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-medium transition-all hover:opacity-80"
+            className="flex items-center gap-1.5 mt-1.5 px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-[11px] font-medium transition-all hover:opacity-80 break-all"
             style={{
               background: "rgba(212,168,87,0.12)",
               color: "#D4A857",

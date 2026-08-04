@@ -52,8 +52,8 @@ export default function AbaEncontro({
 
         return (
           <Card key={sala.space_name} className="p-4">
-            <div className="flex items-start justify-between gap-3 flex-wrap">
-              <div>
+            <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
+              <div className="min-w-0">
                 <p className="text-sm text-cream font-semibold">
                   {sala.dia_semana !== null ? DIAS[sala.dia_semana] : sala.rotulo}
                   {sala.hora ? ` · ${sala.hora}` : ""}
@@ -68,10 +68,10 @@ export default function AbaEncontro({
                   href={sala.meeting_uri}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs"
+                  className="inline-flex items-center gap-1 text-xs break-all"
                   style={{ color: ROXO }}
                 >
-                  <Link2 className="h-3 w-3" /> {sala.meeting_code}
+                  <Link2 className="h-3 w-3 shrink-0" /> {sala.meeting_code}
                 </a>
               )}
             </div>
@@ -96,7 +96,7 @@ export default function AbaEncontro({
                     key={campo}
                     onClick={() => aoMudarSala(sala, { [campo]: !ligado })}
                     disabled={ocupado}
-                    className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                    className="flex items-center gap-1 px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-xs disabled:opacity-40"
                     style={{
                       background: ligado ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
                       color: ligado ? ROXO : "rgba(253,251,247,0.35)",
@@ -116,7 +116,7 @@ export default function AbaEncontro({
                 }
                 disabled={ocupado}
                 title="Aberta deixa entrar sem bater à porta. Fechada exige que você aceite cada pessoa."
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                className="flex items-center gap-1 px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-xs disabled:opacity-40"
                 style={{
                   background:
                     sala.access_type === "OPEN"
@@ -139,19 +139,20 @@ export default function AbaEncontro({
                 <button
                   onClick={() => aoMudarSala(sala, { janela_automatica: true })}
                   disabled={ocupado}
-                  className="px-2.5 py-1.5 rounded-lg text-xs text-cream/40 border border-white/10"
+                  className="flex items-center px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-xs text-cream/40 border border-white/10"
                 >
                   voltar ao horário
                 </button>
               )}
 
               {/* Encerrar derruba todo mundo de dentro, então pergunta antes e
-                  fica separado dos interruptores, que são reversíveis. */}
+                  fica separado dos interruptores, que são reversíveis; gap-2 do
+                  container acima já garante distância mínima dos outros botões. */}
               <button
                 onClick={() => aoEncerrar(sala)}
                 disabled={ocupado}
                 title="Encerra a reunião em andamento para todos, sem precisar entrar nela."
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-xs disabled:opacity-40"
+                className="flex items-center gap-1 px-3 py-2.5 min-h-[44px] md:px-2.5 md:py-1.5 md:min-h-0 rounded-lg text-xs disabled:opacity-40"
                 style={{
                   background: "rgba(255,77,77,0.08)",
                   color: "#FF6B6B",
@@ -161,7 +162,7 @@ export default function AbaEncontro({
                 <PhoneOff className="h-3 w-3" /> Encerrar
               </button>
 
-              <span className="flex items-center gap-1 text-xs text-cream/30 ml-auto">
+              <span className="flex items-center gap-1 text-xs text-cream/30 w-full justify-end mt-1 sm:w-auto sm:ml-auto sm:justify-start sm:mt-0">
                 <Clock3 className="h-3 w-3" />
                 {sala.duracao_min ? `${sala.duracao_min} min` : "duração padrão"}
               </span>
@@ -178,7 +179,7 @@ export default function AbaEncontro({
               {sala.encontros.slice(0, 8).map((e) => (
                 <div
                   key={e.id}
-                  className="flex items-center justify-between gap-3 flex-wrap rounded-xl px-3 py-2"
+                  className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-1.5 sm:gap-3 rounded-xl px-3 py-2"
                   style={{
                     background: "rgba(255,255,255,0.02)",
                     border: "1px solid rgba(255,255,255,0.05)",
@@ -224,7 +225,7 @@ export default function AbaEncontro({
             {porVer > 0 && (
               <button
                 onClick={aoVerCortes}
-                className="mt-3 inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium"
+                className="mt-3 w-full sm:w-auto flex sm:inline-flex items-center justify-center sm:justify-start gap-1.5 px-4 sm:px-3 py-3 sm:py-1.5 min-h-[44px] sm:min-h-0 rounded-lg text-xs font-medium"
                 style={{
                   background: "rgba(108,92,231,0.12)",
                   color: ROXO,

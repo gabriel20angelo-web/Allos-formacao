@@ -82,7 +82,7 @@ export default function ClipeGrade({
                 />
               )}
               <span
-                className="absolute inset-0 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                className="absolute inset-0 flex items-center justify-center opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity"
                 style={{ background: "rgba(0,0,0,0.45)" }}
               >
                 <Play className="h-7 w-7 text-white" fill="white" />
@@ -99,11 +99,11 @@ export default function ClipeGrade({
 
             <p className="text-[10px] text-cream/70 px-1.5 pt-1.5 line-clamp-2">{c.titulo}</p>
 
-            <div className="flex items-center gap-1 p-1.5">
+            <div className="flex items-center flex-wrap gap-2 sm:gap-1 p-1.5">
               <button
                 onClick={() => aoAvaliar(c, "gostei")}
                 title="Publicável"
-                className="p-1 rounded"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1 rounded"
                 style={{
                   background: c.avaliacao === "gostei" ? "rgba(74,222,128,0.15)" : "transparent",
                   color: c.avaliacao === "gostei" ? "#4ADE80" : "rgba(253,251,247,0.3)",
@@ -114,7 +114,7 @@ export default function ClipeGrade({
               <button
                 onClick={() => aoAvaliar(c, "rejeitado")}
                 title="Não publicar"
-                className="p-1 rounded"
+                className="flex items-center justify-center min-h-[44px] min-w-[44px] sm:min-h-0 sm:min-w-0 p-1 rounded"
                 style={{
                   background:
                     c.avaliacao === "rejeitado" ? "rgba(245,158,11,0.15)" : "transparent",
@@ -129,7 +129,7 @@ export default function ClipeGrade({
                 target="_blank"
                 rel="noreferrer"
                 title="Baixar"
-                className="p-1 rounded text-cream/30 ml-auto"
+                className="flex items-center justify-center min-h-[40px] min-w-[40px] sm:min-h-0 sm:min-w-0 p-1 rounded text-cream/30 ml-auto"
               >
                 <Download className="h-3 w-3" />
               </a>

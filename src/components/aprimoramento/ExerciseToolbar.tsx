@@ -149,7 +149,7 @@ function ToolbarButton({
       type="button"
       onClick={onClick}
       disabled={disabled}
-      className="font-dm text-[12.5px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all hover:translate-y-[-1px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
+      className="font-dm text-[12.5px] inline-flex items-center gap-1.5 px-3 py-2.5 md:py-1.5 rounded-full transition-all hover:translate-y-[-1px] disabled:opacity-40 disabled:cursor-not-allowed disabled:hover:translate-y-0"
       style={{
         color: active ? color : "rgba(253,251,247,0.65)",
         background: active ? tint : "rgba(255,255,255,0.025)",

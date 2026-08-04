@@ -101,7 +101,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         >
           {/* Gradient header — cor da categoria desbotando pra transparente */}
           <div
-            className="absolute -top-12 -left-6 -right-6 h-64 -z-10 pointer-events-none rounded-3xl"
+            className="absolute -top-12 -left-4 -right-4 md:-left-6 md:-right-6 h-64 -z-10 pointer-events-none rounded-3xl"
             aria-hidden="true"
             style={{
               background: `radial-gradient(ellipse 80% 70% at 30% 0%, ${cat.tint} 0%, transparent 70%)`,
@@ -249,13 +249,13 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
           <RelatedExercises items={related} />
 
           <div
-            className="mt-14 pt-8 grid grid-cols-2 gap-3 print-hide"
+            className="mt-10 pt-6 md:mt-14 md:pt-8 grid grid-cols-2 gap-3 print-hide"
             style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
           >
             {prev ? (
               <Link
                 href={`/formacao/aprimoramento-dinamicas/${prev.slug}`}
-                className="group rounded-2xl p-4 transition-all hover:bg-white/[0.04]"
+                className="group min-w-0 rounded-2xl p-4 transition-all hover:bg-white/[0.04]"
                 style={{ border: "1px solid rgba(255,255,255,0.07)" }}
               >
                 <p className="font-dm text-[10px] font-semibold tracking-widest uppercase text-cream/40 mb-1.5">
@@ -271,7 +271,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             {next ? (
               <Link
                 href={`/formacao/aprimoramento-dinamicas/${next.slug}`}
-                className="group rounded-2xl p-4 text-right transition-all hover:bg-white/[0.04]"
+                className="group min-w-0 rounded-2xl p-4 text-right transition-all hover:bg-white/[0.04]"
                 style={{ border: "1px solid rgba(255,255,255,0.07)" }}
               >
                 <p className="font-dm text-[10px] font-semibold tracking-widest uppercase text-cream/40 mb-1.5">
@@ -288,7 +288,7 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
         </article>
 
         {/* TOC lateral (sticky em desktop, oculto em mobile) */}
-        <aside className="min-w-0">
+        <aside className="hidden md:block min-w-0">
           <ExerciseToc items={toc} color={cat.color} tint={cat.tint} />
         </aside>
       </div>

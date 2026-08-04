@@ -41,10 +41,12 @@ export default function Modal({
 
   if (!open) return null;
 
+  // O z fica acima de 90 porque no celular a barra de navegação do rodapé mora
+  // em z-[90] e cobria o rodapé de botões de todo modal do app.
   return (
     <div
       ref={overlayRef}
-      className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
+      className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm"
       onClick={(e) => {
         if (e.target === overlayRef.current) onClose();
       }}
@@ -56,27 +58,27 @@ export default function Modal({
         className={`
           rounded-[16px]
           w-full ${maxWidth}
-          max-h-[90vh] overflow-y-auto
+          max-h-[calc(100dvh-2rem)] sm:max-h-[90vh] overflow-y-auto
           animate-fade-up
           bg-dark-surface border border-accent-soft
           shadow-[0_24px_80px_rgba(0,0,0,0.5)]
         `}
       >
         {title && (
-          <div className="flex items-center justify-between p-6 border-b border-accent/10">
-            <h2 className="font-fraunces font-bold text-xl text-cream">
+          <div className="flex items-center justify-between gap-2 p-4 sm:p-6 border-b border-accent/10">
+            <h2 className="font-fraunces font-bold text-lg sm:text-xl text-cream min-w-0 break-words">
               {title}
             </h2>
             <button
               onClick={onClose}
-              className="p-1.5 rounded-[8px] text-cream/40 hover:text-cream hover:bg-white/5 transition-colors"
+              className="shrink-0 p-2.5 sm:p-1.5 rounded-[8px] text-cream/40 hover:text-cream hover:bg-white/5 transition-colors"
               aria-label="Fechar modal"
             >
               <X className="h-5 w-5" />
             </button>
           </div>
         )}
-        <div className="p-6">{children}</div>
+        <div className="p-4 sm:p-6">{children}</div>
       </div>
     </div>
   );

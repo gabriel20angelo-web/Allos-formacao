@@ -25,7 +25,7 @@ export default function FacilitatorButton({
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="font-dm text-[12.5px] inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full transition-all hover:translate-y-[-1px] print-hide"
+        className="font-dm text-[12.5px] inline-flex items-center gap-1.5 px-3 py-2.5 md:py-1.5 rounded-full transition-all hover:translate-y-[-1px] print-hide"
         style={{
           color,
           background: tint,

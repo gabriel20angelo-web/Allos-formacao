@@ -218,7 +218,7 @@ export default function FacilitatorMode({
           <button
             type="button"
             onClick={handleClose}
-            className="flex-shrink-0 w-9 h-9 rounded-xl flex items-center justify-center text-cream/55 hover:text-cream hover:bg-white/[0.06] transition-colors"
+            className="flex-shrink-0 w-10 h-10 md:w-9 md:h-9 rounded-xl flex items-center justify-center text-cream/55 hover:text-cream hover:bg-white/[0.06] transition-colors"
             aria-label="Sair do modo facilitador (Esc)"
           >
             <X width={16} height={16} />
@@ -258,7 +258,7 @@ export default function FacilitatorMode({
           <button
             type="button"
             onClick={() => setPaused((p) => !p)}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-cream/55 hover:text-cream hover:bg-white/[0.06] transition-colors"
+            className="w-10 h-10 md:w-9 md:h-9 rounded-xl flex items-center justify-center text-cream/55 hover:text-cream hover:bg-white/[0.06] transition-colors"
             aria-label={paused ? "Retomar (Espaço)" : "Pausar (Espaço)"}
             title={paused ? "Retomar (Espaço)" : "Pausar (Espaço)"}
           >
@@ -272,7 +272,7 @@ export default function FacilitatorMode({
           <button
             type="button"
             onClick={resetTimers}
-            className="w-9 h-9 rounded-xl flex items-center justify-center text-cream/45 hover:text-cream hover:bg-white/[0.06] transition-colors"
+            className="w-10 h-10 md:w-9 md:h-9 rounded-xl flex items-center justify-center text-cream/45 hover:text-cream hover:bg-white/[0.06] transition-colors"
             aria-label="Zerar timers"
             title="Zerar timers"
           >
@@ -315,7 +315,7 @@ export default function FacilitatorMode({
           <ExerciseBlocks blocks={active.blocks} />
 
           <label
-            className="inline-flex items-center gap-2 mt-10 px-3 py-2 rounded-xl cursor-pointer transition-colors hover:bg-white/[0.04]"
+            className="inline-flex items-center gap-2 mt-10 px-3 py-2.5 md:py-2 rounded-xl cursor-pointer transition-colors hover:bg-white/[0.04]"
             style={{
               background: isChecked ? tint : "transparent",
               border: `1px solid ${isChecked ? border : "rgba(255,255,255,0.07)"}`,
@@ -349,7 +349,7 @@ export default function FacilitatorMode({
 
       {/* ─── Footer ──────────────────────────────────────────────────── */}
       <footer
-        className="relative z-10 px-4 md:px-8 py-3 md:py-4"
+        className="relative z-10 px-4 md:px-8 pt-3 md:pt-4 pb-[max(0.75rem,env(safe-area-inset-bottom))] md:pb-4"
         style={{
           borderTop: "1px solid rgba(255,255,255,0.06)",
           background: "rgba(0,0,0,0.4)",
@@ -424,7 +424,7 @@ export default function FacilitatorMode({
               type="button"
               onClick={goPrev}
               disabled={isFirst}
-              className="px-3 py-2 rounded-xl text-cream/65 hover:text-cream hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent inline-flex items-center gap-1 font-dm text-[12px]"
+              className="px-3 py-2 min-h-[48px] min-w-[48px] md:min-h-0 md:min-w-0 rounded-xl text-cream/65 hover:text-cream hover:bg-white/[0.06] transition-colors disabled:opacity-30 disabled:cursor-not-allowed disabled:hover:bg-transparent inline-flex items-center justify-center gap-1 font-dm text-[12px]"
               aria-label="Voltar (←)"
             >
               <ChevronLeft width={14} height={14} aria-hidden="true" />
@@ -434,7 +434,7 @@ export default function FacilitatorMode({
             <button
               type="button"
               onClick={isLast ? handleClose : goNext}
-              className="px-4 py-2 rounded-xl font-dm text-[12.5px] font-medium transition-colors inline-flex items-center gap-1"
+              className="px-4 py-2 min-h-[48px] md:min-h-0 rounded-xl font-dm text-[12.5px] font-medium transition-colors inline-flex items-center justify-center gap-1"
               style={{
                 background: color,
                 color: "#111",

@@ -182,7 +182,7 @@ export default function SuggestIdeaTrigger() {
                 onChange={(e) => setTitulo(e.target.value.slice(0, TITLE_MAX))}
                 placeholder="Ex.: Roleplay sobre confronto suave"
                 maxLength={TITLE_MAX}
-                className="font-dm text-sm w-full px-3 py-2.5 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50"
+                className="font-dm text-base md:text-sm w-full px-3 py-2.5 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50"
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
@@ -206,7 +206,7 @@ export default function SuggestIdeaTrigger() {
                 rows={5}
                 maxLength={DESC_MAX}
                 placeholder="Pra que serve, em que contexto entra e como funciona — em traços gerais."
-                className="font-dm text-sm w-full px-3 py-2.5 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50 resize-none"
+                className="font-dm text-base md:text-sm w-full px-3 py-2.5 rounded-xl text-cream placeholder:text-cream/30 focus:outline-none focus:ring-1 focus:ring-accent/50 resize-none"
                 style={{
                   background: "rgba(255,255,255,0.04)",
                   border: "1px solid rgba(255,255,255,0.08)",
@@ -216,7 +216,7 @@ export default function SuggestIdeaTrigger() {
 
             {/* Categoria */}
             <Field id="sg-cat" label="Categoria sugerida (opcional)">
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex flex-wrap gap-2 sm:gap-1.5">
                 <CategoryChip
                   active={categoria === ""}
                   onClick={() => setCategoria("")}
@@ -239,19 +239,19 @@ export default function SuggestIdeaTrigger() {
               </div>
             </Field>
 
-            <div className="flex items-center justify-end gap-3 pt-2">
+            <div className="flex flex-col-reverse sm:flex-row sm:items-center sm:justify-end gap-3 pt-2">
               <button
                 type="button"
                 onClick={closeModal}
                 disabled={submitting}
-                className="font-dm text-sm px-4 py-2 rounded-xl text-cream/55 hover:text-cream transition-colors disabled:opacity-40"
+                className="font-dm text-sm px-4 py-2.5 sm:py-2 rounded-xl text-cream/55 hover:text-cream transition-colors disabled:opacity-40 w-full sm:w-auto"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
                 disabled={!formValid || submitting}
-                className="font-dm text-sm font-medium inline-flex items-center gap-2 px-4 py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:translate-y-[-1px]"
+                className="font-dm text-sm font-medium inline-flex items-center justify-center gap-2 px-4 py-2.5 sm:py-2 rounded-xl transition-all disabled:opacity-40 disabled:cursor-not-allowed hover:translate-y-[-1px] w-full sm:w-auto"
                 style={{
                   background: "linear-gradient(135deg, #C84B31, #A33D27)",
                   color: "white",

@@ -12,7 +12,7 @@ export default function RelatedExercises({
 
   return (
     <section
-      className="mt-14 pt-8 print-hide"
+      className="mt-10 pt-6 md:mt-14 md:pt-8 print-hide"
       style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
       aria-labelledby="veja-tambem-heading"
     >

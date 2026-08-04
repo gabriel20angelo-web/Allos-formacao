@@ -31,27 +31,37 @@ export default function Player({
 
   return (
     <div
-      className="fixed inset-0 z-50 flex items-center justify-center p-4"
+      className="fixed inset-0 z-[200] flex items-center justify-center p-0 sm:p-4"
       style={{ background: "rgba(0,0,0,0.8)" }}
       onClick={fecharSalvando}
     >
       <div
-        className="rounded-2xl overflow-hidden max-w-[min(420px,90vw)] w-full"
+        className="w-full h-full sm:h-auto sm:max-w-[min(420px,90vw)] rounded-none sm:rounded-2xl overflow-x-hidden overflow-y-auto max-h-[100dvh] sm:max-h-[90dvh]"
         style={{ background: "#111" }}
         onClick={(ev) => ev.stopPropagation()}
       >
-        <video
-          src={clipe.preview_url || clipe.url || undefined}
-          poster={clipe.thumbnail_url || undefined}
-          controls
-          autoPlay
-          className="w-full"
-          style={{ aspectRatio: "9/16", background: "#000" }}
-        />
+        <div className="relative">
+          <video
+            src={clipe.preview_url || clipe.url || undefined}
+            poster={clipe.thumbnail_url || undefined}
+            controls
+            autoPlay
+            className="w-full max-h-[60dvh] sm:max-h-none object-contain sm:object-fill"
+            style={{ aspectRatio: "9/16", background: "#000" }}
+          />
+          <button
+            onClick={fecharSalvando}
+            className="sm:hidden absolute top-3 right-3 z-10 flex items-center justify-center h-11 w-11 rounded-full text-white"
+            style={{ background: "rgba(0,0,0,0.55)" }}
+            aria-label="Fechar"
+          >
+            <X className="h-5 w-5" />
+          </button>
+        </div>
         <div className="p-3">
-          <p className="text-sm text-cream">{clipe.titulo}</p>
+          <p className="text-sm text-cream break-words">{clipe.titulo}</p>
           {clipe.descricao && (
-            <p className="text-xs text-cream/45 mt-1">{clipe.descricao}</p>
+            <p className="text-xs text-cream/45 mt-1 break-words">{clipe.descricao}</p>
           )}
 
           <textarea
@@ -60,7 +70,7 @@ export default function Player({
             onBlur={() => aoSalvarAnotacao(clipe)}
             placeholder="Por que presta, ou por que não. Ex: cortou no meio da ressalva."
             rows={2}
-            className="w-full mt-3 px-2.5 py-2 rounded-lg text-xs resize-none"
+            className="w-full mt-3 px-2.5 py-2 rounded-lg text-base md:text-xs resize-none"
             style={{
               background: "rgba(255,255,255,0.04)",
               border: "1px solid rgba(255,255,255,0.08)",
@@ -68,14 +78,17 @@ export default function Player({
             }}
           />
 
-          <div className="flex items-center gap-2 mt-3">
+          {/* No celular o veredicto vem primeiro e os dois ícones dividem uma
+              linha ao pé. O `sm:contents` dissolve esse agrupamento no desktop,
+              devolvendo a linha única de sempre. */}
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 mt-3">
             <button
               onClick={() => {
                 aoSalvarAnotacao(clipe);
                 aoAvaliar(clipe, "gostei");
                 aoFechar();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold"
+              className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-3 py-2.5 sm:py-1.5 rounded-lg text-xs font-semibold"
               style={{
                 background: "rgba(74,222,128,0.12)",
                 color: "#4ADE80",
@@ -90,7 +103,7 @@ export default function Player({
                 aoAvaliar(clipe, "rejeitado");
                 aoFechar();
               }}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs"
+              className="flex items-center justify-center gap-1.5 w-full sm:w-auto px-3 py-2.5 sm:py-1.5 rounded-lg text-xs"
               style={{
                 background: "rgba(255,255,255,0.04)",
                 color: "rgba(253,251,247,0.5)",
@@ -99,19 +112,24 @@ export default function Player({
             >
               <ThumbsDown className="h-3.5 w-3.5" /> Não publicar
             </button>
-            <a
-              href={clipe.url || clipe.preview_url || "#"}
-              download
-              target="_blank"
-              rel="noreferrer"
-              className="p-1.5 rounded-lg text-cream/40"
-              title="Baixar"
-            >
-              <Download className="h-4 w-4" />
-            </a>
-            <button onClick={fecharSalvando} className="ml-auto p-1.5 rounded-lg text-cream/40">
-              <X className="h-4 w-4" />
-            </button>
+            <div className="flex items-center justify-end gap-2 sm:contents">
+              <a
+                href={clipe.url || clipe.preview_url || "#"}
+                download
+                target="_blank"
+                rel="noreferrer"
+                className="flex items-center justify-center h-10 w-10 sm:h-auto sm:w-auto sm:p-1.5 rounded-lg text-cream/40"
+                title="Baixar"
+              >
+                <Download className="h-4 w-4" />
+              </a>
+              <button
+                onClick={fecharSalvando}
+                className="flex items-center justify-center h-10 w-10 sm:h-auto sm:w-auto sm:ml-auto sm:p-1.5 rounded-lg text-cream/40"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
           </div>
         </div>
       </div>

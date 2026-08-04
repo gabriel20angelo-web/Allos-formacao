@@ -1300,7 +1300,7 @@ export default function MeetAdminPage() {
           <div className="flex items-center gap-3 flex-wrap">
             <CheckCircle2 className="h-5 w-5 text-emerald-400 shrink-0" />
             <div className="flex-1 min-w-[200px]">
-              <p className="text-sm text-cream">
+              <p className="text-sm text-cream break-all">
                 Conectado como <span className="font-semibold">{status?.organizer_email}</span>
               </p>
               <p className="text-xs text-cream/40 mt-0.5">
@@ -1320,8 +1320,8 @@ export default function MeetAdminPage() {
         </Card>
       )}
 
-      {/* Abas */}
-      <div className="flex flex-wrap gap-1">
+      {/* Abas: no celular rola na horizontal em vez de quebrar linha, senão a barra fica alta demais */}
+      <div className="flex gap-1 overflow-x-auto -mx-4 px-4 pb-1 md:mx-0 md:px-0 md:pb-0 md:flex-wrap md:overflow-visible">
         {([
           ["salas", "Salas dos grupos"],
           ["encontros", `Encontros${status?.total_encontros ? ` (${status.total_encontros})` : ""}`],
@@ -1333,7 +1333,7 @@ export default function MeetAdminPage() {
           <button
             key={id}
             onClick={() => setAba(id)}
-            className="font-dm text-xs px-3 py-1.5 rounded-full transition-all"
+            className="shrink-0 font-dm text-xs px-3 py-1.5 rounded-full transition-all"
             style={{
               backgroundColor: aba === id ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
               color: aba === id ? ROXO : "rgba(253,251,247,0.35)",
@@ -1394,7 +1394,7 @@ export default function MeetAdminPage() {
                 value={novaAvulsa}
                 onChange={(e) => setNovaAvulsa(e.target.value)}
                 placeholder="Nome da reunião"
-                className="flex-1 min-w-[180px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+                className="flex-1 min-w-[180px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream placeholder:text-cream/25"
               />
               <button
                 onClick={criarSalaAvulsa}
@@ -1678,7 +1678,7 @@ export default function MeetAdminPage() {
                       // página: sem cor explícita nas opções, o Windows abre
                       // com fundo branco e herda o texto claro do tema escuro,
                       // deixando a lista ilegível.
-                      className="border border-white/10 rounded-lg px-2.5 py-1.5 text-xs max-w-[280px]"
+                      className="text-base md:text-xs border border-white/10 rounded-lg px-2.5 py-1.5 max-w-full md:max-w-[280px]"
                       style={{ background: "#1A1A1A", color: "#FDFBF7" }}
                     >
                       <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
@@ -1739,7 +1739,7 @@ export default function MeetAdminPage() {
           })}
 
           {slotsOrdenados.length === 0 && (
-            <Card className="p-6 text-center text-sm text-cream/40">
+            <Card className="p-4 sm:p-6 text-center text-sm text-cream/40">
               Nenhum grupo ativo na grade.
             </Card>
           )}
@@ -1764,12 +1764,12 @@ export default function MeetAdminPage() {
                 onChange={(e) => setBusca(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && buscarNasFalas()}
                 placeholder="Buscar palavra nas transcrições"
-                className="flex-1 min-w-[200px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+                className="flex-1 min-w-[200px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream placeholder:text-cream/25"
               />
               <select
                 value={filtroGrupo}
                 onChange={(e) => setFiltroGrupo(e.target.value)}
-                className="border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
+                className="border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs"
                 style={{ background: "#1A1A1A", color: "#FDFBF7" }}
               >
                 <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
@@ -1888,7 +1888,7 @@ export default function MeetAdminPage() {
           </Card>
 
           {falhouEncontros ? (
-            <Card className="p-6 text-center">
+            <Card className="p-4 sm:p-6 text-center">
               <AlertTriangle className="h-5 w-5 text-amber-400 mx-auto mb-2" />
               <p className="text-sm text-cream/60">Não consegui buscar os encontros.</p>
               <p className="text-xs text-cream/40 mt-1">
@@ -1896,7 +1896,7 @@ export default function MeetAdminPage() {
               </p>
             </Card>
           ) : encontrosFiltrados.length === 0 ? (
-            <Card className="p-6 text-center text-sm text-cream/40">
+            <Card className="p-4 sm:p-6 text-center text-sm text-cream/40">
               Nenhum encontro capturado ainda. Depois que os grupos usarem as salas novas, eles
               aparecem aqui sozinhos.
             </Card>
@@ -2014,51 +2014,95 @@ export default function MeetAdminPage() {
                   </div>
 
                   {aberto && (
-                    <div className="mt-3 pt-3 border-t border-white/5 overflow-x-auto">
-                      <table className="w-full text-xs">
-                        <thead>
-                          <tr className="text-cream/30 text-left">
-                            <th className="pb-2 font-normal">Pessoa</th>
-                            <th className="pb-2 font-normal">Minutos</th>
-                            <th className="pb-2 font-normal">Do encontro</th>
-                            <th className="pb-2 font-normal">Chegou</th>
-                            <th className="pb-2 font-normal">Falou</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          {e.participacoes.map((p, i) => (
-                            <tr key={i} className="border-t border-white/5">
-                              <td className="py-1.5 text-cream/70">
-                                {p.display_name}
-                                {p.eh_condutor && (
-                                  <span className="ml-1.5 text-cream/30">condutor</span>
-                                )}
-                                {!p.aluno_id && !p.eh_condutor && (
-                                  <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
-                                )}
-                              </td>
-                              <td className="py-1.5 text-cream/50">{p.minutos_presentes}</td>
-                              <td className="py-1.5 text-cream/50">
-                                {p.permanencia_pct !== null ? `${p.permanencia_pct}%` : "—"}
-                              </td>
-                              <td className="py-1.5 text-cream/50">
+                    <div className="mt-3 pt-3 border-t border-white/5">
+                      {/* Tabela só no desktop; no celular vira cards, mesmos dados */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-xs">
+                          <thead>
+                            <tr className="text-cream/30 text-left">
+                              <th className="pb-2 font-normal">Pessoa</th>
+                              <th className="pb-2 font-normal">Minutos</th>
+                              <th className="pb-2 font-normal">Do encontro</th>
+                              <th className="pb-2 font-normal">Chegou</th>
+                              <th className="pb-2 font-normal">Falou</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {e.participacoes.map((p, i) => (
+                              <tr key={i} className="border-t border-white/5">
+                                <td className="py-1.5 text-cream/70">
+                                  {p.display_name}
+                                  {p.eh_condutor && (
+                                    <span className="ml-1.5 text-cream/30">condutor</span>
+                                  )}
+                                  {!p.aluno_id && !p.eh_condutor && (
+                                    <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
+                                  )}
+                                </td>
+                                <td className="py-1.5 text-cream/50">{p.minutos_presentes}</td>
+                                <td className="py-1.5 text-cream/50">
+                                  {p.permanencia_pct !== null ? `${p.permanencia_pct}%` : "—"}
+                                </td>
+                                <td className="py-1.5 text-cream/50">
+                                  {p.atraso_min === null
+                                    ? "—"
+                                    : p.atraso_min <= tolerancia
+                                      ? "no horário"
+                                      : `${p.atraso_min} min depois`}
+                                </td>
+                                <td className="py-1.5 text-cream/50">
+                                  {p.minutos_fala === null
+                                    ? "—"
+                                    : p.minutos_fala === 0
+                                      ? "não falou"
+                                      : `${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala} vezes`}
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                      <div className="md:hidden space-y-2">
+                        {e.participacoes.map((p, i) => (
+                          <div
+                            key={i}
+                            className="rounded-[14px] p-3.5"
+                            style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                          >
+                            <p className="text-xs text-cream/70 break-words">
+                              {p.display_name}
+                              {p.eh_condutor && (
+                                <span className="ml-1.5 text-cream/30">condutor</span>
+                              )}
+                              {!p.aluno_id && !p.eh_condutor && (
+                                <span className="ml-1.5 text-amber-400/60">sem cadastro</span>
+                              )}
+                            </p>
+                            <div className="mt-2 grid grid-cols-2 gap-x-3 gap-y-1 text-[11px] text-cream/50">
+                              <span>{p.minutos_presentes} min presentes</span>
+                              <span>
+                                {p.permanencia_pct !== null
+                                  ? `${p.permanencia_pct}% do encontro`
+                                  : "—"}
+                              </span>
+                              <span>
                                 {p.atraso_min === null
                                   ? "—"
                                   : p.atraso_min <= tolerancia
-                                    ? "no horário"
-                                    : `${p.atraso_min} min depois`}
-                              </td>
-                              <td className="py-1.5 text-cream/50">
+                                    ? "chegou no horário"
+                                    : `chegou ${p.atraso_min} min depois`}
+                              </span>
+                              <span>
                                 {p.minutos_fala === null
                                   ? "—"
                                   : p.minutos_fala === 0
                                     ? "não falou"
-                                    : `${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala} vezes`}
-                              </td>
-                            </tr>
-                          ))}
-                        </tbody>
-                      </table>
+                                    : `falou ${p.minutos_fala.toFixed(1)} min · ${p.n_turnos_fala}x`}
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
                     </div>
                   )}
                 </Card>
@@ -2144,7 +2188,7 @@ export default function MeetAdminPage() {
                             onChange={(ev) =>
                               setCursoParaBloqueada((m) => ({ ...m, [b.id]: ev.target.value }))
                             }
-                            className="border border-white/10 rounded-lg px-2 py-1 text-xs min-w-[180px]"
+                            className="text-base md:text-xs border border-white/10 rounded-lg px-2 py-1 min-w-[180px] w-full sm:w-auto"
                             style={{ background: "#1A1A1A", color: "#FDFBF7" }}
                           >
                             <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
@@ -2186,7 +2230,7 @@ export default function MeetAdminPage() {
           )}
 
           {aulas.length === 0 ? (
-            <Card className="p-6 text-center text-sm text-cream/40">
+            <Card className="p-4 sm:p-6 text-center text-sm text-cream/40">
               Nada esperando aprovação. As gravações aparecem aqui quando o grupo tem um curso
               escolhido na aba Salas.
             </Card>
@@ -2201,7 +2245,7 @@ export default function MeetAdminPage() {
                       onChange={(e) =>
                         setTituloEditado((t) => ({ ...t, [a.id]: e.target.value }))
                       }
-                      className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-sm text-cream"
+                      className="w-full bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-sm text-cream"
                     />
                     <p className="text-xs text-cream/40 mt-1.5">
                       {a.curso_titulo}
@@ -2274,7 +2318,7 @@ export default function MeetAdminPage() {
                     setCursoParaClipes(e.target.value);
                     carregarAulasDoCurso(e.target.value);
                   }}
-                  className="w-full border border-white/10 rounded-lg px-2.5 py-1.5 text-xs"
+                  className="w-full border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs"
                   style={{ background: "#1A1A1A", color: "#FDFBF7" }}
                 >
                   <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
@@ -2390,7 +2434,7 @@ export default function MeetAdminPage() {
               </Card>
 
               {clipJobs.length === 0 ? (
-                <Card className="p-6 text-center text-sm text-cream/40">
+                <Card className="p-4 sm:p-6 text-center text-sm text-cream/40">
                   Nenhum vídeo enviado para corte ainda.
                 </Card>
               ) : (
@@ -2610,7 +2654,7 @@ export default function MeetAdminPage() {
           )}
 
           {falhouFila ? (
-            <Card className="p-6 text-center">
+            <Card className="p-4 sm:p-6 text-center">
               <AlertTriangle className="h-5 w-5 text-amber-400 mx-auto mb-2" />
               <p className="text-sm text-cream/60">Não consegui buscar os nomes pendentes.</p>
               <p className="text-xs text-cream/40 mt-1">
@@ -2618,7 +2662,7 @@ export default function MeetAdminPage() {
               </p>
             </Card>
           ) : fila.length === 0 ? (
-            <Card className="p-6 text-center">
+            <Card className="p-4 sm:p-6 text-center">
               <CheckCircle2 className="h-6 w-6 text-emerald-400 mx-auto mb-2" />
               <p className="text-sm text-cream/60">Nenhum nome pendente.</p>
             </Card>
@@ -2688,7 +2732,7 @@ export default function MeetAdminPage() {
                 max={60}
                 value={tolerancia}
                 onChange={(e) => setTolerancia(Number(e.target.value))}
-                className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+                className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream"
               />
               <span className="text-xs text-cream/40">minutos</span>
             </div>
@@ -2707,7 +2751,7 @@ export default function MeetAdminPage() {
                 value={pastaDrive}
                 onChange={(e) => setPastaDrive(e.target.value)}
                 placeholder="https://drive.google.com/drive/folders/..."
-                className="flex-1 min-w-[240px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream placeholder:text-cream/25"
+                className="flex-1 min-w-[240px] bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream placeholder:text-cream/25"
               />
               <button
                 onClick={salvarPasta}
@@ -2735,7 +2779,7 @@ export default function MeetAdminPage() {
                 step={30}
                 value={limiteEncerramento}
                 onChange={(e) => setLimiteEncerramento(Number(e.target.value))}
-                className="w-24 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+                className="w-24 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream"
               />
               <span className="text-xs text-cream/40">
                 minutos
@@ -2815,7 +2859,7 @@ export default function MeetAdminPage() {
           onClick={() => setAssistindo(null)}
         >
           <div
-            className="rounded-2xl overflow-hidden max-w-[min(420px,90vw)] w-full"
+            className="rounded-2xl overflow-y-auto overflow-x-hidden max-h-[90vh] max-w-[min(420px,90vw)] w-full"
             style={{ background: "#111" }}
             onClick={(ev) => ev.stopPropagation()}
           >
@@ -2844,7 +2888,7 @@ export default function MeetAdminPage() {
                 onBlur={() => salvarAnotacao(assistindo)}
                 placeholder="Por que presta, ou por que não. Ex: cortou no meio da ressalva."
                 rows={2}
-                className="w-full mt-3 px-2.5 py-2 rounded-lg text-xs resize-none"
+                className="w-full mt-3 px-2.5 py-2 rounded-lg text-base md:text-xs resize-none"
                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", color: "#FDFBF7" }}
               />
 
@@ -2874,7 +2918,7 @@ export default function MeetAdminPage() {
                 <a
                   href={`/formacao/api/admin/meet/clipes/baixar?clip_id=${assistindo.id}`}
                   title="Baixar o arquivo"
-                  className="p-1.5 rounded-lg text-cream/40"
+                  className="p-2.5 md:p-1.5 rounded-lg text-cream/40"
                 >
                   <Download className="h-4 w-4" />
                 </a>
@@ -2883,7 +2927,7 @@ export default function MeetAdminPage() {
                     salvarAnotacao(assistindo);
                     setAssistindo(null);
                   }}
-                  className="ml-auto p-1.5 rounded-lg text-cream/40"
+                  className="ml-auto p-2.5 md:p-1.5 rounded-lg text-cream/40"
                 >
                   <X className="h-4 w-4" />
                 </button>
@@ -2974,12 +3018,15 @@ function ClipeCard({
           {c.titulo || "clipe"}
         </p>
 
-        <div className="flex items-center gap-1 mt-auto pt-1">
+        {/* flex-wrap é rede de segurança: o card tem overflow-hidden (por
+            causa dos cantos redondos da miniatura), e sem wrap um botão a mais
+            some cortado em vez de ir para a linha de baixo */}
+        <div className="flex items-center flex-wrap gap-1.5 md:gap-1 mt-auto pt-1">
           <button
             onClick={() => aoAvaliar("gostei")}
             disabled={ocupado}
             title="Gostei"
-            className="p-1.5 rounded-lg"
+            className="p-2 md:p-1.5 rounded-lg"
             style={{
               background: aprovado ? "rgba(74,222,128,0.15)" : "rgba(255,255,255,0.03)",
               color: aprovado ? "#4ADE80" : "rgba(253,251,247,0.3)",
@@ -2991,7 +3038,7 @@ function ClipeCard({
             onClick={() => aoAvaliar("rejeitado")}
             disabled={ocupado}
             title="Não presta"
-            className="p-1.5 rounded-lg"
+            className="p-2 md:p-1.5 rounded-lg"
             style={{
               background: rejeitado ? "rgba(245,158,11,0.15)" : "rgba(255,255,255,0.03)",
               color: rejeitado ? "#F59E0B" : "rgba(253,251,247,0.3)",
@@ -3008,7 +3055,7 @@ function ClipeCard({
               toast.success("Legenda copiada.");
             }}
             title="Copiar título, descrição e hashtags"
-            className="p-1.5 rounded-lg text-cream/30"
+            className="p-2 md:p-1.5 rounded-lg text-cream/30"
             style={{ background: "rgba(255,255,255,0.03)" }}
           >
             <Copy className="h-3.5 w-3.5" />
@@ -3016,7 +3063,7 @@ function ClipeCard({
           <a
             href={`/formacao/api/admin/meet/clipes/baixar?clip_id=${c.id}`}
             title="Baixar o arquivo"
-            className="p-1.5 rounded-lg text-cream/30 inline-flex"
+            className="p-2 md:p-1.5 rounded-lg text-cream/30 inline-flex"
             style={{ background: "rgba(255,255,255,0.03)" }}
           >
             <Download className="h-3.5 w-3.5" />
@@ -3024,7 +3071,7 @@ function ClipeCard({
           <button
             onClick={aoOcultar}
             title="Esconder da lista"
-            className="p-1.5 rounded-lg text-cream/30 ml-auto"
+            className="p-2 md:p-1.5 rounded-lg text-cream/30 ml-auto"
             style={{ background: "rgba(255,255,255,0.03)" }}
           >
             <EyeOff className="h-3.5 w-3.5" />
@@ -3096,7 +3143,7 @@ function FormDuracao({
           step={15}
           value={valor}
           onChange={(e) => setValor(Number(e.target.value))}
-          className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+          className="w-20 bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream"
         />
         <button
           onClick={() => onSalvar(valor)}
@@ -3142,7 +3189,7 @@ function FormExcecao({
           type="date"
           value={data}
           onChange={(e) => setData(e.target.value)}
-          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-xs text-cream"
+          className="bg-white/5 border border-white/10 rounded-lg px-2.5 py-1.5 text-base md:text-xs text-cream"
         />
       </div>
       <div className="flex gap-1">

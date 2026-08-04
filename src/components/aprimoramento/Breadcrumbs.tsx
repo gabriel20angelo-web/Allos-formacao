@@ -10,7 +10,7 @@ export default function Breadcrumbs({ items }: { items: Crumb[] }) {
   return (
     <nav
       aria-label="Caminho de navegação"
-      className="font-dm text-[12px] text-cream/45"
+      className="font-dm text-[12px] text-cream/45 min-w-0"
     >
       <ol className="flex flex-wrap items-center gap-1.5">
         {items.map((it, i) => {

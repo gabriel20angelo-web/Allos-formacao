@@ -105,7 +105,7 @@ function StatusDropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1.5 px-2 py-1 rounded-md text-xs font-dm transition-colors"
+        className="flex items-center gap-1.5 px-2.5 py-2 md:px-2 md:py-1 rounded-md text-xs font-dm transition-colors"
         style={{ background: cfg.bg, color: cfg.color, border: `1px solid ${cfg.color}33` }}
       >
         <span className="w-2 h-2 rounded-full" style={{ background: cfg.color }} />
@@ -122,14 +122,14 @@ function StatusDropdown({
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 z-30 rounded-lg py-1 min-w-[150px]"
+          className="absolute top-full left-0 mt-1 z-30 rounded-lg py-1 min-w-[150px] max-w-[calc(100vw-2rem)]"
           style={{ background: "#1A1A1A", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
         >
           {Object.entries(STATUS_CONFIG).map(([key, val]) => (
             <button
               key={key}
               onClick={() => { onChange(key); setOpen(false); }}
-              className="w-full flex items-center gap-2 px-3 py-1.5 text-xs font-dm hover:bg-white/5 transition-colors"
+              className="w-full flex items-center gap-2 px-3 py-3 md:py-1.5 text-xs font-dm hover:bg-white/5 transition-colors"
               style={{ color: val.color }}
             >
               <span className="w-2 h-2 rounded-full" style={{ background: val.color }} />
@@ -168,7 +168,7 @@ function AtividadeDropdown({
     <div ref={ref} className="relative">
       <button
         onClick={() => setOpen(!open)}
-        className="flex items-center gap-1 px-2 py-1 rounded-md text-xs font-dm transition-colors truncate max-w-[140px]"
+        className="flex items-center gap-1 px-2.5 py-2 md:px-2 md:py-1 rounded-md text-xs font-dm transition-colors truncate max-w-[140px]"
         style={{ background: "rgba(255,255,255,0.05)", color: current ? "#FDFBF7" : "rgba(253,251,247,0.35)", border: "1px solid rgba(255,255,255,0.06)" }}
       >
         {current || "Atividade"}
@@ -176,12 +176,12 @@ function AtividadeDropdown({
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 mt-1 z-30 rounded-lg py-1 min-w-[180px] max-h-[200px] overflow-y-auto"
+          className="absolute top-full left-0 mt-1 z-30 rounded-lg py-1 min-w-[180px] max-w-[calc(100vw-2rem)] max-h-[200px] overflow-y-auto"
           style={{ background: "#1A1A1A", border: "1px solid rgba(255,255,255,0.08)", boxShadow: "0 8px 32px rgba(0,0,0,0.5)" }}
         >
           <button
             onClick={() => { onChange(null); setOpen(false); }}
-            className="w-full text-left px-3 py-1.5 text-xs font-dm hover:bg-white/5 transition-colors text-cream/40"
+            className="w-full text-left px-3 py-3 md:py-1.5 text-xs font-dm hover:bg-white/5 transition-colors text-cream/40"
           >
             Nenhuma
           </button>
@@ -189,7 +189,7 @@ function AtividadeDropdown({
             <button
               key={a.id}
               onClick={() => { onChange(a.nome); setOpen(false); }}
-              className="w-full text-left px-3 py-1.5 text-xs font-dm hover:bg-white/5 transition-colors"
+              className="w-full text-left px-3 py-3 md:py-1.5 text-xs font-dm hover:bg-white/5 transition-colors"
               style={{ color: "#FDFBF7" }}
             >
               {a.nome}
@@ -1203,13 +1203,13 @@ export default function CalendarioPage() {
   if (loading) {
     return (
       <div className="space-y-6">
-        <Skeleton className="h-10 w-64" />
-        <div className="flex gap-3">
+        <Skeleton className="h-10 w-64 max-w-full" />
+        <div className="flex gap-3 flex-wrap">
           {[...Array(3)].map((_, i) => (
             <Skeleton key={i} className="h-10 w-32" />
           ))}
         </div>
-        <div className="grid grid-cols-6 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-6 gap-3">
           {[...Array(30)].map((_, i) => (
             <Skeleton key={i} className="h-24" />
           ))}
@@ -1226,7 +1226,7 @@ export default function CalendarioPage() {
     <div className="space-y-6">
       {/* Header + controls */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <h1 className="font-fraunces font-bold text-2xl" style={{ color: "#FDFBF7" }}>
+        <h1 className="font-fraunces font-bold text-xl md:text-2xl" style={{ color: "#FDFBF7" }}>
           Calendário Semanal
         </h1>
 
@@ -1241,7 +1241,7 @@ export default function CalendarioPage() {
               step={10}
               value={config?.duracao_minutos ?? 90}
               onChange={(e) => upsertConfig({ duracao_minutos: Number(e.target.value) } as Partial<FormacaoCronograma>)}
-              className="w-20 px-2 py-1.5 rounded-lg text-xs font-dm"
+              className="w-20 px-2 py-2 md:py-1.5 rounded-lg text-base md:text-xs font-dm"
               style={{
                 background: "rgba(255,255,255,0.05)",
                 border: "1px solid rgba(255,255,255,0.06)",
@@ -1254,7 +1254,7 @@ export default function CalendarioPage() {
           {/* Visibility toggle */}
           <button
             onClick={() => upsertConfig({ grupos_visiveis: !(config?.grupos_visiveis ?? true) } as Partial<FormacaoCronograma>)}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-dm transition-colors"
+            className="flex items-center gap-1.5 px-3 py-2 md:py-1.5 rounded-lg text-xs font-dm transition-colors"
             style={{
               background: (config?.grupos_visiveis ?? true) ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.05)",
               color: (config?.grupos_visiveis ?? true) ? "#22c55e" : "rgba(253,251,247,0.4)",
@@ -1284,7 +1284,7 @@ export default function CalendarioPage() {
             <button
               key={tab.key}
               onClick={() => setSubTab(tab.key)}
-              className="flex items-center gap-1.5 px-3 py-2 rounded-lg text-xs sm:text-sm font-dm transition-all duration-200"
+              className="flex items-center gap-1.5 px-3 py-2.5 md:py-2 rounded-lg text-xs sm:text-sm font-dm transition-all duration-200"
               style={{
                 background: active ? "rgba(200,75,49,0.15)" : "transparent",
                 color: active ? "#C84B31" : "rgba(253,251,247,0.5)",
@@ -1312,7 +1312,7 @@ export default function CalendarioPage() {
           >
             {/* Stats bar */}
             <div
-              className="flex flex-wrap gap-3 p-4 rounded-xl"
+              className="flex flex-wrap gap-x-3 gap-y-2 p-4 rounded-xl"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               {[
@@ -1335,8 +1335,8 @@ export default function CalendarioPage() {
               ))}
             </div>
 
-            {/* Grid */}
-            <div className="overflow-x-auto">
+            {/* Grid (desktop >=768px): grade densa Seg-Sex x horários */}
+            <div className="hidden md:block overflow-x-auto">
               <div className="min-w-[800px]">
                 {/* Header row */}
                 <div className="grid grid-cols-[80px_repeat(5,1fr)] gap-2 mb-2">
@@ -1729,6 +1729,317 @@ export default function CalendarioPage() {
                 )}
               </div>
             </div>
+
+            {/* Lista de dias empilhados (mobile <768px): mesmos dados e handlers
+                da grade acima, só que em cards por dia em vez de grid denso. */}
+            <div className="md:hidden space-y-4">
+              {DIAS.map((dia, diaIdx) => (
+                <div key={dia} className="space-y-2">
+                  <h3
+                    className="text-xs font-dm font-semibold uppercase tracking-wide px-1"
+                    style={{ color: "rgba(253,251,247,0.5)" }}
+                  >
+                    {dia}
+                  </h3>
+                  <div className="space-y-2">
+                    {activeHorarios.map((horario) => {
+                      const slot = getSlot(diaIdx, horario.id);
+                      const slotAlocacoes = slot ? getSlotAlocacoes(slot.id) : [];
+
+                      // Célula vazia: toque cria o slot, igual ao clique na grade.
+                      if (!slot) {
+                        return (
+                          <button
+                            key={`${diaIdx}-${horario.id}`}
+                            onClick={() => createSlot(diaIdx, horario.id)}
+                            className="w-full flex items-center gap-3 rounded-[14px] p-3.5 text-left"
+                            style={{ background: "rgba(255,255,255,0.02)", border: "1px dashed rgba(255,255,255,0.08)" }}
+                          >
+                            <span className="text-xs font-dm font-semibold w-14 flex-shrink-0" style={{ color: "#C84B31" }}>
+                              {horario.hora}
+                            </span>
+                            <span className="flex items-center gap-1.5 text-xs font-dm" style={{ color: "rgba(253,251,247,0.3)" }}>
+                              <Plus className="h-4 w-4" /> Criar slot
+                            </span>
+                          </button>
+                        );
+                      }
+
+                      // Slot inativo: mesmo botão "Ativar" da grade.
+                      if (!slot.ativo) {
+                        return (
+                          <div
+                            key={`${diaIdx}-${horario.id}`}
+                            className="flex items-center gap-3 rounded-[14px] p-3.5"
+                            style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.04)", opacity: 0.6 }}
+                          >
+                            <span className="text-xs font-dm font-semibold w-14 flex-shrink-0" style={{ color: "rgba(253,251,247,0.4)" }}>
+                              {horario.hora}
+                            </span>
+                            <span className="text-xs font-dm flex-1" style={{ color: "rgba(253,251,247,0.3)" }}>Inativo</span>
+                            <button
+                              onClick={() => updateSlot(slot.id, { ativo: true } as Partial<FormacaoSlot>)}
+                              className="text-xs font-dm underline px-2 py-2 flex-shrink-0"
+                              style={{ color: "#C84B31" }}
+                            >
+                              Ativar
+                            </button>
+                          </div>
+                        );
+                      }
+
+                      // Slot ativo: card completo, reusando os mesmos handlers da grade.
+                      const lastPres = latestPresencas[slot.id];
+                      const isQuorumOpen = quorumDraftSlot === slot.id;
+                      const isQuorumEditing = isQuorumOpen && quorumEditId !== null;
+
+                      return (
+                        <div
+                          key={`${diaIdx}-${horario.id}`}
+                          className="rounded-[14px] p-3.5 space-y-2.5"
+                          style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
+                        >
+                          {/* Hora + status + ações */}
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-sm font-dm font-semibold" style={{ color: "#C84B31" }}>{horario.hora}</span>
+                            <div className="flex items-center gap-1">
+                              <button
+                                onClick={() => updateSlot(slot.id, { ativo: false } as Partial<FormacaoSlot>)}
+                                className="p-2.5 rounded-lg hover:bg-white/5 transition-colors"
+                                title="Desativar"
+                              >
+                                <EyeOff className="h-4 w-4" style={{ color: "rgba(253,251,247,0.35)" }} />
+                              </button>
+                              <button
+                                onClick={() => deleteSlot(slot.id)}
+                                className="p-2.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                                title="Remover"
+                              >
+                                <Trash2 className="h-4 w-4" style={{ color: "rgba(239,68,68,0.6)" }} />
+                              </button>
+                            </div>
+                          </div>
+
+                          <StatusDropdown
+                            current={slot.status}
+                            automatico={!!slot.status_automatico_em}
+                            onChange={(status) => updateSlot(slot.id, { status } as Partial<FormacaoSlot>)}
+                          />
+
+                          <AtividadeDropdown
+                            current={slot.atividade_nome}
+                            atividades={atividades}
+                            onChange={(nome) => updateSlot(slot.id, { atividade_nome: nome } as Partial<FormacaoSlot>)}
+                          />
+
+                          {/* Meet link */}
+                          {meetEditSlotId === slot.id ? (
+                            <div className="flex items-center gap-2">
+                              <input
+                                type="url"
+                                value={meetLinkDraft}
+                                onChange={(e) => setMeetLinkDraft(e.target.value)}
+                                placeholder="https://meet.google.com/..."
+                                className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-base"
+                                style={{
+                                  background: "rgba(255,255,255,0.05)",
+                                  border: "1px solid rgba(255,255,255,0.1)",
+                                  color: "#FDFBF7",
+                                }}
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter") {
+                                    updateSlot(slot.id, { meet_link: meetLinkDraft || null } as Partial<FormacaoSlot>);
+                                    setMeetEditSlotId(null);
+                                  }
+                                }}
+                              />
+                              <button
+                                onClick={() => {
+                                  updateSlot(slot.id, { meet_link: meetLinkDraft || null } as Partial<FormacaoSlot>);
+                                  setMeetEditSlotId(null);
+                                }}
+                                className="p-2.5 rounded-lg hover:bg-white/5 flex-shrink-0"
+                              >
+                                <Check className="h-4 w-4" style={{ color: "#22c55e" }} />
+                              </button>
+                              <button onClick={() => setMeetEditSlotId(null)} className="p-2.5 rounded-lg hover:bg-white/5 flex-shrink-0">
+                                <X className="h-4 w-4" style={{ color: "rgba(253,251,247,0.3)" }} />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => { setMeetEditSlotId(slot.id); setMeetLinkDraft(slot.meet_link || ""); }}
+                              className="flex items-center gap-1.5 text-xs font-dm py-1 transition-colors hover:opacity-80"
+                              style={{ color: slot.meet_link ? "#60a5fa" : "rgba(253,251,247,0.3)" }}
+                            >
+                              <LinkIcon className="h-3.5 w-3.5" />
+                              {slot.meet_link ? "Meet" : "Adicionar link"}
+                            </button>
+                          )}
+
+                          {/* Quórum */}
+                          <div className="flex flex-col gap-1.5">
+                            {lastPres && !isQuorumOpen && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setQuorumDraftSlot(slot.id);
+                                  setQuorumEditId(lastPres.id);
+                                  setQuorumDraftValue(String(lastPres.total_participantes));
+                                }}
+                                className="flex items-center gap-1.5 px-2.5 py-2 rounded-lg text-xs font-dm font-semibold w-fit hover:opacity-80 transition-opacity"
+                                style={{ background: "rgba(34,197,94,0.1)", color: "#22c55e", border: "1px solid rgba(34,197,94,0.18)" }}
+                                title={`Editar último registro (${new Date(lastPres.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR", { day: "2-digit", month: "2-digit" })})`}
+                              >
+                                <Users className="h-3.5 w-3.5" />
+                                {lastPres.total_participantes} participantes
+                              </button>
+                            )}
+                            {isQuorumOpen ? (
+                              <div className="flex items-center gap-2">
+                                <input
+                                  type="number"
+                                  min="0"
+                                  autoFocus
+                                  value={quorumDraftValue}
+                                  onChange={(e) => setQuorumDraftValue(e.target.value)}
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") registrarQuorum(slot, horario);
+                                    if (e.key === "Escape") cancelQuorumDraft();
+                                  }}
+                                  placeholder="Total"
+                                  className="flex-1 min-w-0 px-2.5 py-2 rounded-lg text-base"
+                                  style={{
+                                    background: "rgba(34,197,94,0.06)",
+                                    border: "1px solid rgba(34,197,94,0.25)",
+                                    color: "#FDFBF7",
+                                  }}
+                                />
+                                <button
+                                  onClick={() => registrarQuorum(slot, horario)}
+                                  disabled={savingQuorum || deletingQuorum}
+                                  className="p-2.5 rounded-lg hover:bg-white/5 disabled:opacity-40 flex-shrink-0"
+                                  title={isQuorumEditing ? "Salvar edição" : "Salvar"}
+                                >
+                                  <Check className="h-4 w-4" style={{ color: "#22c55e" }} />
+                                </button>
+                                {isQuorumEditing && (
+                                  <button
+                                    onClick={deleteQuorumPresenca}
+                                    disabled={savingQuorum || deletingQuorum}
+                                    className="p-2.5 rounded-lg hover:bg-red-500/10 disabled:opacity-40 flex-shrink-0"
+                                    title="Apagar registro"
+                                  >
+                                    <Trash2 className="h-4 w-4" style={{ color: "#ef4444" }} />
+                                  </button>
+                                )}
+                                <button onClick={cancelQuorumDraft} className="p-2.5 rounded-lg hover:bg-white/5 flex-shrink-0" title="Cancelar">
+                                  <X className="h-4 w-4" style={{ color: "rgba(253,251,247,0.3)" }} />
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => {
+                                  setQuorumDraftSlot(slot.id);
+                                  setQuorumEditId(null);
+                                  setQuorumDraftValue("");
+                                }}
+                                className="flex items-center gap-1.5 text-xs font-dm py-1 w-fit transition-colors hover:opacity-80"
+                                style={{ color: "rgba(34,197,94,0.8)" }}
+                              >
+                                <UserCheck className="h-3.5 w-3.5" />
+                                {lastPres ? "Novo registro" : "Registrar quórum"}
+                              </button>
+                            )}
+                          </div>
+
+                          {/* Condutores */}
+                          <div className="space-y-1.5 pt-2" style={{ borderTop: "1px solid rgba(255,255,255,0.05)" }}>
+                            {slotAlocacoes.map((aloc) => {
+                              const waUrl = whatsappUrl(aloc.certificado_condutores?.telefone || null);
+                              return (
+                                <div key={aloc.id} className="flex items-center justify-between gap-2">
+                                  <span className="text-xs font-dm truncate flex-1 min-w-0" style={{ color: "rgba(253,251,247,0.75)" }}>
+                                    {aloc.certificado_condutores?.nome || "—"}
+                                  </span>
+                                  {waUrl && (
+                                    <a
+                                      href={waUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="p-2 rounded-lg hover:bg-green-500/10 flex-shrink-0"
+                                      title={`WhatsApp ${aloc.certificado_condutores?.telefone}`}
+                                    >
+                                      <MessageCircle className="h-4 w-4" style={{ color: "#22c55e" }} />
+                                    </a>
+                                  )}
+                                  <button onClick={() => removeAlocacao(aloc.id)} className="p-2 rounded-lg hover:bg-red-500/10 flex-shrink-0">
+                                    <X className="h-4 w-4" style={{ color: "rgba(239,68,68,0.6)" }} />
+                                  </button>
+                                </div>
+                              );
+                            })}
+
+                            {addCondutorSlotId === slot.id ? (
+                              <div className="space-y-1.5">
+                                <div
+                                  className="max-h-[160px] overflow-y-auto rounded-lg py-1"
+                                  style={{ background: "rgba(0,0,0,0.3)", border: "1px solid rgba(255,255,255,0.06)" }}
+                                >
+                                  {condutores
+                                    .filter((c) => !slotAlocacoes.some((a) => a.condutor_id === c.id))
+                                    .map((c) => (
+                                      <button
+                                        key={c.id}
+                                        onClick={() => addAlocacao(slot.id, c.id)}
+                                        className="w-full text-left px-3 py-2.5 text-xs font-dm hover:bg-white/5 transition-colors"
+                                        style={{ color: "#FDFBF7" }}
+                                      >
+                                        {c.nome}
+                                      </button>
+                                    ))}
+                                  {condutores.filter((c) => !slotAlocacoes.some((a) => a.condutor_id === c.id)).length === 0 && (
+                                    <span className="px-3 py-2 text-xs font-dm block" style={{ color: "rgba(253,251,247,0.3)" }}>
+                                      Sem condutores disponíveis
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => setAddCondutorSlotId(null)}
+                                  className="text-xs font-dm py-1"
+                                  style={{ color: "rgba(253,251,247,0.3)" }}
+                                >
+                                  Cancelar
+                                </button>
+                              </div>
+                            ) : (
+                              <button
+                                onClick={() => setAddCondutorSlotId(slot.id)}
+                                className="flex items-center gap-1.5 text-xs font-dm py-1 transition-colors hover:opacity-80"
+                                style={{ color: "rgba(200,75,49,0.8)" }}
+                              >
+                                <UserPlus className="h-3.5 w-3.5" />
+                                Adicionar condutor
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ))}
+
+              {activeHorarios.length === 0 && (
+                <div className="text-center py-16">
+                  <Clock className="h-8 w-8 mx-auto mb-3" style={{ color: "rgba(253,251,247,0.15)" }} />
+                  <p className="text-sm font-dm" style={{ color: "rgba(253,251,247,0.4)" }}>
+                    Nenhum horário ativo. Crie horários na aba &quot;Horários&quot;.
+                  </p>
+                </div>
+              )}
+            </div>
           </motion.div>
         )}
 
@@ -1743,14 +2054,14 @@ export default function CalendarioPage() {
           >
             {/* Add new */}
             <div
-              className="flex items-center gap-3 p-4 rounded-xl"
+              className="flex items-center gap-3 flex-wrap p-4 rounded-xl"
               style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <input
                 type="time"
                 value={newHora}
                 onChange={(e) => setNewHora(e.target.value)}
-                className="px-3 py-2 rounded-lg text-sm font-dm"
+                className="px-3 py-2 rounded-lg text-base md:text-sm font-dm"
                 style={{
                   background: "rgba(255,255,255,0.05)",
                   border: "1px solid rgba(255,255,255,0.08)",
@@ -1772,7 +2083,7 @@ export default function CalendarioPage() {
                   <motion.div
                     key={h.id}
                     layout
-                    className="flex items-center justify-between px-4 py-3 rounded-xl"
+                    className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 sm:gap-0 px-4 py-3 rounded-xl"
                     style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
                   >
                     <div className="flex items-center gap-3">
@@ -1781,12 +2092,12 @@ export default function CalendarioPage() {
                         {h.hora}
                       </span>
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       {/* Reorder up */}
                       <button
                         onClick={() => moveHorario(h.id, "up")}
                         disabled={idx === 0}
-                        className="p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
+                        className="p-2.5 md:p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
                         title="Mover pra cima"
                       >
                         <ArrowUp className="h-4 w-4" style={{ color: "rgba(253,251,247,0.5)" }} />
@@ -1795,7 +2106,7 @@ export default function CalendarioPage() {
                       <button
                         onClick={() => moveHorario(h.id, "down")}
                         disabled={idx === sortedHorarios.length - 1}
-                        className="p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
+                        className="p-2.5 md:p-1.5 rounded-lg transition-colors disabled:opacity-25 disabled:cursor-not-allowed enabled:hover:bg-white/5"
                         title="Mover pra baixo"
                       >
                         <ArrowDown className="h-4 w-4" style={{ color: "rgba(253,251,247,0.5)" }} />
@@ -1803,7 +2114,7 @@ export default function CalendarioPage() {
                       {/* Toggle ativo */}
                       <button
                         onClick={() => toggleHorario(h.id, !h.ativo)}
-                        className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-dm transition-colors ml-1"
+                        className="flex items-center gap-1.5 px-2.5 py-2 md:py-1 rounded-lg text-xs font-dm transition-colors ml-1"
                         style={{
                           background: h.ativo ? "rgba(34,197,94,0.12)" : "rgba(255,255,255,0.05)",
                           color: h.ativo ? "#22c55e" : "rgba(253,251,247,0.4)",
@@ -1816,7 +2127,7 @@ export default function CalendarioPage() {
                       {/* Delete */}
                       <button
                         onClick={() => deleteHorario(h.id)}
-                        className="p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
+                        className="p-2.5 md:p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" style={{ color: "rgba(239,68,68,0.6)" }} />
                       </button>
@@ -1840,7 +2151,7 @@ export default function CalendarioPage() {
         {/* ─── Cronograma ──────────────────────────────────────────── */}
         {subTab === "cronograma" && (
           <motion.div key="cronograma" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="space-y-5">
-            <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="rounded-xl p-4 sm:p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <ImageIcon className="h-4 w-4" style={{ color: "#C84B31" }} />
@@ -1870,7 +2181,7 @@ export default function CalendarioPage() {
           <motion.div key="whatsapp" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -12 }} transition={{ duration: 0.2 }} className="space-y-5">
             <WhatsAppTemplates />
 
-            <div className="rounded-xl p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+            <div className="rounded-xl p-4 sm:p-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
               <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
                 <div className="flex items-center gap-2">
                   <MessageCircle className="h-4 w-4" style={{ color: "#25D366" }} />
@@ -1890,7 +2201,7 @@ export default function CalendarioPage() {
               <textarea
                 value={whatsappMsg || buildWhatsAppMessage()}
                 onChange={(e) => setWhatsappMsg(e.target.value)}
-                className="w-full text-xs font-dm p-4 rounded-lg resize-y outline-none"
+                className="w-full text-base md:text-xs font-dm p-4 rounded-lg resize-y outline-none"
                 style={{ background: "rgba(0,0,0,0.3)", color: "rgba(253,251,247,0.7)", border: "1px solid rgba(255,255,255,0.06)", minHeight: "200px", maxHeight: "500px" }}
               />
             </div>
@@ -1906,7 +2217,7 @@ export default function CalendarioPage() {
               const naoVinculados = withPhone.filter((c) => !vinculadoIds.has(c.id));
 
               return (
-                <div className="rounded-xl p-5 space-y-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                <div className="rounded-xl p-4 sm:p-5 space-y-5" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
                   {/* Vinculados */}
                   <div>
                     <div className="flex items-center gap-2 mb-3">

@@ -5,9 +5,9 @@ import type { Block } from "@/lib/aprimoramento-dinamicas";
 import { parseMomento, slugifyHeading } from "@/lib/aprimoramento-dinamicas";
 
 const HEADING2_CLASSES =
-  "reveal font-fraunces text-2xl md:text-[28px] text-cream mt-12 mb-4 scroll-mt-24";
+  "reveal font-fraunces text-2xl md:text-[28px] text-cream mt-12 mb-4 scroll-mt-24 break-words";
 const HEADING4_CLASSES =
-  "reveal font-dm text-[11px] font-bold tracking-widest uppercase text-accent mt-6 mb-2";
+  "reveal font-dm text-[11px] font-bold tracking-widest uppercase text-accent mt-6 mb-2 break-words";
 
 export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
   const containerRef = useRef<HTMLDivElement>(null);
@@ -109,7 +109,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
                       Momento {momento.number}
                     </p>
                     {momento.label && (
-                      <h3 className="font-fraunces text-lg md:text-xl text-cream leading-snug mt-0.5">
+                      <h3 className="font-fraunces text-lg md:text-xl text-cream leading-snug mt-0.5 break-words">
                         {momento.label}
                       </h3>
                     )}
@@ -120,7 +120,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
             return (
               <h3
                 key={i}
-                className="reveal font-fraunces text-lg md:text-xl text-cream mt-8 mb-3"
+                className="reveal font-fraunces text-lg md:text-xl text-cream mt-8 mb-3 break-words"
               >
                 {block.text}
               </h3>
@@ -139,7 +139,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
           return (
             <p
               key={i}
-              className="reveal font-dm leading-[1.75] text-cream/80 mb-3"
+              className="reveal font-dm leading-[1.75] text-cream/80 mb-3 break-words"
               style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
             >
               {block.text}
@@ -153,7 +153,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               {block.items.map((item, j) => (
                 <li
                   key={j}
-                  className="font-dm leading-[1.75] text-cream/80 relative pl-4 before:content-['•'] before:absolute before:left-0 before:text-accent"
+                  className="font-dm leading-[1.75] text-cream/80 relative pl-4 break-words before:content-['•'] before:absolute before:left-0 before:text-accent"
                   style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
                 >
                   {item}
@@ -172,7 +172,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               {block.items.map((item, j) => (
                 <li
                   key={j}
-                  className="font-dm leading-[1.75] text-cream/80 pl-1"
+                  className="font-dm leading-[1.75] text-cream/80 pl-1 break-words"
                   style={{ fontSize: "var(--ap-reading-fs, 15px)" }}
                 >
                   {item}
@@ -189,7 +189,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               className="reveal border-l-2 border-accent/60 pl-5 my-6 italic"
             >
               <p
-                className="font-fraunces leading-[1.75] text-cream/85"
+                className="font-fraunces leading-[1.75] text-cream/85 break-words"
                 style={{
                   fontSize: "calc(var(--ap-reading-fs, 15px) + 1px)",
                 }}
@@ -197,7 +197,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
                 &ldquo;{block.text}&rdquo;
               </p>
               {block.attribution && (
-                <footer className="mt-2 font-dm text-xs text-cream/50 not-italic">
+                <footer className="mt-2 font-dm text-xs text-cream/50 not-italic break-words">
                   — {block.attribution}
                 </footer>
               )}
@@ -212,7 +212,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
               className="reveal my-5 rounded-xl p-4 border border-cream/10"
               style={{ background: "rgba(200,75,49,0.06)" }}
             >
-              <p className="font-dm text-[13px] leading-[1.7] text-cream/70 italic">
+              <p className="font-dm text-[13px] leading-[1.7] text-cream/70 italic break-words">
                 {block.text}
               </p>
             </div>
@@ -221,13 +221,13 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
 
         if (block.type === "reference") {
           return (
-            <p key={i} className="reveal font-dm text-xs text-cream/50 mb-3 italic">
+            <p key={i} className="reveal font-dm text-xs text-cream/50 mb-3 italic break-words">
               {block.url ? (
                 <a
                   href={block.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="hover:text-accent transition-colors underline-offset-2 hover:underline"
+                  className="hover:text-accent transition-colors underline-offset-2 hover:underline break-words"
                 >
                   {block.text}
                 </a>
@@ -245,7 +245,7 @@ export default function ExerciseBlocks({ blocks }: { blocks: Block[] }) {
                 href={block.url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="font-dm text-sm text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1 underline underline-offset-4"
+                className="font-dm text-sm text-accent hover:text-accent/80 transition-colors inline-flex items-center gap-1 underline underline-offset-4 break-words"
               >
                 {block.label}
                 <svg

@@ -26,7 +26,7 @@ export default async function LayoutDosAssociados({
   const secoes = secoesDaPessoa(quem.cargos);
 
   return (
-    <div className="max-w-5xl mx-auto px-4 md:px-8 py-8 md:py-10">
+    <div className="max-w-5xl mx-auto px-4 md:px-8 pt-6 pb-24 md:pt-10 md:pb-10">
       <NavDasSecoes secoes={secoes} />
       {children}
     </div>
