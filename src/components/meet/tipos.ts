@@ -40,7 +40,64 @@ export interface EncontroDaPessoaUI {
   n_sessoes: number;
 }
 
+export interface CursoUI {
+  curso_id: string;
+  titulo: string;
+  status: string | null;
+  matriculado_em: string | null;
+  concluido_em: string | null;
+  aulas_total: number;
+  aulas_concluidas: number;
+  pct: number | null;
+  minutos_uso: number;
+  tem_certificado: boolean;
+}
+
+/** A metade da ficha que só existe para quem tem conta na plataforma. */
+export interface PlataformaUI {
+  conta: {
+    papel: string | null;
+    cargos: string[];
+    membro_desde: string | null;
+    nome_no_certificado: string | null;
+    bloqueado: boolean;
+    bloqueado_motivo: string | null;
+    bloqueado_em: string | null;
+    termos_versao: string | null;
+    termos_aceito_em: string | null;
+  };
+  uso: {
+    minutos_totais: number;
+    sessoes: number;
+    dias_com_acesso: number;
+    primeiro_acesso: string | null;
+    ultimo_acesso: string | null;
+  };
+  cursos: CursoUI[];
+  certificados: { curso: string; codigo: string | null; emitido_em: string | null }[];
+  verificacoes: { curso: string; status: string | null; motivo: string | null; created_at: string | null }[];
+  provas: {
+    curso: string;
+    tentativas: number;
+    melhor_nota: number | null;
+    passou: boolean;
+    ultima_em: string | null;
+  }[];
+  horas_sincronas: { horas: number; encontros: number };
+  avaliacoes: { curso: string; nota: number | null; comentario: string | null; created_at: string | null }[];
+  participacao: { comentarios: number; duvidas: number; favoritos: number };
+  ocorrencias: {
+    origem: string | null;
+    status: string | null;
+    relato: string | null;
+    resposta: string | null;
+    created_at: string | null;
+  }[];
+  bloqueios: { acao: string | null; motivo: string | null; created_at: string | null }[];
+}
+
 export interface RetratoUI {
+  plataforma?: PlataformaUI | null;
   pessoa: {
     nome: string;
     email: string | null;

@@ -9,6 +9,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { retratoDaPessoa } from "@/lib/meet/pessoa";
+import { fichaDaPlataforma } from "@/lib/plataforma/ficha-aluno";
 
 export const dynamic = "force-dynamic";
 
@@ -36,5 +37,13 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Não achei essa pessoa." }, { status: 404 });
   }
 
-  return NextResponse.json(retrato);
+  // Quem tem conta tem uma história bem maior do que a presença nos encontros:
+  // matrícula, aulas, prova, certificado, tempo de permanência, o que avaliou e
+  // o que reclamou. Só faz sentido buscar quando há conta, e por isso a segunda
+  // parte da ficha é condicional em vez de vir sempre vazia.
+  const plataforma = retrato.pessoa.aluno_id
+    ? await fichaDaPlataforma(sb, retrato.pessoa.aluno_id, retrato.pessoa.email)
+    : null;
+
+  return NextResponse.json({ ...retrato, plataforma });
 }
