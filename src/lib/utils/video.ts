@@ -37,12 +37,37 @@ function isSafeHttpUrl(url: string): boolean {
   return url.startsWith("https://") || url.startsWith("http://");
 }
 
+/**
+ * O segundo em que o vídeo deve começar, quando o endereço diz.
+ *
+ * Gravação de encontro sobe com `&t=37` porque a sala abre quinze minutos antes
+ * e o arquivo pega a chegada das pessoas. O embed do YouTube não lê `t`: ele
+ * quer `start`. Sem esta tradução, o cálculo do início real era feito, gravado,
+ * e jogado fora na hora de tocar.
+ *
+ * Aceita as formas que o YouTube usa: `t=90`, `t=90s`, `t=1m30s`, `t=1h2m3s`.
+ */
+export function extractStartSeconds(url: string): number | null {
+  const bruto = url.match(/[?&#]t=([0-9hms]+)/i)?.[1];
+  if (!bruto) return null;
+
+  if (/^\d+$/.test(bruto)) return Number(bruto) || null;
+
+  const m = bruto.match(/^(?:(\d+)h)?(?:(\d+)m)?(?:(\d+)s)?$/i);
+  if (!m) return null;
+
+  const seg = Number(m[1] || 0) * 3600 + Number(m[2] || 0) * 60 + Number(m[3] || 0);
+  return seg || null;
+}
+
 export function getEmbedUrl(url: string, source: VideoSource): string {
   switch (source) {
     case "youtube": {
       const id = extractYouTubeId(url);
       if (!id) return isSafeHttpUrl(url) ? url : "";
-      const params = "rel=0&modestbranding=1&playsinline=1";
+      const inicio = extractStartSeconds(url);
+      const params =
+        "rel=0&modestbranding=1&playsinline=1" + (inicio ? `&start=${inicio}` : "");
       return `https://www.youtube-nocookie.com/embed/${id}?${params}`;
     }
     case "google_drive": {
