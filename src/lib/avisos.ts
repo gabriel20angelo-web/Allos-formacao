@@ -124,6 +124,30 @@ export async function avisarSeRodadaFalhou(
 }
 
 /**
+ * Manda um e-mail de mentira, para provar que o caminho do alarme está de pé.
+ *
+ * Alarme que ninguém nunca viu funcionar é pior do que alarme nenhum: dá a
+ * sensação de estar coberto. Isto existe para responder "o e-mail sai mesmo?"
+ * sem precisar esperar a máquina quebrar de verdade. Ignora a folga de
+ * propósito, e não grava marca nenhuma, para não calar um alarme real logo
+ * depois do teste.
+ */
+export async function avisarDeMentira(): Promise<{ enviou: boolean; para: string; motivo?: string }> {
+  try {
+    const enviou = await enviar("Allos: teste do alarme da captura", [
+      "Este é um teste, disparado de propósito. Nada está errado.",
+      "",
+      "Serve para provar que o caminho do alarme funciona: se um dia a captura do Meet parar ou uma etapa quebrar, um e-mail como este vai chegar neste endereço.",
+      "",
+      "Se você recebeu isto sem ter pedido, alguém chamou o endereço de teste do vigia.",
+    ]);
+    return { enviou, para: PARA, motivo: enviou ? undefined : "Workspace não configurado ou destinatário vazio" };
+  } catch (e) {
+    return { enviou: false, para: PARA, motivo: e instanceof Error ? e.message : "erro ao enviar" };
+  }
+}
+
+/**
  * Chamado pelo vigia, que tem agendamento próprio. Olha só a idade do último
  * registro de captura: se a automação parou, é isto que percebe, porque quem
  * parou não consegue reclamar de si mesmo.

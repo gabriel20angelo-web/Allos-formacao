@@ -18,7 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { timingSafeEqual } from "crypto";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-import { avisarSeCapturaSumiu } from "@/lib/avisos";
+import { avisarSeCapturaSumiu, avisarDeMentira } from "@/lib/avisos";
 
 export const dynamic = "force-dynamic";
 
@@ -37,6 +37,13 @@ export async function GET(req: NextRequest) {
 
   if (!segredoConfere(token)) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
+  // `?teste=1` manda um e-mail de mentira e não olha nada. Serve para
+  // conferir, a qualquer momento, que o canal do alarme continua de pé, em vez
+  // de descobrir isso no dia em que a captura cair.
+  if (req.nextUrl.searchParams.get("teste") === "1") {
+    return NextResponse.json(await avisarDeMentira());
   }
 
   try {
