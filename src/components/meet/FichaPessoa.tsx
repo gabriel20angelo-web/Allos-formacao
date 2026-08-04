@@ -16,6 +16,11 @@
 // ela o recorte: quem conduz vê a pessoa dentro do próprio grupo e não recebe a
 // metade da plataforma, que é da coordenação. O aviso no rodapé diz isso em voz
 // alta, para ninguém ler "dois encontros" como "só veio duas vezes na vida".
+//
+// A primeira aba é a linha do tempo, porque as listas temáticas respondem
+// "quanto de cada coisa" e a pergunta que se faz ao clicar num nome é outra:
+// "o que essa pessoa andou fazendo". Matrícula, encontro, prova e desabafo em
+// ordem cronológica contam uma história que as abas separadas escondem.
 
 import { useEffect, useMemo, useState } from "react";
 import {
@@ -29,10 +34,19 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import Modal from "@/components/ui/Modal";
+// Direto da lib, e não do componente do dashboard: importar de lá arrastaria
+// framer-motion e o painel de anotações do dia para esta ficha, que também abre
+// no celular de quem conduz um grupo.
+import { TYPE_META } from "@/lib/utils/activity-meta";
+import {
+  groupByDay,
+  hourLabel,
+  type TimelineEvent,
+} from "@/lib/utils/activity";
 import type { PlataformaUI, RetratoUI } from "./tipos";
 import { minutos, ROXO } from "./tipos";
 
-type AbaFicha = "encontros" | "plataforma" | "certificado";
+type AbaFicha = "atividade" | "encontros" | "plataforma" | "certificado";
 
 /** "3h 20min", que é como se fala, e não "200 minutos". */
 function duracao(min: number): string {
@@ -68,7 +82,7 @@ export default function FichaPessoa({
   const [retrato, setRetrato] = useState<RetratoUI | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(false);
-  const [aba, setAba] = useState<AbaFicha>("encontros");
+  const [aba, setAba] = useState<AbaFicha>("atividade");
 
   useEffect(() => {
     if (!aberta || (!norm && !alunoId)) return;
@@ -79,7 +93,7 @@ export default function FichaPessoa({
     setRetrato(null);
     // Volta para a primeira aba a cada pessoa: continuar em "plataforma" ao
     // abrir alguém sem conta mostraria uma aba que não existe para ela.
-    setAba("encontros");
+    setAba("atividade");
 
     const params = new URLSearchParams();
     if (norm) params.set("norm", norm);
@@ -115,6 +129,7 @@ export default function FichaPessoa({
 
   const abas = useMemo(() => {
     const lista: { chave: AbaFicha; rotulo: string }[] = [
+      { chave: "atividade", rotulo: "Atividade" },
       { chave: "encontros", rotulo: "Encontros" },
     ];
     if (plataforma) lista.push({ chave: "plataforma", rotulo: "Na plataforma" });
@@ -193,6 +208,7 @@ export default function FichaPessoa({
             </div>
           )}
 
+          {aba === "atividade" && <AbaAtividade retrato={retrato} />}
           {aba === "encontros" && <AbaEncontros retrato={retrato} />}
           {aba === "plataforma" && plataforma && <AbaPlataforma dados={plataforma} />}
           {aba === "certificado" && <AbaCertificado retrato={retrato} />}
@@ -245,6 +261,275 @@ function Linha({ children }: { children: React.ReactNode }) {
       style={{ background: "rgba(255,255,255,0.02)" }}
     >
       {children}
+    </div>
+  );
+}
+
+/**
+ * O retrato já vem inteiro do servidor, então a linha do tempo é só uma leitura
+ * diferente do que está na memória: nenhuma chamada nova, nenhum campo a mais.
+ * Cada fonte vira TimelineEvent, o formato que a "Atividade recente" do
+ * dashboard já usa, para as duas telas contarem a mesma coisa do mesmo jeito.
+ */
+function linhaDoTempo(retrato: RetratoUI): TimelineEvent[] {
+  const eventos: TimelineEvent[] = [];
+  const pessoa = retrato.pessoa.nome;
+  const email = retrato.pessoa.email || undefined;
+
+  // person e personEmail são iguais em toda a ficha (é uma pessoa só), então
+  // ficam fora de cada chamada para não repetir vinte vezes o mesmo par.
+  const registrar = (e: Omit<TimelineEvent, "person" | "personEmail">) => {
+    eventos.push({ ...e, person: pessoa, personEmail: email });
+  };
+
+  retrato.encontros.forEach((e) => {
+    const partes: string[] = [`${e.minutos_presentes} min`];
+    if (e.permanencia_pct !== null) partes.push(`${e.permanencia_pct}% do encontro`);
+    if (e.minutos_fala !== null) {
+      partes.push(e.minutos_fala > 0 ? `falou ${minutos(e.minutos_fala)} min` : "não falou");
+    }
+    if (e.atraso_min !== null && e.atraso_min > 0) {
+      partes.push(`entrou ${e.atraso_min} min depois`);
+    }
+    registrar({
+      // Quem entra duas vezes no mesmo encontro aparece com dois nomes de tela,
+      // e o id precisa distinguir as duas linhas.
+      id: `encontro-${e.encontro_id}-${e.display_name}`,
+      type: "encontro",
+      // `inicio` é a hora real da sala; sem ela sobra só a data, e meio-dia
+      // mantém o evento dentro do dia certo em qualquer fuso.
+      timestamp: e.inicio || `${e.data_reuniao}T12:00:00`,
+      title: e.atividade_nome || "Encontro",
+      detail: partes.join(" · "),
+    });
+  });
+
+  retrato.feedback.forEach((f, i) => {
+    const notas: string[] = [];
+    if (f.nota_grupo !== null) notas.push(`grupo ${f.nota_grupo}`);
+    if (f.nota_condutor !== null) notas.push(`condutor ${f.nota_condutor}`);
+    registrar({
+      id: `feedback-${i}`,
+      type: "feedback",
+      timestamp: f.created_at,
+      title: f.atividade_nome || "atividade sem nome",
+      detail: notas.length ? notas.join(" · ") : undefined,
+      body: f.relato || undefined,
+    });
+  });
+
+  const p = retrato.plataforma;
+  if (p) {
+    p.cursos.forEach((c) => {
+      if (c.matriculado_em) {
+        registrar({
+          id: `matricula-${c.curso_id}`,
+          type: "enrollment",
+          timestamp: c.matriculado_em,
+          title: c.titulo,
+        });
+      }
+      if (c.concluido_em) {
+        registrar({
+          id: `conclusao-${c.curso_id}`,
+          type: "completion",
+          timestamp: c.concluido_em,
+          title: c.titulo,
+        });
+      }
+    });
+
+    p.certificados.forEach((c, i) => {
+      if (!c.emitido_em) return;
+      registrar({
+        id: `certificado-${i}`,
+        type: "certificate",
+        timestamp: c.emitido_em,
+        title: c.curso,
+        detail: c.codigo || undefined,
+      });
+    });
+
+    p.avaliacoes.forEach((a, i) => {
+      if (!a.created_at) return;
+      registrar({
+        id: `avaliacao-${i}`,
+        type: "review",
+        timestamp: a.created_at,
+        title: a.curso,
+        score: a.nota ?? undefined,
+        scoreSuffix: "/5",
+        body: a.comentario || undefined,
+      });
+    });
+
+    p.provas.forEach((pr, i) => {
+      if (!pr.ultima_em) return;
+      const partes: string[] = [];
+      if (pr.melhor_nota !== null) partes.push(`${pr.melhor_nota} pontos`);
+      partes.push(pr.passou ? "passou" : "não passou");
+      if (pr.tentativas > 1) partes.push(`${pr.tentativas} tentativas`);
+      registrar({
+        id: `prova-${i}`,
+        type: "exam",
+        timestamp: pr.ultima_em,
+        title: pr.curso,
+        detail: partes.join(" · "),
+      });
+    });
+
+    // Ocorrência não tem tipo próprio na timeline, e usar "feedback" é honesto:
+    // as duas são texto que a pessoa escreveu pedindo alguma coisa. O título diz
+    // qual das duas é, para ninguém confundir desabafo com reclamação aberta.
+    p.ocorrencias.forEach((o, i) => {
+      if (!o.created_at) return;
+      registrar({
+        id: `ocorrencia-${i}`,
+        type: "feedback",
+        timestamp: o.created_at,
+        title: `ocorrência: ${o.origem || "outro"}`,
+        detail: o.status || "nova",
+        body: o.relato || undefined,
+      });
+    });
+  }
+
+  return eventos.sort(
+    (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+  );
+}
+
+function AbaAtividade({ retrato }: { retrato: RetratoUI }) {
+  const [abertos, setAbertos] = useState<Set<string>>(new Set());
+  const dias = useMemo(() => groupByDay(linhaDoTempo(retrato)), [retrato]);
+
+  function alternar(id: string) {
+    setAbertos((atual) => {
+      const proximo = new Set(atual);
+      if (proximo.has(id)) proximo.delete(id);
+      else proximo.add(id);
+      return proximo;
+    });
+  }
+
+  if (dias.length === 0) {
+    return (
+      <p className="text-xs text-cream/40 py-6 text-center">
+        Ainda não há nada registrado no nome dela.
+      </p>
+    );
+  }
+
+  return (
+    <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+      {dias.map((dia) => (
+        <div key={dia.key}>
+          <div className="flex items-center gap-2 mb-1.5">
+            <span className="text-[11px] font-semibold text-cream/50">{dia.label}</span>
+            <span className="text-[10px] text-cream/25">
+              {dia.events.length} evento{dia.events.length > 1 ? "s" : ""}
+            </span>
+            <div className="flex-1 h-px" style={{ background: "rgba(255,255,255,0.05)" }} />
+          </div>
+
+          <div className="relative pl-[13px]">
+            <div
+              className="absolute left-[5px] top-1 bottom-1 w-px"
+              style={{ background: "rgba(255,255,255,0.06)" }}
+            />
+            {dia.events.map((e) => {
+              const meta = TYPE_META[e.type];
+              // Só vira botão a linha que tem texto para ler: clicar numa
+              // matrícula e nada acontecer ensina que clicar não serve.
+              const legivel = !!e.body;
+              const aberto = abertos.has(e.id);
+
+              return (
+                <div
+                  key={e.id}
+                  onClick={legivel ? () => alternar(e.id) : undefined}
+                  role={legivel ? "button" : undefined}
+                  tabIndex={legivel ? 0 : undefined}
+                  onKeyDown={
+                    legivel
+                      ? (ev) => {
+                          if (ev.key === "Enter" || ev.key === " ") {
+                            ev.preventDefault();
+                            alternar(e.id);
+                          }
+                        }
+                      : undefined
+                  }
+                  className={`relative flex items-start gap-2.5 py-1.5 pl-3 pr-2 rounded-[10px] transition-colors group ${
+                    legivel ? "cursor-pointer hover:bg-white/[.04]" : "hover:bg-white/[.02]"
+                  }`}
+                >
+                  <span
+                    className="absolute -left-[12px] top-[11px] w-[9px] h-[9px] rounded-full border-2"
+                    style={{ background: "#1a1a1a", borderColor: meta.color }}
+                  />
+                  <meta.icon
+                    className="h-3.5 w-3.5 flex-shrink-0 mt-0.5"
+                    style={{ color: meta.color }}
+                  />
+                  <div className="min-w-0 flex-1">
+                    <p className="text-[11px] text-cream/75 leading-snug break-words">
+                      <span className="text-cream/40">{meta.verb} </span>
+                      <span className="text-cream">{e.title}</span>
+                      {e.score !== undefined && (
+                        <span
+                          className="ml-1.5 text-[10px] font-semibold"
+                          style={{ color: meta.color }}
+                        >
+                          {e.score}
+                          {e.scoreSuffix || ""}
+                        </span>
+                      )}
+                    </p>
+                    {e.detail && (
+                      <p className="text-[11px] text-cream/30 leading-snug mt-0.5 break-words">
+                        {e.detail}
+                      </p>
+                    )}
+                    {legivel &&
+                      (aberto ? (
+                        <div
+                          className="mt-1.5 pl-2.5 py-1 border-l-2"
+                          style={{ borderColor: `${meta.color}55` }}
+                        >
+                          <p className="text-[11px] text-cream/60 leading-relaxed whitespace-pre-wrap break-words">
+                            {e.body}
+                          </p>
+                          <span
+                            className="text-[10px] mt-1 inline-block"
+                            style={{ color: meta.color }}
+                          >
+                            ocultar
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-baseline gap-1.5 mt-0.5">
+                          <p className="text-[11px] text-cream/30 leading-snug truncate min-w-0">
+                            “{e.body}”
+                          </p>
+                          <span
+                            className="text-[10px] flex-shrink-0 group-hover:underline"
+                            style={{ color: meta.color }}
+                          >
+                            ler
+                          </span>
+                        </div>
+                      ))}
+                  </div>
+                  <span className="text-[10px] text-cream/25 tabular-nums flex-shrink-0 mt-0.5">
+                    {hourLabel(e.timestamp)}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      ))}
     </div>
   );
 }

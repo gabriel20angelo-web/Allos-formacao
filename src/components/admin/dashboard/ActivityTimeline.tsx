@@ -36,103 +36,20 @@ import DayNotesPanel from "./DayNotesPanel";
 import type { DayNotesApi } from "@/hooks/useDayNotes";
 import {
   Activity,
-  Award,
-  BookOpen,
-  CheckCircle,
   Download,
-  FileText,
-  MessageCircle,
-  MessageSquare,
-  PlayCircle,
   Search,
-  Star,
-  UserPlus,
   Users,
   TrendingUp,
   CalendarClock,
   Megaphone,
-  Video,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-const TYPE_META: Record<
-  TimelineEventType,
-  { label: string; plural: string; verb: string; icon: LucideIcon; color: string }
-> = {
-  feedback: {
-    label: "Feedback",
-    plural: "Feedbacks",
-    verb: "enviou feedback de",
-    icon: MessageSquare,
-    color: "#C84B31",
-  },
-  // A presença medida na sala, ao lado do feedback que é autodeclarado. Cor
-  // própria porque a diferença entre declarar e ter estado é justamente o que
-  // se quer enxergar de relance.
-  encontro: {
-    label: "Encontro",
-    plural: "Encontros",
-    verb: "esteve em",
-    icon: Video,
-    color: "#2E9E8F",
-  },
-  signup: {
-    label: "Cadastro",
-    plural: "Cadastros",
-    verb: "criou conta",
-    icon: UserPlus,
-    color: "#22C55E",
-  },
-  enrollment: {
-    label: "Matrícula",
-    plural: "Matrículas",
-    verb: "matriculou-se em",
-    icon: BookOpen,
-    color: "#2E9E8F",
-  },
-  lesson: {
-    label: "Aula concluída",
-    plural: "Aulas concluídas",
-    verb: "concluiu a aula",
-    icon: PlayCircle,
-    color: "#6C5CE7",
-  },
-  completion: {
-    label: "Curso concluído",
-    plural: "Cursos concluídos",
-    verb: "concluiu o curso",
-    icon: CheckCircle,
-    color: "#D4A857",
-  },
-  review: {
-    label: "Avaliação",
-    plural: "Avaliações",
-    verb: "avaliou",
-    icon: Star,
-    color: "#F59E0B",
-  },
-  certificate: {
-    label: "Certificado",
-    plural: "Certificados",
-    verb: "recebeu certificado de",
-    icon: Award,
-    color: "#D4854A",
-  },
-  comment: {
-    label: "Comentário",
-    plural: "Comentários",
-    verb: "comentou em",
-    icon: MessageCircle,
-    color: "#38BDF8",
-  },
-  exam: {
-    label: "Prova",
-    plural: "Provas",
-    verb: "fez a prova de",
-    icon: FileText,
-    color: "#EF4444",
-  },
-};
+// O mapa de tipos mora em lib/utils/activity-meta: a ficha de pessoa precisa
+// dele sem precisar deste componente, e importá-lo daqui arrastava
+// framer-motion e o painel de anotações para o celular de quem conduz um grupo.
+// A reexportação no fim do arquivo continua valendo para quem já importava.
+import { TYPE_META } from "@/lib/utils/activity-meta";
 
 const PAGE_SIZE = 60;
 
