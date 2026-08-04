@@ -85,11 +85,48 @@ export default function ComoFunciona({
           </div>
 
           <div>
-            <p className="text-cream/80 font-semibold mb-1.5">Todo encontro precisa ficar gravado</p>
+            <p className="text-cream/80 font-semibold mb-1.5">Um link só, sempre o mesmo</p>
             <p>
-              É o que permite o vídeo virar aula no site e render os cortes que aparecem aqui
-              embaixo. O botão de gravar já vem ligado; se ele estiver desligado, o encontro daquele
-              dia não gera nada.
+              O endereço do Meet do seu grupo não muda de uma semana para a outra. Ele está na aba
+              Meu encontro, e é por ele que a sala reconhece de quem é aquele horário, o que poupa
+              você de configurar qualquer coisa antes de começar. Abrindo uma reunião por fora, o
+              encontro acontece normalmente, só que fica solto: não é registrado, não vira aula e
+              não rende nada depois.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-cream/80 font-semibold mb-1.5">O que acontece sozinho</p>
+            <p>
+              Entrando por esse link, o registro do encontro começa junto com ele. A gravação, a
+              transcrição e as notas de IA ficam ligadas por padrão, e você não precisa apertar nada
+              enquanto conduz. Se em algum dia fizer sentido não registrar, os botões da aba Meu
+              encontro desligam qualquer uma das três.
+            </p>
+            <p className="mt-2">
+              Terminado o encontro, o vídeo sobe para o YouTube como não listado, que é o modo em
+              que só abre quem tem o endereço: ele não aparece em busca, nem no canal, nem para
+              quem não recebeu o link. De lá ele chega ao site da Allos, na página do seu grupo, que
+              é o que permite alguém rever um encontro perdido e o que sustenta o certificado no
+              fim.
+            </p>
+          </div>
+
+          <div>
+            <p className="text-cream/80 font-semibold mb-1.5">Os cortes passam por você</p>
+            <p>
+              Do vídeo inteiro saem trechos curtos, e eles aparecem na aba Cortes esperando a sua
+              opinião. Nada sai dali por conta própria: o que presta você aprova, o que não presta
+              você recusa, e o campo de anotação existe para registrar o motivo quando valer a pena
+              lembrar dele depois.
+            </p>
+            <p className="mt-2">
+              O que você aprovar fica à sua disposição para o seu Instagram, se for do seu
+              interesse. Dá para publicar em parceria com o perfil da Allos Formação, o que coloca o
+              vídeo também na frente de quem acompanha a página e costuma alcançar mais gente do que
+              o seu perfil sozinho. Como isso vale para todo encontro, quem conduz por um semestre
+              termina com material recorrente sem ter parado para gravar nada além das próprias
+              aulas.
             </p>
           </div>
 
