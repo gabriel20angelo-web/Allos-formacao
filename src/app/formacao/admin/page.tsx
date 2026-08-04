@@ -920,17 +920,33 @@ export default function AdminDashboard() {
         atividades.forEach((a) =>
           horasMap.set(a.nome.toLowerCase(), a.carga_horaria)
         );
-        const pMap = new Map<string, { count: number; horas: number }>();
+        // Pelo e-mail, e rotulado com o nome mais completo que a pessoa já
+        // digitou.
+        //
+        // Agrupar por nome errava dos dois lados ao mesmo tempo. Fragmentava:
+        // a mesma conta assinou "Mariana Alves" e "Mariana Alves Ribeiro do
+        // Nascimento", e as 56 horas dela apareciam como 36. E fundia: três
+        // contas diferentes digitaram "Arthur de Assis Souza", e as horas das
+        // três eram somadas numa linha só. O ranking tinha 163 nomes para 149
+        // pessoas, e duas das cinco posições do pódio estavam erradas.
+        const pMap = new Map<
+          string,
+          { count: number; horas: number; nome: string }
+        >();
         subs.forEach((s) => {
           const nome = (s.nome_completo || "").trim();
           if (!nome) return;
-          const e = pMap.get(nome) || { count: 0, horas: 0 };
+          const chave = personKey({ person: nome, personEmail: s.email || undefined });
+          const e = pMap.get(chave) || { count: 0, horas: 0, nome };
           e.count++;
           e.horas += horasMap.get(s.atividade_nome?.toLowerCase() || "") || 2;
-          pMap.set(nome, e);
+          // O nome mais longo é o mais completo, e é por ele que a pessoa é
+          // reconhecida na lista.
+          if (nome.length > e.nome.length) e.nome = nome;
+          pMap.set(chave, e);
         });
-        const topP = Array.from(pMap.entries())
-          .map(([nome, d]) => ({ nome, count: d.count, horas: d.horas }))
+        const topP = Array.from(pMap.values())
+          .map((d) => ({ nome: d.nome, count: d.count, horas: d.horas }))
           .sort((a, b) => b.horas - a.horas || b.count - a.count)
           .slice(0, 5);
 
@@ -944,13 +960,16 @@ export default function AdminDashboard() {
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count);
 
-        // Unique participants in period
-        const uniqueNames = new Set<string>();
+        // Quantas pessoas, não quantos nomes: seis contas apareciam duas vezes
+        // aqui só por terem digitado o nome de outro jeito, e esse número é o
+        // denominador da frequência média logo abaixo — inflá-lo fazia a
+        // frequência do grupo parecer menor do que é.
+        const uniquePeople = new Set<string>();
         subs.forEach((s) => {
           const nome = (s.nome_completo || "").trim();
-          if (nome) uniqueNames.add(nome.toLowerCase());
+          if (nome) uniquePeople.add(personKey({ person: nome, personEmail: s.email || undefined }));
         });
-        const uniqueParticipants = uniqueNames.size;
+        const uniqueParticipants = uniquePeople.size;
 
         const avgFrequencyPerStudent =
           uniqueParticipants > 0 ? total / uniqueParticipants : 0;
@@ -963,13 +982,19 @@ export default function AdminDashboard() {
           string,
           { first: Date; last: Date }
         >();
+        // Pelo e-mail também aqui, e este era o mais caro dos três: quem passou
+        // a assinar de outro jeito virava duas pessoas, uma ativa (o nome de
+        // agora) e uma inativa (o nome que ela deixou de usar). A retenção caía
+        // sozinha, e a pessoa era contada como nova no período em que só mudou
+        // a forma de escrever o próprio nome.
         allSubs.forEach((s) => {
-          const nome = (s.nome_completo || "").trim().toLowerCase();
+          const nome = (s.nome_completo || "").trim();
           if (!nome) return;
+          const chave = personKey({ person: nome, personEmail: s.email || undefined });
           const d = new Date(s.created_at);
-          const existing = allParticipantDates.get(nome);
+          const existing = allParticipantDates.get(chave);
           if (!existing) {
-            allParticipantDates.set(nome, { first: d, last: d });
+            allParticipantDates.set(chave, { first: d, last: d });
           } else {
             if (d < existing.first) existing.first = d;
             if (d > existing.last) existing.last = d;

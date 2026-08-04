@@ -31,6 +31,7 @@ import {
   type TimelineEvent,
   type TimelineEventType,
 } from "@/lib/utils/activity";
+import { personKey } from "@/lib/utils/suspeita";
 import DayNotesPanel from "./DayNotesPanel";
 import type { DayNotesApi } from "@/hooks/useDayNotes";
 import {
@@ -234,14 +235,13 @@ export default function ActivityTimeline({
   const chart = useMemo(() => bucketEvents(filtered, range), [filtered, range]);
 
   // ── Resumo ──────────────────────────────────────────────────────
-  const peopleNow = useMemo(
-    () => new Set(filtered.map((e) => e.person.trim().toLowerCase())).size,
-    [filtered]
-  );
-  const peoplePrev = useMemo(
-    () => new Set(previous.map((e) => e.person.trim().toLowerCase())).size,
-    [previous]
-  );
+  // Pelo e-mail, não pelo nome. O formulário de /certificado aceita o nome
+  // digitado na hora, e a mesma conta aparece como "Mariana Alves" numa semana
+  // e "Mariana Alves Ribeiro do Nascimento" na outra: contadas pelo nome, elas
+  // viram duas pessoas, e o número que responde "quem apareceu depois da
+  // divulgação" fica inflado justamente onde se olha para decidir.
+  const peopleNow = useMemo(() => new Set(filtered.map(personKey)).size, [filtered]);
+  const peoplePrev = useMemo(() => new Set(previous.map(personKey)).size, [previous]);
   const eventsVar = variation(filtered.length, previous.length);
   const peopleVar = variation(peopleNow, peoplePrev);
 
