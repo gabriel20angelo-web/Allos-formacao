@@ -94,6 +94,14 @@ interface Status {
     nomes_nao_reconhecidos: number;
     erro: string | null;
   } | null;
+  // Veredito da mesma função que autoriza o sistema a concluir que um encontro
+  // não aconteceu. Opcional porque a tela pode estar aberta contra um servidor
+  // que ainda não tem o campo, e nesse caso a idade é calculada pela data.
+  captura?: {
+    saudavel: boolean;
+    motivo: string | null;
+    horas_desde_ultima_ingestao: number | null;
+  };
 }
 interface ItemFila {
   display_name: string;
@@ -2830,9 +2838,14 @@ export default function MeetAdminPage() {
             <p className="text-sm text-cream font-semibold mb-2">Última busca</p>
             {status?.ultima_ingestao ? (
               <div className="text-xs text-cream/50 space-y-1">
-                <p>
-                  {new Date(status.ultima_ingestao.executado_em).toLocaleString("pt-BR")}
-                </p>
+                {/* A data sozinha não responde a pergunta que se faz olhando
+                    para este cartão, que é "isso ainda está rodando?". Ninguém
+                    calcula de cabeça quantas horas faz, e era exatamente assim
+                    que uma captura parada passava despercebida por dias. */}
+                <IdadeDaCaptura
+                  executadoEm={status.ultima_ingestao.executado_em}
+                  captura={status.captura}
+                />
                 <p>
                   {status.ultima_ingestao.encontros_novos} novos ·{" "}
                   {status.ultima_ingestao.encontros_atualizados} atualizados ·{" "}
@@ -2840,6 +2853,14 @@ export default function MeetAdminPage() {
                 </p>
                 {status.ultima_ingestao.erro && (
                   <p className="text-amber-400/80 mt-2">{status.ultima_ingestao.erro}</p>
+                )}
+                {/* A consequência, e não só o sintoma: enquanto a captura não
+                    está saudável o sistema se recusa a marcar qualquer slot
+                    como não conduzido, e o calendário fica parado sem avisar. */}
+                {status.captura && !status.captura.saudavel && status.captura.motivo && (
+                  <p className="text-amber-400/80 mt-2">
+                    Marcação automática de status suspensa: {status.captura.motivo}
+                  </p>
                 )}
               </div>
             ) : (
@@ -3079,6 +3100,83 @@ function ClipeCard({
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Há quanto tempo a captura rodou pela última vez, em palavras.
+ *
+ * Arredonda de propósito. Precisão de minuto não muda nenhuma decisão de quem
+ * olha esta tela; o que muda é a ordem de grandeza.
+ */
+function tempoDecorrido(horas: number): string {
+  if (horas < 1) {
+    const min = Math.max(1, Math.round(horas * 60));
+    return `há ${min} ${min === 1 ? "minuto" : "minutos"}`;
+  }
+  if (horas < 48) {
+    const h = Math.round(horas);
+    return `há ${h} ${h === 1 ? "hora" : "horas"}`;
+  }
+  return `há ${Math.round(horas / 24)} dias`;
+}
+
+/**
+ * Data da última busca com a idade dela ao lado, em cor.
+ *
+ * Os cortes seguem a batida do agendador, que é de hora em hora: até duas horas
+ * é o funcionamento normal com folga para um atraso de fila; até seis é
+ * estranho mas ainda pode ser uma sequência ruim de sorte; acima disso alguma
+ * coisa parou, e o caso mais comum não é erro nenhum no código, e sim o GitHub
+ * ter desativado o agendamento por falta de push no repositório.
+ */
+function IdadeDaCaptura({
+  executadoEm,
+  captura,
+}: {
+  executadoEm: string;
+  captura: Status["captura"];
+}) {
+  // A conta do servidor vale mais que a do browser, cujo relógio pode estar
+  // errado. Sem ela, sobra calcular pela data, que é melhor que não mostrar.
+  const horas =
+    captura?.horas_desde_ultima_ingestao ??
+    (Date.now() - new Date(executadoEm).getTime()) / 3_600_000;
+
+  const nivel = horas <= 2 ? "ok" : horas <= 6 ? "atencao" : "parada";
+  const cor =
+    nivel === "ok"
+      ? { fg: "#4ADE80", bg: "rgba(74,222,128,0.12)", borda: "rgba(74,222,128,0.3)" }
+      : nivel === "atencao"
+        ? { fg: "#F59E0B", bg: "rgba(245,158,11,0.12)", borda: "rgba(245,158,11,0.3)" }
+        : { fg: "#FF4D4D", bg: "rgba(255,0,0,0.10)", borda: "rgba(255,0,0,0.3)" };
+
+  return (
+    <>
+      <div className="flex items-center gap-2 flex-wrap">
+        <span>{new Date(executadoEm).toLocaleString("pt-BR")}</span>
+        <span
+          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-semibold"
+          style={{ background: cor.bg, color: cor.fg, border: `1px solid ${cor.borda}` }}
+        >
+          {nivel === "ok" ? (
+            <CheckCircle2 className="h-3 w-3 shrink-0" />
+          ) : (
+            <AlertTriangle className="h-3 w-3 shrink-0" />
+          )}
+          {tempoDecorrido(horas)}
+        </span>
+      </div>
+
+      {nivel === "parada" && (
+        <p className="mt-2 leading-relaxed" style={{ color: cor.fg }}>
+          A busca deveria rodar de hora em hora, então a captura pode ter parado.
+          Vale conferir se o agendamento ainda está disparando: o GitHub desativa
+          sozinho o agendamento de repositório que fica sessenta dias sem push, e
+          quando isso acontece nada aqui dá erro, só para de acontecer.
+        </p>
+      )}
+    </>
   );
 }
 

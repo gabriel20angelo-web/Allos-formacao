@@ -155,10 +155,16 @@ export default function ModeracaoPage() {
     const client = createClient();
 
     const table = deleteTarget.type === "reviews" ? "reviews" : "lesson_comments";
-    const { error } = await client.from(table).delete().eq("id", deleteTarget.id);
+    const { error, count } = await client.from(table).delete({ count: "exact" }).eq("id", deleteTarget.id);
 
     if (error) {
       toast.error("Erro ao excluir.");
+      setDeleting(false);
+      return;
+    }
+
+    if (count === 0) {
+      toast.error("Nada foi apagado. Provavelmente é permissão: recarregue e tente de novo; se persistir, é a policy do banco.");
       setDeleting(false);
       return;
     }
@@ -524,8 +530,6 @@ export default function ModeracaoPage() {
 
       {/* Dúvidas */}
       {tab === "duvidas" && <DuvidasPage />}
-
-      {/* Categorias */}
 
       {/* Delete confirmation */}
       <Modal

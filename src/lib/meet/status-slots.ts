@@ -54,7 +54,7 @@ function segundaDaSemana(d: Date): Date {
  * Só conclusão negativa depende disso. Marcar "conduzido" a partir de um
  * registro que existe é seguro em qualquer cenário.
  */
-async function capturaSaudavel(sb: Sb): Promise<{ ok: boolean; motivo?: string }> {
+export async function capturaSaudavel(sb: Sb): Promise<{ ok: boolean; motivo?: string }> {
   const { data: cred } = await sb
     .from("formacao_meet_credenciais")
     .select("id")

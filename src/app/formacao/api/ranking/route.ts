@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { createServiceRoleClient } from '@/lib/supabase/server'
+import { ACTIVITY_RANGES, getRangeStart, type ActivityRange } from '@/lib/utils/activity'
 
 // Route is dynamic on searchParams (?period=&type=). `revalidate=300` here
 // causes regression in Next 14 (TTFB jumps from ~0.8s → ~3s) because the
@@ -9,7 +10,19 @@ import { createServiceRoleClient } from '@/lib/supabase/server'
 // which we accept until the Railway region is moved out of Singapore.
 export const dynamic = "force-dynamic";
 
-function getSince(period: string): Date {
+// A mesma rota atende dois chamadores com vocabulários diferentes: o site
+// público manda "week"|"month"|"quarter"|"semester"|"year" (HeroFormacao,
+// SyncGroupsSection) e o card do admin manda um ActivityRange
+// ("today"|"7d"|...|"all", ver src/lib/utils/activity.ts). Nenhum dos dois
+// conjuntos se sobrepõe, então dá pra aceitar os dois sem ambiguidade.
+function isActivityRange(period: string): period is ActivityRange {
+  return (ACTIVITY_RANGES as readonly string[]).includes(period)
+}
+
+// `null` = sem corte de data (caso "all" do admin).
+function getSince(period: string): Date | null {
+  if (isActivityRange(period)) return getRangeStart(period)
+
   const now = new Date()
   switch (period) {
     case 'month': return new Date(now.getFullYear(), now.getMonth(), 1)
@@ -18,6 +31,7 @@ function getSince(period: string): Date {
     case 'year': return new Date(now.getFullYear(), 0, 1)
     default: {
       // ISO 8601: domingo (getDay()=0) é o dia 7 da semana anterior.
+      // Também é o fallback de period ausente/desconhecido (ex: "week").
       const d = new Date(now)
       const day = d.getDay() || 7
       d.setDate(d.getDate() - day + 1)
@@ -29,7 +43,7 @@ function getSince(period: string): Date {
 
 type RankEntry = { nome: string; count: number; horas: number }
 
-async function getSyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
+async function getSyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date | null): Promise<RankEntry[]> {
   const [subsRes, atRes] = await Promise.all([
     sb.from('certificado_submissions').select('nome_completo, atividade_nome, created_at'),
     sb.from('certificado_atividades').select('nome, carga_horaria'),
@@ -44,7 +58,10 @@ async function getSyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleCli
     )
   }
 
-  const filtered = subsRes.data.filter((s: { created_at: string }) => new Date(s.created_at) >= since)
+  // since=null ("all") não corta nada
+  const filtered = since
+    ? subsRes.data.filter((s: { created_at: string }) => new Date(s.created_at) >= since)
+    : subsRes.data
   const map = new Map<string, { count: number; horas: number }>()
 
   filtered.forEach((s: { nome_completo: string; atividade_nome: string }) => {
@@ -58,13 +75,14 @@ async function getSyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleCli
   return Array.from(map.entries()).map(([nome, d]) => ({ nome, count: d.count, horas: d.horas }))
 }
 
-async function getAsyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
-  // Get completed lesson progress since the period
-  const { data: progressData, error: progressError } = await sb
+async function getAsyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date | null): Promise<RankEntry[]> {
+  // Get completed lesson progress since the period (since=null / "all" não filtra por data)
+  let progressQuery = sb
     .from('lesson_progress')
     .select('user_id, lesson_id, completed_at')
     .eq('completed', true)
-    .gte('completed_at', since.toISOString())
+  if (since) progressQuery = progressQuery.gte('completed_at', since.toISOString())
+  const { data: progressData, error: progressError } = await progressQuery
 
   if (progressError || !progressData || progressData.length === 0) return []
 
@@ -143,12 +161,13 @@ async function getAsyncRanking(sb: Awaited<ReturnType<typeof createServiceRoleCl
   }))
 }
 
-async function getCurseirosRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date): Promise<RankEntry[]> {
-  // Get certificates issued since period
-  const { data: certs } = await sb
+async function getCurseirosRanking(sb: Awaited<ReturnType<typeof createServiceRoleClient>>, since: Date | null): Promise<RankEntry[]> {
+  // Get certificates issued since period (since=null / "all" não filtra por data)
+  let certsQuery = sb
     .from('certificates')
     .select('user_id, course_id, issued_at')
-    .gte('issued_at', since.toISOString())
+  if (since) certsQuery = certsQuery.gte('issued_at', since.toISOString())
+  const { data: certs } = await certsQuery
 
   if (!certs || certs.length === 0) return []
 

@@ -5,6 +5,7 @@ import { motion } from "framer-motion";
 import { useInView } from "react-intersection-observer";
 import { Radio, ArrowRight } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
+import { formatPrice } from "@/lib/utils/format";
 import Link from "next/link";
 import Image from "next/image";
 
@@ -17,7 +18,10 @@ interface FeaturedCourse {
   featured_label: string | null;
   course_type: "async" | "sync";
   is_free: boolean;
-  price: number | null;
+  // A coluna do banco é `price_cents`, em centavos. Este componente pedia
+  // `price`, que nunca existiu, e o card de curso pago na home mostrava
+  // "R$ undefined" para quem entrasse no site.
+  price_cents: number | null;
 }
 
 export default function FeaturedCourses() {
@@ -133,7 +137,11 @@ export default function FeaturedCourses() {
                       className="font-dm text-xs font-medium"
                       style={{ color: course.is_free ? "#2E9E8F" : "#C84B31" }}
                     >
-                      {course.is_free ? "Gratuito" : `R$ ${course.price?.toFixed(2)}`}
+                      {course.is_free
+                        ? "Gratuito"
+                        : course.price_cents
+                          ? formatPrice(course.price_cents)
+                          : "Sob consulta"}
                     </span>
                     <span className="font-dm text-[11px] flex items-center gap-1 text-[#C84B31] opacity-0 group-hover:opacity-100 transition-opacity">
                       Acessar <ArrowRight size={12} />

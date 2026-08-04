@@ -63,13 +63,18 @@ export default function AdminDuvidasPage() {
   async function toggleAnswered(q: VideoQuestion) {
     const client = createClient();
     const newVal = !q.answered;
-    const { error } = await client
+    const { error, count } = await client
       .from("video_questions")
-      .update({ answered: newVal })
+      .update({ answered: newVal }, { count: "exact" })
       .eq("id", q.id);
 
     if (error) {
       toast.error("Erro ao atualizar.");
+      return;
+    }
+
+    if (count === 0) {
+      toast.error("Nada foi atualizado. Provavelmente é permissão: recarregue e tente de novo; se persistir, é a policy do banco.");
       return;
     }
 
@@ -85,13 +90,19 @@ export default function AdminDuvidasPage() {
     if (!deleteTarget) return;
     setDeleting(true);
     const client = createClient();
-    const { error } = await client
+    const { error, count } = await client
       .from("video_questions")
-      .delete()
+      .delete({ count: "exact" })
       .eq("id", deleteTarget.id);
 
     if (error) {
       toast.error("Erro ao excluir.");
+      setDeleting(false);
+      return;
+    }
+
+    if (count === 0) {
+      toast.error("Nada foi apagado. Provavelmente é permissão: recarregue e tente de novo; se persistir, é a policy do banco.");
       setDeleting(false);
       return;
     }

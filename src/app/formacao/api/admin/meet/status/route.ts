@@ -6,6 +6,7 @@
 
 import { NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
+import { capturaSaudavel } from "@/lib/meet/status-slots";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
@@ -64,6 +65,18 @@ export async function GET() {
     .select("tolerancia_atraso_min, limite_encerramento_min, pasta_drive_url")
     .maybeSingle();
 
+  // O mesmo veredito que decide se o sistema pode marcar um encontro como não
+  // conduzido. Reaproveitado aqui de propósito: se a regra do painel fosse
+  // escrita à parte, as duas versões divergiriam com o tempo e a tela diria
+  // "tudo certo" enquanto o automático se recusa a concluir qualquer coisa.
+  const saude = await capturaSaudavel(sb);
+
+  // Nulo quando nunca rodou, e não zero: zero significaria "acabou de rodar",
+  // que é o oposto do que aconteceu. Quem lê trata a ausência à parte.
+  const horasDesdeUltimaIngestao = ultimaIngestao?.executado_em
+    ? (Date.now() - new Date(ultimaIngestao.executado_em).getTime()) / 3_600_000
+    : null;
+
   return NextResponse.json({
     config: {
       tolerancia_atraso_min: cronograma?.tolerancia_atraso_min ?? 7,
@@ -81,5 +94,13 @@ export async function GET() {
     total_encontros: totalEncontros ?? 0,
     nomes_pendentes: pendentes ?? 0,
     ultima_ingestao: ultimaIngestao || null,
+    captura: {
+      saudavel: saude.ok,
+      motivo: saude.motivo ?? null,
+      horas_desde_ultima_ingestao:
+        horasDesdeUltimaIngestao === null
+          ? null
+          : Math.round(horasDesdeUltimaIngestao * 10) / 10,
+    },
   });
 }
