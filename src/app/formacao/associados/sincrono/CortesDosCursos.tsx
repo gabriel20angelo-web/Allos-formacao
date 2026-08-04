@@ -35,9 +35,20 @@ interface EncontroDoCurso {
 export default function CortesDosCursos({
   aoAssistir,
   aoAvaliar,
+  ajustes,
 }: {
   aoAssistir: (c: ClipeC) => void;
   aoAvaliar: (c: ClipeC, v: "gostei" | "rejeitado") => void;
+  /**
+   * O que foi avaliado desde que esta lista carregou.
+   *
+   * A lista é estado deste componente, e quem envia a avaliação é a tela, que
+   * atualiza o estado DELA: as salas do grupo. O corte de curso era gravado no
+   * servidor e continuava aparecendo por avaliar; o segundo clique mandava
+   * "gostei" outra vez em vez de desmarcar, porque o valor de partida estava
+   * velho. Enquanto a aba vinha vazia ninguém tropeçou nisso.
+   */
+  ajustes: Record<string, "gostei" | "rejeitado" | null>;
 }) {
   const [cursos, setCursos] = useState<CursoComCortes[]>([]);
   const [escolhido, setEscolhido] = useState<CursoComCortes | null>(null);
@@ -129,7 +140,15 @@ export default function CortesDosCursos({
       <p className="text-sm text-cream font-semibold mb-3">{escolhido.title}</p>
 
       <div className="space-y-2">
-        {encontros.map((e) => {
+        {encontros.map((e0) => {
+          // O que já foi avaliado nesta visita vale mais que o que veio do
+          // servidor quando a lista carregou.
+          const e = {
+            ...e0,
+            clipes: e0.clipes.map((c) =>
+              c.id in ajustes ? { ...c, avaliacao: ajustes[c.id] } : c
+            ),
+          };
           const aberto = abertoId === e.job_id;
           const porVer = e.clipes.filter((c) => !c.avaliacao).length;
 

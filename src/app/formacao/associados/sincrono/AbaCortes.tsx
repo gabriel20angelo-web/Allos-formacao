@@ -42,10 +42,13 @@ export default function AbaCortes({
   salas,
   aoAssistir,
   aoAvaliar,
+  ajustes,
 }: {
   salas: SalaC[];
   aoAssistir: (c: ClipeC) => void;
   aoAvaliar: (c: ClipeC, v: "gostei" | "rejeitado") => void;
+  /** O que foi avaliado nesta visita. Só a lista dos cursos precisa. */
+  ajustes: Record<string, "gostei" | "rejeitado" | null>;
 }) {
   const [filtro, setFiltro] = useState<Filtro>("por-ver");
 
@@ -141,7 +144,7 @@ export default function AbaCortes({
       {/* Os cortes das aulas gravadas. Continuam com a navegação própria —
           curso, depois encontro — porque um curso passa de trezentos cortes, e
           carregar tudo junto da fila acima só produziria uma parede. */}
-      <CortesDosCursos aoAssistir={aoAssistir} aoAvaliar={aoAvaliar} />
+      <CortesDosCursos aoAssistir={aoAssistir} aoAvaliar={aoAvaliar} ajustes={ajustes} />
     </div>
   );
 }

@@ -41,6 +41,11 @@ export default function TelaDoGrupo() {
   const [assistindo, setAssistindo] = useState<ClipeC | null>(null);
   const [anotacao, setAnotacao] = useState("");
   const [trabalhando, setTrabalhando] = useState<string | null>(null);
+  // O que foi avaliado desde que a tela abriu, por corte. As salas guardam o
+  // próprio estado, mas os cortes dos cursos vêm de outra rota e ficam numa
+  // lista que esta tela não controla; sem este mapa, o botão não acende lá e o
+  // clique seguinte manda de novo o mesmo valor em vez de desmarcar.
+  const [ajustes, setAjustes] = useState<Record<string, "gostei" | "rejeitado" | null>>({});
 
   const carregar = useCallback(async () => {
     try {
@@ -115,6 +120,7 @@ export default function TelaDoGrupo() {
 
   async function avaliar(c: ClipeC, valor: "gostei" | "rejeitado") {
     const novo = c.avaliacao === valor ? null : valor;
+    setAjustes((a) => ({ ...a, [c.id]: novo }));
     setSalas((s) =>
       s.map((sala) => ({
         ...sala,
@@ -248,14 +254,20 @@ export default function TelaDoGrupo() {
       )}
 
       {aba === "cortes" && (
-        <AbaCortes salas={salas} aoAssistir={assistir} aoAvaliar={avaliar} />
+        <AbaCortes salas={salas} aoAssistir={assistir} aoAvaliar={avaliar} ajustes={ajustes} />
       )}
 
       {aba === "combinado" && <ComoFunciona inicialmenteAberto />}
 
       {assistindo && (
         <Player
-          clipe={assistindo}
+          // Com o corte aberto, avaliar precisa acender o botão aqui também: o
+          // objeto que abriu o player é uma foto do clique.
+          clipe={
+            assistindo.id in ajustes
+              ? { ...assistindo, avaliacao: ajustes[assistindo.id] }
+              : assistindo
+          }
           anotacao={anotacao}
           aoMudarAnotacao={setAnotacao}
           aoSalvarAnotacao={salvarAnotacao}
