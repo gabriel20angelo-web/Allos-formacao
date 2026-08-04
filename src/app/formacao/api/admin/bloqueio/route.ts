@@ -13,6 +13,7 @@ import {
   createServerSupabaseClient,
   createServiceRoleClient,
 } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +28,12 @@ export async function POST(req: NextRequest) {
 
   const { data: perfil } = await userClient
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
-  if (perfil?.role !== "admin") {
+  // Pelos cargos: quem administra pode ter "admin" entre os extras, e a
+  // comparação crua o barrava aqui sem dizer por quê.
+  if (!temCargo(perfil, "admin")) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -67,13 +70,15 @@ export async function POST(req: NextRequest) {
   // conta administrativa seja derrubada por engano em um clique.
   const { data: alvoPerfil } = await sb
     .from("profiles")
-    .select("id, role, full_name")
+    .select("id, role, cargos, full_name")
     .eq("id", alvo)
     .maybeSingle();
   if (!alvoPerfil) {
     return NextResponse.json({ error: "Pessoa não encontrada" }, { status: 404 });
   }
-  if (bloquear && alvoPerfil.role === "admin") {
+  // Também pelos cargos: um administrador com o papel em `cargos` passava por
+  // esta proteção e podia ser bloqueado num clique.
+  if (bloquear && temCargo(alvoPerfil, "admin")) {
     return NextResponse.json(
       { error: "Remova o papel de administrador antes de bloquear esta conta." },
       { status: 400 }

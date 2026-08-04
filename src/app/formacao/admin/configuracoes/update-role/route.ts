@@ -1,4 +1,5 @@
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -21,11 +22,15 @@ export async function POST(request: Request) {
 
   const { data: callerProfile } = await userClient
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
 
-  if (callerProfile?.role !== "admin") {
+  // Pelos cargos. Esta rota é justamente a que distribui cargos, então a
+  // comparação crua tinha o efeito mais desconfortável de todos: um
+  // administrador com "admin" entre os extras não conseguia arrumar o cargo de
+  // ninguém, nem o próprio, e a tela só dizia "Sem permissão".
+  if (!temCargo(callerProfile, "admin")) {
     return Response.json({ error: "Sem permissão" }, { status: 403 });
   }
 
@@ -38,10 +43,6 @@ export async function POST(request: Request) {
   const ALLOWED_ROLES = ["student", "instructor", "admin", "associado", "eventos", "condutor"] as const;
   if (!ALLOWED_ROLES.includes(role)) {
     return Response.json({ error: "Role inválido" }, { status: 400 });
-  }
-
-  if (userId === user.id && role !== "admin") {
-    return Response.json({ error: "Não pode remover sua própria permissão" }, { status: 400 });
   }
 
   // Cargos extras. O papel principal continua sendo um só e governa tudo que
@@ -60,6 +61,22 @@ export async function POST(request: Request) {
     // O papel principal já está lá: repetir na lista de extras só criaria dois
     // lugares para dizer a mesma coisa, e um deles ficaria desatualizado.
     extras = Array.from(new Set(cargos.filter((c: string) => c !== role)));
+  }
+
+  // Não sair sozinho pela porta que se está guardando.
+  //
+  // A checagem olhava só o papel principal, então quem carregava "admin" entre
+  // os extras passava por ela e se rebaixava mandando a lista de extras vazia:
+  // o papel continuava sendo o mesmo, e o cargo que dava acesso ia embora junto
+  // com o resto. Com a conta administrativa fora do ar, o conserto exige alguém
+  // com acesso ao banco.
+  // Sem `cargos` no corpo, os extras de hoje ficam como estão — e são eles que
+  // decidem se a pessoa continua administradora.
+  const extrasFinais =
+    cargos !== undefined ? extras : ((callerProfile?.cargos as string[] | null) ?? []);
+  const aindaSeraAdmin = role === "admin" || extrasFinais.includes("admin");
+  if (userId === user.id && !aindaSeraAdmin) {
+    return Response.json({ error: "Não pode remover sua própria permissão" }, { status: 400 });
   }
 
   // Service role só agora, exclusivamente pra escrita (bypassa RLS).

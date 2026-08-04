@@ -13,6 +13,7 @@ import {
   createServerSupabaseClient,
   createServiceRoleClient,
 } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 import { detectarSinais } from "@/lib/utils/suspeita";
 import type { TimelineEvent } from "@/lib/utils/activity";
 import {
@@ -66,10 +67,12 @@ async function exigirAdmin() {
 
   const { data: perfil } = await userClient
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
-  if (perfil?.role !== "admin") {
+  // Pelos cargos: quem administra pode ter "admin" entre os extras, e a
+  // comparação crua o barrava aqui sem dizer por quê.
+  if (!temCargo(perfil, "admin")) {
     return { erro: NextResponse.json({ error: "Sem permissão" }, { status: 403 }) };
   }
   return { user };

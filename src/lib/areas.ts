@@ -211,6 +211,35 @@ export function caminhosDoPainel(cargos: Set<string>): string[] {
     .map((a) => a.href);
 }
 
+/**
+ * O caminho pedido é de uma área que esta pessoa NÃO alcança?
+ *
+ * `circulaLivre` existe porque o painel tem dezenas de telas fora do catálogo
+ * (alunos, cursos, categorias, atalhos) e prender o professor às poucas áreas
+ * catalogadas fecharia todas elas. Só que "circula livre" acabou valendo também
+ * para as áreas que o catálogo marca como exclusivas do administrador — o menu
+ * escondia Configurações do professor, e digitar o endereço abria a tela assim
+ * mesmo, com a lista de contas e o botão de trocar cargo à vista.
+ *
+ * Aqui a pergunta é ao contrário da outra: não é "onde ela pode ir", é "este
+ * lugar tem dono, e não é ela?". Quem circula livre continua alcançando tudo
+ * que o catálogo não reivindica.
+ */
+export function areaProibida(pathname: string, cargos: Set<string>): boolean {
+  return AREAS.some((a) => {
+    if (!a.href.startsWith("/formacao/admin")) return false;
+    // A raiz do painel é o Dashboard e casa por igualdade apenas: com prefixo
+    // ela cobriria todas as telas do painel, e negar o Dashboard a alguém
+    // fecharia junto tudo o que não tem dono no catálogo. Mesma convenção do
+    // menu e do gate de rota.
+    const casa =
+      a.href === "/formacao/admin"
+        ? pathname === a.href
+        : pathname === a.href || pathname.startsWith(`${a.href}/`);
+    return casa && !podeVer(a, cargos);
+  });
+}
+
 /** Onde esta pessoa cai ao abrir o painel. */
 export function homeDoPainel(cargos: Set<string>): string {
   if (circulaLivre(cargos)) return "/formacao/admin";

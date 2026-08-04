@@ -13,6 +13,7 @@ import {
   createServerSupabaseClient,
   createServiceRoleClient,
 } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export const dynamic = "force-dynamic";
 
@@ -27,10 +28,12 @@ export async function POST(req: NextRequest) {
 
   const { data: perfil } = await userClient
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
-  if (perfil?.role !== "admin") {
+  // Pelos cargos: quem administra pode ter "admin" entre os extras, e a
+  // comparação crua o barrava aqui sem dizer por quê.
+  if (!temCargo(perfil, "admin")) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 

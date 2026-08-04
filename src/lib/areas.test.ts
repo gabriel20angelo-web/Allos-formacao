@@ -13,6 +13,7 @@
 import { describe, it, expect } from "vitest";
 import { cargosDe, temAlgumCargo, conjuntoTemAlgum } from "./cargos";
 import {
+  areaProibida,
   areasDoSite,
   areasDoPainel,
   caminhosDoPainel,
@@ -149,6 +150,47 @@ describe("a casa de quem trabalha nos grupos", () => {
   it("aluno não vê nenhuma", () => {
     expect(idsDasSecoes(quem("student"))).toEqual([]);
     expect(homeDosAssociados(cargosDe(quem("student")))).toBeNull();
+  });
+});
+
+describe("área com dono não abre para quem circula livre", () => {
+  // O professor circula livre para alcançar as telas do painel que não estão
+  // no catálogo. Isso vinha abrindo junto as que são só do administrador: o
+  // menu escondia Configurações dele, e digitar o endereço mostrava a lista de
+  // contas com o botão de trocar cargo.
+
+  it("o professor não entra nas áreas exclusivas do administrador", () => {
+    const prof = cargosDe(quem("instructor"));
+    expect(areaProibida("/formacao/admin/configuracoes", prof)).toBe(true);
+    expect(areaProibida("/formacao/admin/associados", prof)).toBe(true);
+    expect(areaProibida("/formacao/admin/associados/sugestoes", prof)).toBe(true);
+  });
+
+  it("o professor continua entrando no que é dele", () => {
+    const prof = cargosDe(quem("instructor"));
+    expect(areaProibida("/formacao/admin", prof)).toBe(false);
+    expect(areaProibida("/formacao/admin/certificados", prof)).toBe(false);
+    expect(areaProibida("/formacao/admin/formacao-base", prof)).toBe(false);
+    expect(areaProibida("/formacao/admin/moderacao", prof)).toBe(false);
+  });
+
+  it("as telas fora do catálogo seguem abertas a quem circula livre", () => {
+    // Estas não têm dono declarado: prendê-las junto fecharia metade do painel.
+    const prof = cargosDe(quem("instructor"));
+    expect(areaProibida("/formacao/admin/alunos", prof)).toBe(false);
+    expect(areaProibida("/formacao/admin/cursos", prof)).toBe(false);
+    expect(areaProibida("/formacao/admin/condutores", prof)).toBe(false);
+  });
+
+  it("o administrador não é barrado em lugar nenhum", () => {
+    const adm = cargosDe(quem("admin"));
+    expect(areaProibida("/formacao/admin/configuracoes", adm)).toBe(false);
+    expect(areaProibida("/formacao/admin/associados", adm)).toBe(false);
+  });
+
+  it("vale para o administrador que carrega o cargo entre os extras", () => {
+    const adm = cargosDe(quem("condutor", "admin"));
+    expect(areaProibida("/formacao/admin/configuracoes", adm)).toBe(false);
   });
 });
 

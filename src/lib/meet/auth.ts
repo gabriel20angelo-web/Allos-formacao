@@ -6,6 +6,7 @@
 // uma porta aberta.
 
 import { createServerSupabaseClient } from "@/lib/supabase/server";
+import { temCargo } from "@/lib/cargos";
 
 export interface AdminOk {
   ok: true;
@@ -27,11 +28,17 @@ export async function exigirAdmin(): Promise<AdminOk | AdminNegado> {
 
   const { data: perfil } = await client
     .from("profiles")
-    .select("role")
+    .select("role, cargos")
     .eq("id", user.id)
     .single();
 
-  if (perfil?.role !== "admin") {
+  // Pelos cargos, nunca por `role` direto. Quem administra e também conduz um
+  // grupo carrega "admin" na lista de extras, e a comparação crua barrava essa
+  // pessoa nas dezoito rotas que passam por aqui — com 403 e nenhuma pista na
+  // tela de que o motivo era o cargo estar na coluna errada. As policies do
+  // Postgres já respondem pelos dois lugares (`tem_cargo`), então era só este
+  // lado que discordava.
+  if (!temCargo(perfil, "admin")) {
     return { ok: false, status: 403, erro: "Sem permissão" };
   }
   return { ok: true, userId: user.id };

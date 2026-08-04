@@ -8,7 +8,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { cargosDe } from "@/lib/cargos";
-import { caminhosDoPainel, circulaLivre, homeDaPessoa, homeDoPainel } from "@/lib/areas";
+import { areaProibida, caminhosDoPainel, circulaLivre, homeDaPessoa, homeDoPainel } from "@/lib/areas";
 
 const BASE_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
@@ -172,6 +172,17 @@ export async function updateSession(request: NextRequest) {
       // /formacao a obrigaria a descobrir sozinha onde foi parar o trabalho.
       if (!suas.length) {
         return hardRedirect(homeDaPessoa(meus), supabaseResponse);
+      }
+
+      // Área com dono não se abre para quem circula livre.
+      //
+      // O professor circula livre para alcançar as dezenas de telas do painel
+      // que não estão no catálogo, e isso vinha abrindo junto as que o catálogo
+      // marca como exclusivas do administrador: Configurações some do menu
+      // dele, e digitar o endereço mostrava a lista de contas com o botão de
+      // trocar cargo. O menu dizia uma coisa e a rota fazia outra.
+      if (areaProibida(pathname, meus)) {
+        return hardRedirect(homeDoPainel(meus), supabaseResponse);
       }
 
       // Preso à própria área só quem não circula livre. Quem acumula eventos e
