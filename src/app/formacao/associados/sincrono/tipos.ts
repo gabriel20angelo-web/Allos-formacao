@@ -32,6 +32,13 @@ export interface SalaC {
   dia_semana: number | null;
   hora: string | null;
   atividade_nome: string | null;
+  /**
+   * Esta é a sala do vínculo de quem está olhando.
+   *
+   * Não é permissão: todo condutor abre e mexe em todas. É o rótulo que faz a
+   * pessoa achar a dela entre seis, e vem primeiro na lista por isso.
+   */
+  minha: boolean;
   encontros: EncontroC[];
 }
 

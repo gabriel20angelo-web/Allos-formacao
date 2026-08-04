@@ -136,9 +136,25 @@ export default function AbaEncontro({
           <Card key={sala.space_name} className="p-4">
             <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-2 sm:gap-3">
               <div className="min-w-0">
-                <p className="text-sm text-cream font-semibold">
-                  {sala.dia_semana !== null ? DIAS[sala.dia_semana] : sala.rotulo}
-                  {sala.hora ? ` · ${sala.hora}` : ""}
+                <p className="text-sm text-cream font-semibold flex items-center gap-2 flex-wrap">
+                  <span>
+                    {sala.dia_semana !== null ? DIAS[sala.dia_semana] : sala.rotulo}
+                    {sala.hora ? ` · ${sala.hora}` : ""}
+                  </span>
+                  {/* Todas as salas ficam abertas a quem conduz. Este selo é o
+                      que distingue a sua do resto, e ele vem primeiro na lista. */}
+                  {sala.minha && (
+                    <span
+                      className="px-2 py-0.5 rounded-full text-[10px] font-bold uppercase tracking-wider"
+                      style={{
+                        background: "rgba(108,92,231,0.16)",
+                        color: "#A99CF0",
+                        border: "1px solid rgba(108,92,231,0.32)",
+                      }}
+                    >
+                      seu grupo
+                    </span>
+                  )}
                 </p>
                 <p className="text-xs text-cream/50 mt-0.5">
                   {sala.atividade_nome || sala.rotulo || "Sem atividade definida"}

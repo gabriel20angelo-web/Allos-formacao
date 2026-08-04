@@ -12,87 +12,34 @@
 // Sem `curso_id` do job: ele é congelado no momento do envio, então vincular a
 // sala ao curso depois não conserta as linhas antigas. O caminho pela aula
 // sempre reflete o presente.
+//
+// O recorte por curso saiu. Ele filtrava pelos cursos vinculados às salas da
+// pessoa (`formacao_meet_spaces.curso_id`), e nenhuma das seis salas tinha esse
+// campo preenchido: a aba abria vazia para os nove condutores, com o texto
+// "nenhum curso seu tem cortes ainda", que soava como "ainda não cortamos" e
+// era na verdade "falta um vínculo que ninguém sabia que existia". Quem tem o
+// cargo vê os cortes de todos os cursos.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { temCargo } from "@/lib/cargos";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { identificarCondutor } from "@/lib/condutor";
 
 export const dynamic = "force-dynamic";
 
-type Sb = Awaited<ReturnType<typeof createServiceRoleClient>>;
-
-async function identificar() {
-  const client = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-  if (!user) return null;
-
-  const { data: perfil } = await client
-    .from("profiles")
-    .select("role, cargos")
-    .eq("id", user.id)
-    .single();
-
-  const sb = await createServiceRoleClient();
-  const { data: ficha } = await sb
-    .from("certificado_condutores")
-    .select("id")
-    .eq("user_id", user.id)
-    .maybeSingle();
-
-  // Cargo, não papel principal: o administrador que também conduz carrega
-  // "admin" na lista de extras, e sem isso perderia a lista completa de cursos.
-  return { userId: user.id, ehAdmin: temCargo(perfil, "admin"), condutorId: ficha?.id || null };
-}
-
-/** Os cursos vinculados às salas desta pessoa. Admin sem ficha vê todos. */
-async function cursosDele(sb: Sb, condutorId: string | null, ehAdmin: boolean): Promise<string[] | null> {
-  if (ehAdmin && !condutorId) return null; // null = sem restrição
-
-  if (!condutorId) return [];
-
-  const { data: alocacoes } = await sb
-    .from("formacao_alocacoes")
-    .select("slot_id")
-    .eq("condutor_id", condutorId);
-
-  const slotIds = (alocacoes || []).map((a: { slot_id: string }) => a.slot_id);
-  if (!slotIds.length) return [];
-
-  const { data: spaces } = await sb
-    .from("formacao_meet_spaces")
-    .select("curso_id")
-    .in("slot_id", slotIds)
-    .not("curso_id", "is", null);
-
-  return Array.from(
-    new Set((spaces || []).map((s: { curso_id: string }) => s.curso_id))
-  );
-}
-
 export async function GET(req: NextRequest) {
-  const quem = await identificar();
-  if (!quem) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const quem = await identificarCondutor();
+  if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
 
   const sb = await createServiceRoleClient();
-  const permitidos = await cursosDele(sb, quem.condutorId, quem.ehAdmin);
   const cursoPedido = req.nextUrl.searchParams.get("curso_id");
 
   // ── sem curso escolhido: a lista de quais têm corte ──
   if (!cursoPedido) {
-    let q = sb
+    const { data: jobs } = await sb
       .from("formacao_clip_jobs")
       .select("curso_id, lesson_id")
       .not("curso_id", "is", null)
       .not("lesson_id", "is", null);
-
-    if (permitidos) {
-      if (!permitidos.length) return NextResponse.json({ cursos: [] });
-      q = q.in("curso_id", permitidos);
-    }
-
-    const { data: jobs } = await q;
     const contagem = new Map<string, number>();
     for (const j of (jobs || []) as { curso_id: string }[]) {
       contagem.set(j.curso_id, (contagem.get(j.curso_id) || 0) + 1);
@@ -116,10 +63,6 @@ export async function GET(req: NextRequest) {
   }
 
   // ── curso escolhido: os cortes, agrupados por aula ──
-  if (permitidos && !permitidos.includes(cursoPedido)) {
-    return NextResponse.json({ error: "Este curso não é seu." }, { status: 403 });
-  }
-
   const { data: curso } = await sb
     .from("courses")
     .select("id, title")

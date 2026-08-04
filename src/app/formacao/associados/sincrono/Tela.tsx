@@ -178,13 +178,21 @@ export default function TelaDoGrupo() {
     0
   );
 
+  // Todo condutor alcança todos os grupos, mas o título não pode falar no
+  // plural quando existe uma sala só: "Os grupos" acima de um card é a tela
+  // dizendo que falta alguma coisa que não falta.
+  const umSoGrupo = salas.length <= 1;
+
   return (
     <div className="space-y-4">
       <div>
-        <h1 className="font-fraunces font-bold text-xl md:text-2xl text-cream mb-1">Meu grupo</h1>
+        <h1 className="font-fraunces font-bold text-xl md:text-2xl text-cream mb-1">
+          {umSoGrupo ? "Meu grupo" : "Os grupos"}
+        </h1>
         <p className="text-sm text-cream/50">
           {profile?.full_name ? `${profile.full_name}, aqui` : "Aqui"} você ajusta o que acontece
-          no seu encontro e olha o que saiu dele.
+          {umSoGrupo ? " no seu encontro" : " nos encontros"} e olha o que saiu dele
+          {umSoGrupo ? "" : "s"}.
         </p>
       </div>
 

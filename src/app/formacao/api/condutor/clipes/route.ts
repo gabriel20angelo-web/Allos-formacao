@@ -7,20 +7,22 @@
 // antes da frase, e reconhece quando um trecho bom isolado acaba dizendo o
 // contrário do que foi dito. Por isso a opinião dele vale mais que a nota que
 // a ferramenta deu.
+//
+// A checagem de posse do corte saiu junto com o resto do recorte por vínculo:
+// ela subia a cadeia inteira (clipe → job → encontro → sala → alocação →
+// ficha) para responder "este corte é seu?", e devolvia 403 para o corte que
+// nasceu de uma aula de curso, que é a maior parte do acervo. Fica registrado
+// quem avaliou, em `avaliado_por`, e é isso que responde por quem decidiu.
 
 import { NextRequest, NextResponse } from "next/server";
-import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { temCargo } from "@/lib/cargos";
+import { createServiceRoleClient } from "@/lib/supabase/server";
+import { identificarCondutor } from "@/lib/condutor";
 
 export const dynamic = "force-dynamic";
 
 export async function PATCH(req: NextRequest) {
-  const client = await createServerSupabaseClient();
-  const {
-    data: { user },
-  } = await client.auth.getUser();
-
-  if (!user) return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+  const quem = await identificarCondutor();
+  if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
 
   let body: {
     clip_id?: string;
@@ -38,82 +40,21 @@ export async function PATCH(req: NextRequest) {
 
   const sb = await createServiceRoleClient();
 
-  const { data: perfil } = await client
-    .from("profiles")
-    .select("role, cargos")
-    .eq("id", user.id)
-    .single();
-  // Quem administra pode ter o cargo entre os extras — comparar `role` direto o
-  // mandaria para a checagem de posse abaixo e barraria a curadoria de qualquer
-  // corte que não fosse de uma sala dele.
-  const ehAdmin = temCargo(perfil, "admin");
+  // O corte existe? É a única pergunta que sobrou. Sem ela, um id inventado
+  // atualizaria zero linhas e a rota responderia "ok".
+  const { data: clipe } = await sb
+    .from("formacao_clips")
+    .select("id")
+    .eq("id", body.clip_id)
+    .maybeSingle();
 
-  // O corte pertence a um encontro de uma sala que esta pessoa conduz?
-  //
-  // A pergunta é feita aqui mesmo, e não confiada à tela, porque a tela só
-  // mostra o que é dele — mas quem chama a rota direto pode mandar qualquer
-  // identificador.
-  if (!ehAdmin) {
-    const { data: clipe } = await sb
-      .from("formacao_clips")
-      .select("id, job_id")
-      .eq("id", body.clip_id)
-      .maybeSingle();
-
-    if (!clipe) return NextResponse.json({ error: "Corte não encontrado" }, { status: 404 });
-
-    const { data: job } = await sb
-      .from("formacao_clip_jobs")
-      .select("encontro_id")
-      .eq("id", clipe.job_id)
-      .maybeSingle();
-
-    if (!job?.encontro_id) {
-      return NextResponse.json({ error: "Este corte não é seu." }, { status: 403 });
-    }
-
-    const { data: encontro } = await sb
-      .from("formacao_meet_encontros")
-      .select("space_name")
-      .eq("id", job.encontro_id)
-      .maybeSingle();
-
-    const { data: ficha } = await sb
-      .from("certificado_condutores")
-      .select("id")
-      .eq("user_id", user.id)
-      .maybeSingle();
-
-    if (!encontro || !ficha) {
-      return NextResponse.json({ error: "Este corte não é seu." }, { status: 403 });
-    }
-
-    const { data: alocacoes } = await sb
-      .from("formacao_alocacoes")
-      .select("slot_id")
-      .eq("condutor_id", ficha.id);
-
-    const slotIds = (alocacoes || []).map((a: { slot_id: string }) => a.slot_id);
-
-    const { data: minhaSala } = slotIds.length
-      ? await sb
-          .from("formacao_meet_spaces")
-          .select("space_name")
-          .eq("space_name", encontro.space_name)
-          .in("slot_id", slotIds)
-          .maybeSingle()
-      : { data: null };
-
-    if (!minhaSala) {
-      return NextResponse.json({ error: "Este corte não é seu." }, { status: 403 });
-    }
-  }
+  if (!clipe) return NextResponse.json({ error: "Corte não encontrado" }, { status: 404 });
 
   const campos: Record<string, unknown> = {};
   if (body.avaliacao !== undefined) {
     campos.avaliacao = body.avaliacao;
     campos.avaliado_em = body.avaliacao ? new Date().toISOString() : null;
-    campos.avaliado_por = body.avaliacao ? user.id : null;
+    campos.avaliado_por = body.avaliacao ? quem.userId : null;
   }
   if (body.anotacao !== undefined) campos.anotacao = body.anotacao.trim() || null;
 

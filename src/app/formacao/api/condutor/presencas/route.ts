@@ -1,10 +1,12 @@
-// Quem esteve num encontro do grupo, para quem conduz.
+// Quem esteve num encontro, para quem conduz.
 //
-// Rota separada da do administrador pelo mesmo motivo das outras do condutor:
-// aquela devolve qualquer encontro a quem souber um id, esta confere antes se
-// o encontro é de uma sala dele. E vem sob demanda, ao abrir um encontro, e
-// não junto da lista de salas — sessenta encontros de setenta e sete pessoas
-// seriam quatro mil linhas para mostrar as trinta que alguém quer ver.
+// Rota separada da do administrador porque ela entrega mais do que quem conduz
+// precisa. Vem sob demanda, ao abrir um encontro, e não junto da lista de
+// salas — sessenta encontros de setenta e sete pessoas seriam quatro mil
+// linhas para mostrar as trinta que alguém quer ver.
+//
+// O encontro precisava ser de uma sala do próprio vínculo; agora basta ser de
+// uma sala ativa, que é o mesmo alcance da tela.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
@@ -46,9 +48,9 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: "Encontro não encontrado." }, { status: 404 });
   }
 
-  const minhas = await salasDoCondutor(sb, quem.condutorId, quem.ehAdmin);
-  if (!minhas.includes((encontro as { space_name: string }).space_name)) {
-    return NextResponse.json({ error: "Este encontro não é do seu grupo." }, { status: 403 });
+  const salas = await salasDoCondutor(sb);
+  if (!salas.includes((encontro as { space_name: string }).space_name)) {
+    return NextResponse.json({ error: "Este encontro é de uma sala inativa." }, { status: 404 });
   }
 
   const { data: parts } = await sb

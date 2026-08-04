@@ -1,29 +1,39 @@
-// De quem é cada grupo.
+// Quem entra na área de quem conduz.
 //
-// Esta pergunta é feita por mais de uma rota — a tela do grupo, a curadoria
-// dos cortes, o resumo da área — e responder a ela em cada lugar seria pedir
-// para as respostas divergirem. Quando uma cópia envelhece, a divergência não
-// aparece como erro: aparece como sala que some da tela de uma pessoa e
-// continua aparecendo na de outra.
+// Durante um tempo a resposta foi uma cadeia de quatro elos: conta → ficha em
+// `certificado_condutores` → alocação no horário → sala daquele horário. Cada
+// elo era uma chave estrangeira de verdade, e a ideia era boa no papel: um
+// condutor não tem por que mexer no grupo do outro.
 //
-// O caminho é conta → ficha do condutor → alocação no horário → sala daquele
-// horário, e cada elo é uma chave estrangeira de verdade. O resto do sistema
-// casa condutor por semelhança de nome, para estatística; aqui isso não serve.
-// Dois "Ana Paula", ou um apelido diferente no Meet, já bastariam para abrir o
-// grupo de uma pessoa para outra.
+// Na prática a cadeia fechava a porta na cara de quem trabalha. Faltar
+// qualquer elo dava uma tela diferente, nenhuma delas acionável por quem lia:
+// "sua conta não está ligada a uma ficha", "você não está alocado em nenhum
+// horário", "nenhum curso seu tem cortes". Em 04/08/2026 eram 9 pessoas com o
+// cargo, 6 fichas ligadas, e nenhuma das 6 salas vinculada a um curso — ou
+// seja, a aba de cortes dos cursos abria vazia para todo mundo, inclusive para
+// quem tinha a cadeia inteira montada.
 //
-// É o espelho em TypeScript da função `conduz_a_sala()` do Postgres (migration
-// 074). As duas precisam responder a mesma coisa.
+// A regra agora é uma só: **o cargo é a permissão**. Quem tem `condutor` entra
+// e alcança a área inteira, sem ficha, sem alocação e sem curso vinculado. São
+// pessoas da mesma casa fazendo o mesmo trabalho, e o custo de uma ver o grupo
+// da outra é muito menor que o de ninguém conseguir entrar.
+//
+// A ficha não sumiu: ela continua dizendo QUAL grupo é o da pessoa, e é isso
+// que a tela usa para marcar "seu grupo" no meio dos outros. Só deixou de ser
+// o cadeado.
 
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase/server";
-import { temCargo } from "@/lib/cargos";
+import { temAlgumCargo, temCargo } from "@/lib/cargos";
 
 type Sb = Awaited<ReturnType<typeof createServiceRoleClient>>;
 
 export interface Condutor {
   ok: true;
   userId: string;
-  /** A ficha em `certificado_condutores`. Nula para o administrador sem ficha. */
+  /**
+   * A ficha em `certificado_condutores`, quando existir. Serve para saber qual
+   * grupo é o dela; não decide mais o que ela pode abrir.
+   */
   condutorId: string | null;
   ehAdmin: boolean;
 }
@@ -54,6 +64,16 @@ export async function identificarCondutor(): Promise<Condutor | Barrado> {
   // comparação crua o rebaixaria a condutor comum sem dizer nada.
   const ehAdmin = temCargo(perfil, "admin");
 
+  // O cargo é a única porta. Antes era a ficha, e por isso três das nove
+  // pessoas com o cargo levavam 403 numa área que é delas.
+  if (!temAlgumCargo(perfil, ["condutor"])) {
+    return {
+      ok: false,
+      status: 403,
+      erro: "Esta área é de quem conduz um grupo. Peça o cargo ao administrador.",
+    };
+  }
+
   const sb = await createServiceRoleClient();
   const { data: ficha } = await sb
     .from("certificado_condutores")
@@ -61,37 +81,33 @@ export async function identificarCondutor(): Promise<Condutor | Barrado> {
     .eq("user_id", user.id)
     .maybeSingle();
 
-  if (!ehAdmin && !ficha) {
-    return {
-      ok: false,
-      status: 403,
-      erro: "Sua conta ainda não está ligada a uma ficha de condutor. Peça isso ao administrador.",
-    };
-  }
-
   return { ok: true, userId: user.id, condutorId: ficha?.id || null, ehAdmin };
 }
 
 /**
- * As salas que esta pessoa conduz.
+ * As salas que a área mostra: todas as ativas.
  *
- * Administrador vê todas: é a única forma de conferir o que o condutor está
- * vendo, e sem isso a tela responderia "você não conduz nada" para quem
- * mantém o sistema.
+ * O recorte por alocação saiu. Ele fazia sentido enquanto a promessa era "cada
+ * um cuida do seu"; a promessa agora é acesso pleno para quem conduz, e um
+ * recorte que sobrevive só no servidor vira exatamente a divergência cara de
+ * achar: a tela mostra o grupo, o botão responde "esta sala não é sua".
  */
-export async function salasDoCondutor(
-  sb: Sb,
-  condutorId: string | null,
-  ehAdmin = false
-): Promise<string[]> {
-  if (ehAdmin && !condutorId) {
-    const { data } = await sb
-      .from("formacao_meet_spaces")
-      .select("space_name")
-      .eq("ativo", true);
-    return (data || []).map((s: { space_name: string }) => s.space_name);
-  }
+export async function salasDoCondutor(sb: Sb): Promise<string[]> {
+  const { data } = await sb
+    .from("formacao_meet_spaces")
+    .select("space_name")
+    .eq("ativo", true);
+  return (data || []).map((s: { space_name: string }) => s.space_name);
+}
 
+/**
+ * As salas do vínculo desta pessoa.
+ *
+ * Não é permissão, é rótulo: com seis grupos na tela, saber qual é o seu é a
+ * diferença entre ligar a gravação certa e ligar a do vizinho. Sem ficha ou
+ * sem alocação devolve lista vazia, e a tela simplesmente não marca nada.
+ */
+export async function salasDaFicha(sb: Sb, condutorId: string | null): Promise<string[]> {
   if (!condutorId) return [];
 
   const { data: alocacoes } = await sb

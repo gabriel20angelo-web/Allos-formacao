@@ -10,13 +10,19 @@
 // Duplicar a rota em vez de acrescentar um "se for condutor" na outra é
 // deliberado: uma lista de permissões dentro de um endpoint que já faz tudo é
 // uma linha que alguém apaga sem perceber daqui a seis meses.
+//
+// O que mudou: quem tem o cargo alcança TODAS as salas ativas, e não só as do
+// próprio vínculo. A lista curta de campos acima continua sendo o limite real
+// desta rota — o condutor mexe no que acontece dentro do encontro, de qualquer
+// grupo, e nada do que decide onde o material vai parar.
 
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
-// Quem conduz o quê é pergunta de mais de uma rota, então mora num lugar só.
+// Quem entra na área é pergunta de mais de uma rota, então mora num lugar só.
 import {
   identificarCondutor as identificar,
   salasDoCondutor as salasDele,
+  salasDaFicha,
 } from "@/lib/condutor";
 import {
   atualizarAcesso,
@@ -46,13 +52,15 @@ export async function GET() {
   if (!quem.ok) return NextResponse.json({ error: quem.erro }, { status: quem.status });
 
   const sb = await createServiceRoleClient();
-  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
+  const nomes = await salasDele(sb);
+  // Não filtra nada: só diz qual delas é a da pessoa, para a tela marcar.
+  const minhas = new Set(await salasDaFicha(sb, quem.condutorId));
 
   if (!nomes.length) {
     return NextResponse.json({
       salas: [],
       aviso:
-        "Você ainda não está alocado em nenhum horário com sala criada. Fale com o administrador.",
+        "Nenhuma sala de encontro foi criada ainda. Fale com o administrador.",
     });
   }
 
@@ -134,27 +142,38 @@ export async function GET() {
     ]);
   }
 
-  return NextResponse.json({
-    salas: (spaces || []).map((s: { space_name: string; slot_id: string | null }) => {
-      const slot = s.slot_id ? slotPorId.get(s.slot_id) : null;
-      return {
-        ...s,
-        dia_semana: slot?.dia_semana ?? null,
-        hora: slot?.formacao_horarios?.hora ?? null,
-        atividade_nome: slot?.atividade_nome ?? null,
-        encontros: encontrosPorSala.get(s.space_name) || [],
-      };
-    }),
+  const lista = (spaces || []).map((s: { space_name: string; slot_id: string | null }) => {
+    const slot = s.slot_id ? slotPorId.get(s.slot_id) : null;
+    return {
+      ...s,
+      dia_semana: slot?.dia_semana ?? null,
+      hora: slot?.formacao_horarios?.hora ?? null,
+      atividade_nome: slot?.atividade_nome ?? null,
+      minha: minhas.has(s.space_name),
+      encontros: encontrosPorSala.get(s.space_name) || [],
+    };
   });
+
+  // O grupo da pessoa primeiro, o resto na ordem da semana. Com seis salas na
+  // tela, procurar a sua toda semana numa lista ordenada por outro critério é
+  // um pedágio pequeno cobrado sempre.
+  lista.sort((a, b) => {
+    if (a.minha !== b.minha) return a.minha ? -1 : 1;
+    const dia = (a.dia_semana ?? 9) - (b.dia_semana ?? 9);
+    if (dia !== 0) return dia;
+    return (a.hora || "").localeCompare(b.hora || "");
+  });
+
+  return NextResponse.json({ salas: lista });
 }
 
 /**
  * Encerrar a reunião em andamento.
  *
- * Existe aqui, e não na rota do admin, porque aquela não confere de quem é a
- * sala: para ela, saber o nome de uma sala qualquer bastaria para derrubar a
- * reunião de outro grupo. Encerrar tira todo mundo de dentro, então a posse é
- * verificada antes.
+ * A conferência que sobrou é a de que a sala existe e está ativa: encerrar tira
+ * todo mundo de dentro, e um nome digitado errado não pode virar uma reunião
+ * derrubada em outro canto do sistema. Quem conduz encerra a de qualquer grupo,
+ * que é o combinado desde que a área virou acesso por cargo.
  */
 export async function POST(req: NextRequest) {
   const quem = await identificar();
@@ -171,9 +190,9 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = await createServiceRoleClient();
-  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
+  const nomes = await salasDele(sb);
   if (!nomes.includes(body.space_name)) {
-    return NextResponse.json({ error: "Esta sala não é sua." }, { status: 403 });
+    return NextResponse.json({ error: "Esta sala não existe ou está inativa." }, { status: 404 });
   }
 
   try {
@@ -212,11 +231,13 @@ export async function PATCH(req: NextRequest) {
 
   const sb = await createServiceRoleClient();
 
-  // A sala é dele? Sem esta checagem, saber o nome de uma sala qualquer
-  // bastaria para reconfigurá-la.
-  const nomes = await salasDele(sb, quem.condutorId, quem.ehAdmin);
+  // A sala existe? A posse deixou de ser conferida aqui, mas o nome continua
+  // vindo do cliente, e gravar num `space_name` inventado escreveria zero
+  // linhas e responderia "ok" — a tela mostraria o interruptor mexido e nada
+  // teria acontecido.
+  const nomes = await salasDele(sb);
   if (!quem.ehAdmin && !nomes.includes(spaceName)) {
-    return NextResponse.json({ error: "Esta sala não é sua." }, { status: 403 });
+    return NextResponse.json({ error: "Esta sala não existe ou está inativa." }, { status: 404 });
   }
 
   const mudancas: Record<string, unknown> = {};

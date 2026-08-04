@@ -8,6 +8,10 @@
 //
 // O curso só entra na lista se tiver corte. Uma lista de cursos onde metade
 // abre vazia ensina a não clicar.
+//
+// A lista era filtrada pelos cursos vinculados à sala de quem olhava, e como
+// nenhuma sala tinha esse vínculo, ela vinha vazia para todo mundo. Agora quem
+// conduz vê os cortes de todos os cursos.
 
 import { useCallback, useEffect, useState } from "react";
 import Card from "@/components/ui/Card";
@@ -78,7 +82,7 @@ export default function CortesDosCursos({
       <Card className="p-4">
         <p className="text-sm text-cream font-semibold mb-1">Cortes dos cursos</p>
         <p className="text-xs text-cream/40">
-          Nenhum curso seu tem cortes ainda. Eles aparecem depois que as aulas gravadas passam
+          Nenhum curso tem cortes ainda. Eles aparecem depois que as aulas gravadas passam
           pelo corte.
         </p>
       </Card>
