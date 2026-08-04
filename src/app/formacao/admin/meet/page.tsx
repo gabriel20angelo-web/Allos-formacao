@@ -2176,7 +2176,7 @@ export default function MeetAdminPage() {
               acabou agora, e por isso fica separado do aviso âmbar: alarme para
               o que é rotina ensina a ignorar alarme. A aula do curso é o vídeo
               do YouTube; o Drive é onde o arquivo mora. */}
-          {aulasBloqueadas.some((b) => b.esperando_youtube) && (
+          {aulasBloqueadas.some((b) => b.esperando_youtube && b.curso_id) && (
             <Card className="p-4 border border-white/10">
               <p className="text-sm text-cream font-semibold">Subindo para o YouTube</p>
               <p className="text-xs text-cream/40 mt-1">
@@ -2186,7 +2186,7 @@ export default function MeetAdminPage() {
               </p>
               <div className="mt-3 space-y-3">
                 {aulasBloqueadas
-                  .filter((b) => b.esperando_youtube)
+                  .filter((b) => b.esperando_youtube && b.curso_id)
                   .map((b) => (
                     <div key={b.id} className="text-xs">
                       <p className="text-cream/70">
@@ -2267,14 +2267,15 @@ export default function MeetAdminPage() {
           {/* Gravação que existe mas não chegou na fila. Sem isto, o vazio da
               tela é indistinguível de "não houve encontro", e foi exatamente
               nisso que o Gabriel se perdeu. */}
-          {aulasBloqueadas.some((b) => !b.esperando_youtube) && (
+          {aulasBloqueadas.some((b) => !(b.esperando_youtube && b.curso_id)) && (
             <Card className="p-4 border border-amber-400/30">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-cream font-semibold">
-                    {aulasBloqueadas.filter((b) => !b.esperando_youtube).length} gravação
-                    {aulasBloqueadas.filter((b) => !b.esperando_youtube).length > 1
+                    {aulasBloqueadas.filter((b) => !(b.esperando_youtube && b.curso_id)).length}{" "}
+                    gravação
+                    {aulasBloqueadas.filter((b) => !(b.esperando_youtube && b.curso_id)).length > 1
                       ? "ões"
                       : ""}{" "}
                     sem virar aula
@@ -2284,7 +2285,7 @@ export default function MeetAdminPage() {
                       curso aqui resolve sem obrigar a ir configurar a sala. */}
                   <div className="mt-2 space-y-3">
                     {aulasBloqueadas
-                      .filter((b) => !b.esperando_youtube)
+                      .filter((b) => !(b.esperando_youtube && b.curso_id))
                       .map((b) => (
                       <div key={b.id} className="text-xs">
                         <p className="text-cream/50">
@@ -2325,6 +2326,19 @@ export default function MeetAdminPage() {
                           >
                             {trabalhando === b.id ? "Criando" : "Virar aula"}
                           </button>
+                          {/* Sem curso E sem vídeo no YouTube: "Virar aula"
+                              recusa, com razão. Sem esta saída, o aviso seria
+                              um beco. */}
+                          {b.esperando_youtube && (
+                            <button
+                              onClick={() => criarAulaDaGravacao(b, true)}
+                              disabled={!cursoParaBloqueada[b.id] || trabalhando === b.id}
+                              title="O aluno assiste pelo Drive até o envio terminar. Quando o YouTube ficar pronto, a aula troca sozinha."
+                              className="px-2.5 py-1 rounded-lg text-xs text-cream/50 border border-white/10 disabled:opacity-40"
+                            >
+                              Publicar com o Drive mesmo assim
+                            </button>
+                          )}
                           <button
                             onClick={() => ignorarGravacao(b)}
                             disabled={trabalhando === b.id}

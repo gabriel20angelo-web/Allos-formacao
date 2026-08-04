@@ -137,12 +137,18 @@ export async function GET() {
           ? Math.round((e.youtube_bytes_enviados / e.youtube_bytes_total) * 100)
           : 0;
 
+      // Falta de curso é o bloqueio de verdade e vem primeiro; a espera do
+      // YouTube segue marcada à parte para a tela oferecer a saída manual
+      // mesmo quando os dois faltam ao mesmo tempo.
       let motivo: string;
       if (!space) {
         motivo = "A sala deste encontro não existe mais no painel.";
       } else if (!space.curso_id) {
         motivo =
-          "Este grupo não tem curso vinculado. Escolha o curso na aba Salas, em 'Gravações viram aulas de'.";
+          "Este grupo não tem curso vinculado. Escolha o curso na aba Salas, em 'Gravações viram aulas de'." +
+          (esperandoYoutube
+            ? " O vídeo também ainda não está no YouTube: escolhendo o curso aqui, a aula entra na fila quando o envio terminar."
+            : "");
       } else if (esperandoYoutube) {
         motivo =
           e.youtube_status === "erro"
