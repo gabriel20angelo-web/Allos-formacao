@@ -101,22 +101,48 @@ function nomeDoParticipante(p: MeetParticipant): {
  * conta até o fim do encontro, senão quem ficou até o final apareceria com
  * zero minuto, que é o oposto da verdade.
  */
-function medirSessoes(
+export function medirSessoes(
   sessoes: MeetParticipantSession[],
   fimEncontro: Date
 ): { minutos: number; entrada: Date | null; saida: Date | null; n: number } {
-  let minutos = 0;
   let entrada: Date | null = null;
   let saida: Date | null = null;
+
+  const janelas: { ini: number; fim: number }[] = [];
 
   for (const s of sessoes) {
     if (!s.startTime) continue;
     const ini = new Date(s.startTime);
     const fim = s.endTime ? new Date(s.endTime) : fimEncontro;
-    if (fim > ini) minutos += (fim.getTime() - ini.getTime()) / MS_MIN;
+    if (fim > ini) janelas.push({ ini: ini.getTime(), fim: fim.getTime() });
     if (!entrada || ini < entrada) entrada = ini;
     if (!saida || fim > saida) saida = fim;
   }
+
+  // Une o que se sobrepõe antes de somar. Duas sessões da mesma pessoa deviam
+  // ser sucessivas, mas não são: quem entra pelo computador e pelo celular ao
+  // mesmo tempo, ou fica com uma aba pendurada, produz janelas paralelas. Somar
+  // as durações cruas dava 167 minutos de presença num encontro de 85, e o
+  // número passava despercebido porque a permanência é capada em 100%.
+  janelas.sort((a, b) => a.ini - b.ini);
+  let minutos = 0;
+  let atualIni = 0;
+  let atualFim = 0;
+  for (const j of janelas) {
+    if (!atualFim) {
+      atualIni = j.ini;
+      atualFim = j.fim;
+      continue;
+    }
+    if (j.ini <= atualFim) {
+      atualFim = Math.max(atualFim, j.fim);
+    } else {
+      minutos += (atualFim - atualIni) / MS_MIN;
+      atualIni = j.ini;
+      atualFim = j.fim;
+    }
+  }
+  if (atualFim) minutos += (atualFim - atualIni) / MS_MIN;
 
   return { minutos: Math.round(minutos), entrada, saida, n: sessoes.length };
 }
