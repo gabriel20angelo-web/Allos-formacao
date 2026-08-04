@@ -371,18 +371,11 @@ async function ligarAliasesAContaNova(sb: Sb): Promise<number> {
 
   if (!soltos?.length) return 0;
 
-  const emails = Array.from(
-    new Set(
-      (soltos as { pessoa_email: string }[]).map((a) => a.pessoa_email.toLowerCase().trim())
-    )
-  );
-
-  const { data: perfis } = await sb
-    .from("profiles")
-    .select("id, email")
-    .in("email", emails)
-    .limit(1000);
-
+  // Todos os perfis, e a comparação em memória: `in("email", ...)` é sensível a
+  // maiúsculas, e quem se cadastrou como "Fulano@Gmail.com" nunca casaria com o
+  // endereço em minúsculas que o formulário guardou. São algumas centenas de
+  // linhas, então o custo de trazer tudo é menor que o de perder gente.
+  const { data: perfis } = await sb.from("profiles").select("id, email").limit(5000);
   if (!perfis?.length) return 0;
 
   const idPorEmail = new Map(
