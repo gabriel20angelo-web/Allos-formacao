@@ -277,16 +277,61 @@ export async function ingerir(opts?: {
         .limit(1)
         .maybeSingle();
 
+      // O encontro mais antigo que ainda não fechou.
+      //
+      // Sem ele, a janela começa no ÚLTIMO encontro da sala, e basta alguém
+      // abrir o link depois para que o encontro pendente saia do alcance: a
+      // varredura passa a procurar a partir de um instante posterior ao dele, e
+      // ninguém volta ali nunca mais. Aconteceu com o encontro de 04/08/2026,
+      // que ficou sem ser reprocessado porque três testes de link e uma sala
+      // aberta por engano empurraram a janela duas horas para frente.
+      //
+      // É o modo de falha mais silencioso possível: o encontro fica marcado
+      // como não concluído para sempre, sem erro, sem log, e a transcrição que
+      // chegaria dez minutos depois nunca é buscada.
+      const { data: pendentes } = await sb
+        .from("formacao_meet_encontros")
+        .select("conference_record_id, inicio")
+        .eq("space_name", space.space_name)
+        .eq("transcricao_ingerida", false)
+        .order("inicio", { ascending: true });
+
+      const listaPendente = (pendentes || []) as {
+        conference_record_id: string;
+        inicio: string;
+      }[];
+      const idsPendentes = new Set(listaPendente.map((p) => p.conference_record_id));
+      const maisAntigoPendente = listaPendente[0]?.inicio;
+
+      const referencia =
+        maisAntigoPendente && (!ultimo?.inicio || maisAntigoPendente < ultimo.inicio)
+          ? maisAntigoPendente
+          : ultimo?.inicio;
+
       // Duas horas de sobreposição: encontro ingerido sem transcrição pronta
       // precisa ser reencontrado na rodada seguinte.
-      const desde = ultimo?.inicio
-        ? new Date(new Date(ultimo.inicio).getTime() - 2 * 60 * MS_MIN)
+      const desde = referencia
+        ? new Date(new Date(referencia).getTime() - 2 * 60 * MS_MIN)
         : new Date(Date.now() - diasAtras * 24 * 60 * MS_MIN);
 
       // Teto por rodada: uma sala que ficou semanas sem captura devolve todas as
       // conferências pendentes de uma vez, e processar todas na mesma requisição
       // pode passar de vários minutos. O que sobrar entra na rodada seguinte.
-      const conferencias = (await listarConferencias(space.space_name, desde)).slice(0, 8);
+      //
+      // O que fica no teto, porém, não é indiferente. O Google devolve da mais
+      // recente para a mais antiga, e o corte cru deixaria de fora justamente o
+      // encontro pendente, que é o único que não tem outra chance: os novos
+      // voltam sozinhos na próxima rodada, o pendente é o que está esperando
+      // ser terminado. Por isso ele vai na frente da fila.
+      const todas = await listarConferencias(space.space_name, desde);
+      const conferencias = [...todas]
+        .sort((a, b) => {
+          const pa = idsPendentes.has(a.name) ? 0 : 1;
+          const pb = idsPendentes.has(b.name) ? 0 : 1;
+          if (pa !== pb) return pa - pb;
+          return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
+        })
+        .slice(0, 8);
 
       for (const conf of conferencias) {
         if (!conf.endTime) continue; // ainda em curso
