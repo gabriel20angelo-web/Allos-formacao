@@ -16,6 +16,11 @@ import TempoPorCurso from "./TempoPorCurso";
 import { detectarSinais, type Sinal } from "@/lib/utils/suspeita";
 import { formatDuration, getUsageTotals } from "@/lib/queries/usage";
 import type { ActivityRange, TimelineEvent } from "@/lib/utils/activity";
+import {
+  anotarPresencaMedida,
+  carregarEventosDeEncontros,
+  type ResultadoEventosMeet,
+} from "@/lib/meet/eventos";
 import { AlertTriangle, Download, Lock, Mail, UserCircle } from "lucide-react";
 import { hourLabel } from "@/lib/utils/activity";
 import { TYPE_META } from "./ActivityTimeline";
@@ -24,6 +29,15 @@ import AcoesPessoa from "./AcoesPessoa";
 export interface PessoaRef {
   nome: string;
   email?: string;
+}
+
+/**
+ * Duração para a tela. `formatDuration` devolve um traço quando não há tempo
+ * algum, e num quadro de presença o zero precisa ser lido como zero: ausência
+ * medida é informação, não dado faltando.
+ */
+function minutosLegiveis(minutos: number): string {
+  return minutos > 0 ? formatDuration(minutos * 60) : "0min";
 }
 
 interface Dossie {
@@ -37,6 +51,8 @@ interface Dossie {
   membroDesde: string | null;
   aliases: string[];
   eventos: TimelineEvent[];
+  /** A captura do Meet bateu no teto de linhas: a linha do tempo avisa. */
+  encontrosTruncados: boolean;
   resumo: {
     matriculas: number;
     concluidos: number;
@@ -47,6 +63,14 @@ interface Dossie {
     /** Permanência ativa medida na plataforma (migration 042). */
     tempoUsoSegundos: number;
     diasComAcesso: number;
+    /** Encontros do Meet em que a captura registrou esta pessoa. */
+    encontros: number;
+    /**
+     * Minutos de sala somados. Vem da presença medida, que exclui quem conduziu:
+     * o condutor entra em todo encontro e infla qualquer comparação com o que os
+     * alunos declaram, então aqui ele conta zero minuto de propósito.
+     */
+    minutosEmEncontro: number;
   };
   sinais: Sinal[];
 }
@@ -90,8 +114,23 @@ export default function PessoaModal({
     const email = ref.email || perfil?.email || null;
     const userId = perfil?.id;
 
+    // A captura do Meet responde a dois vínculos: a conta, quando a pessoa
+    // entrou logada, e a grafia do nome de tela reconhecida pelo certificado.
+    // Sem nenhum dos dois não dá para filtrar, e uma chamada sem filtro traz o
+    // encontro de todo mundo, ou seja, o dossiê de uma pessoa mostrando a
+    // presença das outras.
+    const encontrosPromise: Promise<ResultadoEventosMeet> =
+      userId || email
+        ? carregarEventosDeEncontros(sb, { alunoId: userId ?? null, email })
+        : Promise.resolve({
+            eventos: [],
+            presencas: [],
+            encontrosCapturados: new Map(),
+            truncado: false,
+          });
+
     // 2. Tudo o que ela fez, em paralelo.
-    const [subsRes, enrollRes, lessonsRes, certsRes, revsRes, atividadesRes] =
+    const [subsRes, enrollRes, lessonsRes, certsRes, revsRes, atividadesRes, encontros] =
       await Promise.all([
         email
           ? sb
@@ -131,6 +170,7 @@ export default function PessoaModal({
               .eq("user_id", userId)
           : Promise.resolve({ data: [] }),
         sb.from("certificado_atividades").select("nome, carga_horaria"),
+        encontrosPromise,
       ]);
 
     type SubRow = {
@@ -265,9 +305,22 @@ export default function PessoaModal({
       });
     });
 
+    // O medido entra na mesma lista do declarado, e não num quadro à parte: é
+    // lado a lado, no mesmo dia, que a distância entre o que a pessoa disse ter
+    // feito e o que ela fez na sala aparece sem ninguém precisar cruzar nada.
+    eventos.push(...encontros.eventos);
+
     eventos.sort(
       (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
     );
+
+    // Só agora, com a lista fechada: a anotação procura o feedback do mesmo dia
+    // e da mesma atividade, e feedback que ainda não tivesse entrado ficaria sem
+    // a presença medida ao lado.
+    const eventosAnotados = anotarPresencaMedida(eventos, {
+      presencas: encontros.presencas,
+      encontrosCapturados: encontros.encontrosCapturados,
+    });
 
     const aliases = Array.from(
       new Set(
@@ -289,6 +342,13 @@ export default function PessoaModal({
       0
     );
 
+    // Somado a partir da presença, onde o minuto é número; no evento ele já
+    // virou texto e teria de ser lido de volta.
+    const minutosEmEncontro = encontros.presencas.reduce(
+      (soma, p) => soma + (p.minutos || 0),
+      0
+    );
+
     setDossie({
       userId: perfil?.id ?? null,
       bloqueado: !!perfil?.bloqueado,
@@ -298,7 +358,8 @@ export default function PessoaModal({
       papel: perfil?.role ?? null,
       membroDesde: perfil?.created_at ?? null,
       aliases,
-      eventos,
+      eventos: eventosAnotados,
+      encontrosTruncados: encontros.truncado,
       resumo: {
         matriculas: enrolls.length,
         concluidos: enrolls.filter((e) => e.status === "completed").length,
@@ -308,8 +369,10 @@ export default function PessoaModal({
         horasSincronas,
         tempoUsoSegundos: uso.totalSeconds,
         diasComAcesso: uso.byDay.length,
+        encontros: encontros.eventos.length,
+        minutosEmEncontro,
       },
-      sinais: detectarSinais(eventos),
+      sinais: detectarSinais(eventosAnotados),
     });
     setLoading(false);
   }, []);
@@ -355,6 +418,11 @@ export default function PessoaModal({
     linhas.push(`Aulas concluídas,${dossie.resumo.aulas}`);
     linhas.push(`Feedbacks de certificação,${dossie.resumo.feedbacks}`);
     linhas.push(`Horas síncronas declaradas,${dossie.resumo.horasSincronas}`);
+    linhas.push(`Encontros no Meet com presença medida,${dossie.resumo.encontros}`);
+    // Em minutos crus: quem abre o CSV vai somar e comparar, não ler.
+    linhas.push(
+      `Minutos medidos em encontro,${dossie.resumo.minutosEmEncontro}`
+    );
     linhas.push(
       `Tempo de permanência na plataforma,${esc(formatDuration(dossie.resumo.tempoUsoSegundos))}`
     );
@@ -412,6 +480,13 @@ export default function PessoaModal({
         { label: "Aulas concluídas", valor: dossie.resumo.aulas },
         { label: "Feedbacks enviados", valor: dossie.resumo.feedbacks },
         { label: "Horas síncronas", valor: `${dossie.resumo.horasSincronas}h` },
+        // Ao lado das horas declaradas de propósito: a comparação entre as duas
+        // é o que o quadro tem de novo a dizer.
+        { label: "Encontros no Meet", valor: dossie.resumo.encontros },
+        {
+          label: "Tempo nos encontros",
+          valor: minutosLegiveis(dossie.resumo.minutosEmEncontro),
+        },
         {
           label: "Tempo na plataforma",
           valor: formatDuration(dossie.resumo.tempoUsoSegundos),
@@ -572,6 +647,9 @@ export default function PessoaModal({
             range={range}
             onRangeChange={setRange}
             accent="#C84B31"
+            // O aviso de teto já existe na timeline; repetir a linha aqui em
+            // cima seria dizer duas vezes a mesma coisa em dois lugares.
+            truncated={dossie.encontrosTruncados ? ["os encontros do Meet"] : []}
             csvName={`atividade_${(dossie.email || dossie.nome).split("@")[0]}`}
             subtitle="Tudo o que esta pessoa fez na plataforma, do mais recente para o mais antigo."
           />

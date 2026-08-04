@@ -34,6 +34,7 @@ import {
   type ActivityRange,
   type TimelineEvent,
 } from "@/lib/utils/activity";
+import { anotarPresencaMedida, carregarEventosDeEncontros } from "@/lib/meet/eventos";
 import StatStrip from "@/components/admin/dashboard/StatStrip";
 import HintButton from "@/components/admin/dashboard/HintButton";
 import RankingCard from "@/components/admin/dashboard/RankingCard";
@@ -821,7 +822,14 @@ export default function AdminDashboard() {
       const periodStart = rangeStart ?? new Date(0);
 
       try {
-        // Só o que nasce no formulário de /certificado alimenta esta aba.
+        // Duas fontes, e de propósito. O formulário de /certificado é o que a
+        // pessoa DECLARA; a captura do Meet é o que ela de fato fez na sala. A
+        // regra antiga desta aba ("só o que nasce no formulário") existia
+        // quando a única coisa que vinha do Meet era quórum agregado, sem
+        // pessoa. Agora a presença é por pessoa e com identidade resolvida,
+        // então ela é do mesmo tipo de informação que o feedback, e ver uma sem
+        // a outra é o que faz alguém parecer ausente por não ter preenchido
+        // formulário, ou presente por ter preenchido dois.
         const [subsRes, atividadesRes] = await Promise.all([
           // submissions stay unfiltered here — the inactive/retention math
           // below needs the full participant history to detect first/last
@@ -839,32 +847,43 @@ export default function AdminDashboard() {
         const allSubs = (subsRes.data ?? []) as SubmissionRow[];
         const atividades = (atividadesRes.data ?? []) as AtividadeRow[];
 
+        const eventosDeclarados: TimelineEvent[] = allSubs.map((s) => {
+          const condutores = (s.condutores || []).filter(Boolean);
+          const partes = [
+            condutores.length > 0 ? `com ${condutores.join(", ")}` : "",
+            s.nota_condutor ? `condutor ${s.nota_condutor}/10` : "",
+          ].filter(Boolean);
+          return {
+            id: `sub-${s.id}`,
+            type: "feedback" as const,
+            timestamp: s.created_at,
+            person: (s.nome_completo || "Sem nome").trim(),
+            personEmail: s.email || undefined,
+            title: s.atividade_nome || "atividade",
+            detail: partes.join(" · ") || undefined,
+            body: s.relato?.trim() || undefined,
+            score: s.nota_grupo ?? undefined,
+            scoreSuffix: "/10",
+          };
+        });
+
+        const medido = await carregarEventosDeEncontros(supabase);
+
+        // O cruzamento acontece na própria linha do feedback, e não num
+        // relatório à parte: relatório à parte ninguém abre. Quem declarou e
+        // esteve ganha os minutos medidos ao lado; quem declarou num dia em que
+        // o encontro FOI capturado e não aparece nele fica marcado. Sem captura
+        // daquele encontro, nada é afirmado.
+        const eventosSincronos = anotarPresencaMedida(
+          [...eventosDeclarados, ...medido.eventos],
+          medido
+        );
+
         // A timeline recorta a janela sozinha, então recebe o histórico inteiro.
         setSyncEvents(
-          allSubs
-            .map((s) => {
-              const condutores = (s.condutores || []).filter(Boolean);
-              const partes = [
-                condutores.length > 0 ? `com ${condutores.join(", ")}` : "",
-                s.nota_condutor ? `condutor ${s.nota_condutor}/10` : "",
-              ].filter(Boolean);
-              return {
-                id: `sub-${s.id}`,
-                type: "feedback" as const,
-                timestamp: s.created_at,
-                person: (s.nome_completo || "Sem nome").trim(),
-                personEmail: s.email || undefined,
-                title: s.atividade_nome || "atividade",
-                detail: partes.join(" · ") || undefined,
-                body: s.relato?.trim() || undefined,
-                score: s.nota_grupo ?? undefined,
-                scoreSuffix: "/10",
-              };
-            })
-            .sort(
-              (a, b) =>
-                new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
-            )
+          eventosSincronos.sort(
+            (a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()
+          )
         );
 
         // Filter submissions by period

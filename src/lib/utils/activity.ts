@@ -94,6 +94,8 @@ export function getPreviousRangeStart(
 export type TimelineEventType =
   // síncrona (/certificado)
   | "feedback"
+  // síncrona (captura do Meet) — o que foi medido, ao lado do que foi declarado
+  | "encontro"
   // assíncrona (cursos)
   | "signup"
   | "enrollment"

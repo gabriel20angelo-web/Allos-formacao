@@ -51,6 +51,7 @@ import {
   TrendingUp,
   CalendarClock,
   Megaphone,
+  Video,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
@@ -64,6 +65,16 @@ const TYPE_META: Record<
     verb: "enviou feedback de",
     icon: MessageSquare,
     color: "#C84B31",
+  },
+  // A presença medida na sala, ao lado do feedback que é autodeclarado. Cor
+  // própria porque a diferença entre declarar e ter estado é justamente o que
+  // se quer enxergar de relance.
+  encontro: {
+    label: "Encontro",
+    plural: "Encontros",
+    verb: "esteve em",
+    icon: Video,
+    color: "#2E9E8F",
   },
   signup: {
     label: "Cadastro",
