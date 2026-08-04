@@ -225,7 +225,13 @@ export default function EstatisticasPage() {
       .sort((a, b) => b.taxa - a.taxa || b.total - a.total);
   }, [logs, condutores]);
 
-  const bestConductor = conductorStats.length > 0 ? conductorStats[0] : null;
+  // Só há "mais confiável" se alguém conduziu alguma coisa. Sem esta condição,
+  // um mês em que nenhum encontro aconteceu elegia o primeiro da lista com 0%,
+  // e o card dizia o contrário do que o número mostrava logo abaixo.
+  const bestConductor =
+    conductorStats.length > 0 && conductorStats[0].conduzidos > 0
+      ? conductorStats[0]
+      : null;
   const hasData = logs.length > 0 || presencas.length > 0;
 
   if (loading) {
