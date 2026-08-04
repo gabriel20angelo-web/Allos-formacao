@@ -70,6 +70,12 @@ interface AulaBloqueada {
   titulo: string;
   data_reuniao: string;
   motivo: string;
+  /** Esperando o envio ao YouTube: é espera normal, não falha de configuração. */
+  esperando_youtube?: boolean;
+  youtube_status?: string | null;
+  youtube_pct?: number;
+  /** Curso já vinculado à sala: dispensa escolher curso na mão. */
+  curso_id?: string | null;
 }
 interface Excecao {
   id: string;
@@ -770,15 +776,32 @@ export default function MeetAdminPage() {
     }
   }
 
-  async function criarAulaDaGravacao(b: AulaBloqueada) {
-    const cursoId = cursoParaBloqueada[b.id];
+  async function criarAulaDaGravacao(b: AulaBloqueada, forcarDrive = false) {
+    // Quando a sala já tem curso, o vínculo vale: obrigar a escolher de novo só
+    // para destravar uma espera do YouTube seria pedir duas vezes a mesma coisa.
+    const cursoId = cursoParaBloqueada[b.id] || b.curso_id;
     if (!cursoId) return;
+
+    if (forcarDrive) {
+      const ok = confirm(
+        `Publicar "${b.titulo}" com o arquivo do Drive?\n\n` +
+          "O aluno assiste pelo Drive, não pelo YouTube. Quando o envio ao YouTube terminar, " +
+          "a aula troca sozinha para o vídeo do YouTube."
+      );
+      if (!ok) return;
+    }
+
     setTrabalhando(b.id);
     try {
       const r = await fetch("/formacao/api/admin/meet/aulas", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ acao: "criar", encontro_id: b.id, curso_id: cursoId }),
+        body: JSON.stringify({
+          acao: "criar",
+          encontro_id: b.id,
+          curso_id: cursoId,
+          forcar_drive: forcarDrive,
+        }),
       });
       const j = await lerResposta(r);
       toast.success((j.aviso as string) || "Na fila.");
@@ -2103,9 +2126,14 @@ export default function MeetAdminPage() {
       {aba === "aulas" && (
         <div className="space-y-3">
           <p className="text-xs text-cream/40">
-            Gravações de grupos vinculados a um curso. Aprovar cria a aula no curso e libera o
-            vídeo para quem tiver o link, que é o que permite o aluno assistir. Antes de aprovar,
-            vale abrir e conferir o começo da gravação, que costuma pegar a chegada das pessoas.
+            O caminho da gravação: o Meet grava, o arquivo é organizado no Drive, sobe ao YouTube
+            como não listado, e é <span className="text-cream/60">esse vídeo do YouTube</span> que
+            vira aula do curso. O link do Drive não vai para a plataforma. Antes de publicar, vale
+            abrir e conferir o começo da gravação, que costuma pegar a chegada das pessoas.
+          </p>
+          <p className="text-xs text-cream/30">
+            Publicar aqui não manda nada para o OpusClip: nenhum corte é gerado, e nada é cobrado,
+            sem você pedir na aba Clipes.
           </p>
 
           {aulasPublicadas.length > 0 && (
@@ -2144,23 +2172,120 @@ export default function MeetAdminPage() {
             </Card>
           )}
 
+          {/* Esperar o envio ao YouTube é o estado normal de uma gravação que
+              acabou agora, e por isso fica separado do aviso âmbar: alarme para
+              o que é rotina ensina a ignorar alarme. A aula do curso é o vídeo
+              do YouTube; o Drive é onde o arquivo mora. */}
+          {aulasBloqueadas.some((b) => b.esperando_youtube) && (
+            <Card className="p-4 border border-white/10">
+              <p className="text-sm text-cream font-semibold">Subindo para o YouTube</p>
+              <p className="text-xs text-cream/40 mt-1">
+                A gravação vai para o Drive, sobe ao YouTube como não listada, e é o vídeo do
+                YouTube que vira aula. O agendador empurra uma gravação por vez, a cada quinze
+                minutos; um encontro de duas horas leva algumas rodadas.
+              </p>
+              <div className="mt-3 space-y-3">
+                {aulasBloqueadas
+                  .filter((b) => b.esperando_youtube)
+                  .map((b) => (
+                    <div key={b.id} className="text-xs">
+                      <p className="text-cream/70">
+                        {new Date(b.data_reuniao + "T12:00:00").toLocaleDateString("pt-BR")}{" "}
+                        {b.titulo}
+                      </p>
+                      <p
+                        className={
+                          b.youtube_status === "erro" ? "text-red-400/80" : "text-cream/40"
+                        }
+                      >
+                        {b.motivo}
+                      </p>
+
+                      {b.youtube_status === "enviando" && (
+                        <div className="mt-1.5 h-1 rounded-full bg-white/5 overflow-hidden max-w-[280px]">
+                          <div
+                            className="h-full rounded-full transition-all"
+                            style={{
+                              width: `${b.youtube_pct || 0}%`,
+                              background: ROXO,
+                            }}
+                          />
+                        </div>
+                      )}
+
+                      {/* A saída para quando o envio quebra ou a pressa é maior
+                          que a espera. Fica discreto de propósito: é exceção. */}
+                      <div className="flex items-center gap-2 flex-wrap mt-2">
+                        {!b.curso_id && (
+                          <select
+                            value={cursoParaBloqueada[b.id] || ""}
+                            onChange={(ev) =>
+                              setCursoParaBloqueada((m) => ({ ...m, [b.id]: ev.target.value }))
+                            }
+                            className="text-base md:text-xs border border-white/10 rounded-lg px-2 py-1 min-w-[180px] w-full sm:w-auto"
+                            style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                          >
+                            <option value="" style={{ background: "#1A1A1A", color: "#FDFBF7" }}>
+                              escolha o curso
+                            </option>
+                            {cursos.map((c) => (
+                              <option
+                                key={c.id}
+                                value={c.id}
+                                style={{ background: "#1A1A1A", color: "#FDFBF7" }}
+                              >
+                                {c.title}
+                              </option>
+                            ))}
+                          </select>
+                        )}
+                        <button
+                          onClick={() => criarAulaDaGravacao(b, true)}
+                          disabled={
+                            (!cursoParaBloqueada[b.id] && !b.curso_id) || trabalhando === b.id
+                          }
+                          title="O aluno assiste pelo Drive até o envio terminar. Quando o YouTube ficar pronto, a aula troca sozinha."
+                          className="px-2.5 py-1 rounded-lg text-xs text-cream/50 border border-white/10 disabled:opacity-40"
+                        >
+                          {trabalhando === b.id ? "Publicando" : "Publicar com o Drive mesmo assim"}
+                        </button>
+                        <button
+                          onClick={() => ignorarGravacao(b)}
+                          disabled={trabalhando === b.id}
+                          title="Tira da fila de aulas. O encontro continua contando para presença e quórum."
+                          className="px-2.5 py-1 rounded-lg text-xs text-cream/40 border border-white/10 disabled:opacity-40"
+                        >
+                          Nunca virar aula
+                        </button>
+                      </div>
+                    </div>
+                  ))}
+              </div>
+            </Card>
+          )}
+
           {/* Gravação que existe mas não chegou na fila. Sem isto, o vazio da
               tela é indistinguível de "não houve encontro", e foi exatamente
               nisso que o Gabriel se perdeu. */}
-          {aulasBloqueadas.length > 0 && (
+          {aulasBloqueadas.some((b) => !b.esperando_youtube) && (
             <Card className="p-4 border border-amber-400/30">
               <div className="flex items-start gap-3">
                 <AlertTriangle className="h-5 w-5 text-amber-400 shrink-0 mt-0.5" />
                 <div className="flex-1">
                   <p className="text-sm text-cream font-semibold">
-                    {aulasBloqueadas.length} gravação
-                    {aulasBloqueadas.length > 1 ? "ões" : ""} sem virar aula
+                    {aulasBloqueadas.filter((b) => !b.esperando_youtube).length} gravação
+                    {aulasBloqueadas.filter((b) => !b.esperando_youtube).length > 1
+                      ? "ões"
+                      : ""}{" "}
+                    sem virar aula
                   </p>
                   {/* Um aviso sem saída ensina a ignorar avisos. O motivo mais
                       comum é o grupo não ter curso vinculado, e escolher o
                       curso aqui resolve sem obrigar a ir configurar a sala. */}
                   <div className="mt-2 space-y-3">
-                    {aulasBloqueadas.map((b) => (
+                    {aulasBloqueadas
+                      .filter((b) => !b.esperando_youtube)
+                      .map((b) => (
                       <div key={b.id} className="text-xs">
                         <p className="text-cream/50">
                           <span className="text-cream/70">
@@ -2289,6 +2414,18 @@ export default function MeetAdminPage() {
             </Card>
           ) : (
             <>
+              {/* Escrito na tela porque a dúvida apareceu de verdade: uma
+                  gravação nova não subiu para corte e pareceu falha, quando na
+                  verdade é a regra. Nada entra na fila de cortes sozinho. */}
+              <Card className="p-4 border border-white/10">
+                <p className="text-sm text-cream font-semibold">Corte é sempre por decisão sua</p>
+                <p className="text-xs text-cream/40 mt-1">
+                  Nenhum encontro gravado vai para o OpusClip automaticamente. Gravar, subir ao
+                  YouTube e virar aula acontecem sozinhos; cortar, não. Um vídeo só é enviado
+                  quando você marca e clica aqui nesta aba, e é aqui que a conta começa a correr.
+                </p>
+              </Card>
+
               <Card className="p-4">
                 <p className="text-sm text-cream font-semibold mb-1">
                   Escolher vídeos para cortar

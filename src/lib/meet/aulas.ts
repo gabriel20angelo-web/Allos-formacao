@@ -19,10 +19,14 @@ export interface ResultadoSugestoes {
   sem_curso: number;
   /** Sugestões que trocaram o link do Drive pelo do YouTube quando ele ficou pronto. */
   atualizadas: number;
+  /** Gravações seguradas fora da fila até o vídeo existir no YouTube. */
+  esperando_youtube: number;
+  /** Aulas já publicadas que passaram a apontar para o YouTube. */
+  aulas_corrigidas: number;
 }
 
 /** Endereço do vídeo, preferindo o YouTube quando ele já existe. */
-function montarUrl(
+export function montarUrl(
   gravacaoUri: string,
   youtubeId: string | null,
   inicioSeg: number | null
@@ -33,6 +37,54 @@ function montarUrl(
   );
 }
 
+/** O que o aluno assiste é o YouTube; o Drive é onde o arquivo mora. */
+export function ehDrive(url: string | null): boolean {
+  return !!url && /drive\.google\.com/i.test(url);
+}
+
+/**
+ * A gravação espera fora da fila até existir no YouTube?
+ *
+ * Sala que não publica no YouTube segue como sempre foi, com o link do Drive:
+ * desligar o envio e mesmo assim nunca ver a aula aparecer seria uma armadilha.
+ */
+export function deveEsperarYoutube(
+  subirYoutube: boolean,
+  youtubeVideoId: string | null
+): boolean {
+  return subirYoutube && !youtubeVideoId;
+}
+
+/**
+ * O que trocar numa sugestão que já existe, agora que o YouTube ficou pronto.
+ *
+ * `aula` é o caso que faltava: entre a sugestão nascer e alguém publicar passam
+ * segundos, e o link do Drive congelava na aula para sempre.
+ */
+export function decidirTroca(
+  sugestao: { status: string; video_url: string; lesson_id: string | null },
+  youtubeVideoId: string | null
+): "nada" | "sugestao" | "aula" {
+  if (!youtubeVideoId || !ehDrive(sugestao.video_url)) return "nada";
+  if (sugestao.status === "pendente") return "sugestao";
+  if (sugestao.status === "aprovada" && sugestao.lesson_id) return "aula";
+  return "nada";
+}
+
+/**
+ * A aula publicada ainda está com o link que esta sugestão pôs lá?
+ *
+ * Corrigir a aula não pode atropelar edição feita à mão: uma rotina que
+ * sobrescreve escolha de gente é pior que uma aula apontando para o lugar
+ * errado. Aula que sumiu também não se corrige.
+ */
+export function podeCorrigirAula(
+  sugestao: { video_url: string },
+  urlDaAula: string | null | undefined
+): boolean {
+  return !!urlDaAula && urlDaAula === sugestao.video_url;
+}
+
 /** "Encontro 7 · 05/08" — a numeração continua de onde a seção parou. */
 function montarTitulo(numero: number, data: string): string {
   const [, mes, dia] = data.split("-");
@@ -40,7 +92,14 @@ function montarTitulo(numero: number, data: string): string {
 }
 
 export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoes> {
-  const res: ResultadoSugestoes = { criadas: 0, ja_existiam: 0, sem_curso: 0, atualizadas: 0 };
+  const res: ResultadoSugestoes = {
+    criadas: 0,
+    ja_existiam: 0,
+    sem_curso: 0,
+    atualizadas: 0,
+    esperando_youtube: 0,
+    aulas_corrigidas: 0,
+  };
 
   // Só encontro com gravação pronta e que ainda não gerou sugestão.
   const { data: encontros } = await sb
@@ -60,23 +119,30 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
 
   const { data: spaces } = await sb
     .from("formacao_meet_spaces")
-    .select("space_name, curso_id, secao_id");
+    .select("space_name, curso_id, secao_id, subir_youtube");
   const porSpace = new Map(
-    (spaces || []).map((s: { space_name: string; curso_id: string | null; secao_id: string | null }) => [
-      s.space_name,
-      s,
-    ])
+    (spaces || []).map(
+      (s: {
+        space_name: string;
+        curso_id: string | null;
+        secao_id: string | null;
+        subir_youtube: boolean;
+      }) => [s.space_name, s]
+    )
   );
 
   const { data: jaSugeridos } = await sb
     .from("formacao_meet_aulas_sugeridas")
-    .select("id, encontro_id, status, video_url");
+    .select("id, encontro_id, status, video_url, lesson_id");
   const sugeridoPorEncontro = new Map(
     (jaSugeridos || []).map(
-      (s: { id: string; encontro_id: string; status: string; video_url: string }) => [
-        s.encontro_id,
-        s,
-      ]
+      (s: {
+        id: string;
+        encontro_id: string;
+        status: string;
+        video_url: string;
+        lesson_id: string | null;
+      }) => [s.encontro_id, s]
     )
   );
 
@@ -94,18 +160,45 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     if (existente) {
       res.ja_existiam++;
 
-      // A aula entra na fila com o link do Drive assim que a gravação existe,
-      // sem esperar o YouTube. Se o envio terminar antes de alguém aprovar, o
-      // link é trocado aqui: melhor uma aula que melhora sozinha do que uma
-      // fila vazia esperando um envio que pode nem estar configurado.
-      if (e.youtube_video_id && existente.status === "pendente") {
+      // Quando o envio termina, o link do Drive é trocado pelo do YouTube.
+      // Vale para a sugestão que ainda espera aprovação E para a aula que já
+      // foi publicada: entre criar a sugestão e alguém clicar em publicar
+      // passam segundos, e foi assim que a aula de 04/08/2026 nasceu apontando
+      // para o Drive dezessete segundos antes de o vídeo ficar pronto. Sem
+      // corrigir a aula já criada, essa corrida congela o Drive para sempre.
+      const primeira = decidirTroca(existente, e.youtube_video_id);
+
+      if (primeira !== "nada") {
         const melhor = montarUrl(e.gravacao_uri, e.youtube_video_id, e.inicio_efetivo_seg);
-        if (melhor !== existente.video_url) {
+
+        if (primeira === "sugestao") {
           await sb
             .from("formacao_meet_aulas_sugeridas")
             .update({ video_url: melhor })
             .eq("id", existente.id);
           res.atualizadas++;
+        } else {
+          // A aula publicada só é corrigida se ainda estiver com exatamente o
+          // link que esta sugestão pôs lá. Se alguém editou o vídeo à mão
+          // depois, essa mão vence: rotina que sobrescreve escolha de gente é
+          // pior que aula apontando para o lugar errado.
+          const { data: aula } = await sb
+            .from("lessons")
+            .select("id, video_url")
+            .eq("id", existente.lesson_id!)
+            .maybeSingle();
+
+          if (podeCorrigirAula(existente, aula?.video_url)) {
+            await sb
+              .from("lessons")
+              .update({ video_url: melhor, video_source: "youtube" })
+              .eq("id", existente.lesson_id!);
+            await sb
+              .from("formacao_meet_aulas_sugeridas")
+              .update({ video_url: melhor })
+              .eq("id", existente.id);
+            res.aulas_corrigidas++;
+          }
         }
       }
       continue;
@@ -114,6 +207,17 @@ export async function sugerirAulasDeGravacoes(sb: Sb): Promise<ResultadoSugestoe
     const space = porSpace.get(e.space_name);
     if (!space?.curso_id) {
       res.sem_curso++;
+      continue;
+    }
+
+    // A aula do curso é o vídeo do YouTube, não o arquivo do Drive. O Drive é
+    // onde a gravação mora e fica organizada; o que o aluno assiste sai de lá
+    // só depois de subir como não listado. Enquanto o envio não termina, a
+    // gravação espera fora da fila em vez de entrar com o link errado — a tela
+    // mostra o progresso, e há um botão para publicar com o Drive assim mesmo
+    // quando o envio falhar ou a pressa for maior.
+    if (deveEsperarYoutube(space.subir_youtube, e.youtube_video_id)) {
+      res.esperando_youtube++;
       continue;
     }
 

@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { extrairIdDaPasta, liberarPorLink } from "@/lib/meet/drive";
+import { montarUrl } from "@/lib/meet/aulas";
 import { detectVideoSource } from "@/lib/utils/video";
 
 export const dynamic = "force-dynamic";
@@ -84,7 +85,9 @@ export async function GET() {
   // indistinguível de "está tudo certo, não houve encontro".
   const { data: comGravacao } = await sb
     .from("formacao_meet_encontros")
-    .select("id, space_name, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_status")
+    .select(
+      "id, space_name, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_status, youtube_video_id, youtube_bytes_enviados, youtube_bytes_total, youtube_erro, youtube_tentativas"
+    )
     .eq("descartado", false)
     // O que foi marcado para não virar aula sai da fila sem descartar o
     // encontro: a presença dele continua valendo.
@@ -99,12 +102,14 @@ export async function GET() {
 
   const { data: spaces } = await sb
     .from("formacao_meet_spaces")
-    .select("space_name, curso_id, rotulo, slot_id");
+    .select("space_name, curso_id, rotulo, slot_id, subir_youtube");
   const spacePorNome = new Map(
-    (spaces || []).map((s: { space_name: string; curso_id: string | null }) => [
-      s.space_name,
-      s,
-    ])
+    (spaces || []).map(
+      (s: { space_name: string; curso_id: string | null; subir_youtube: boolean }) => [
+        s.space_name,
+        s,
+      ]
+    )
   );
 
   const bloqueadas = ((comGravacao || []) as {
@@ -113,19 +118,52 @@ export async function GET() {
     atividade_nome: string | null;
     data_reuniao: string;
     youtube_status: string | null;
+    youtube_video_id: string | null;
+    youtube_bytes_enviados: number | null;
+    youtube_bytes_total: number | null;
+    youtube_erro: string | null;
+    youtube_tentativas: number | null;
   }[])
     .filter((e) => !idsComSugestao.has(e.id))
     .map((e) => {
       const space = spacePorNome.get(e.space_name);
+
+      // Esperar o YouTube é o estado normal de uma gravação recém-terminada,
+      // não uma falha. Precisa aparecer como espera, com o quanto já subiu, ou
+      // a tela vira um alarme que se aprende a ignorar.
+      const esperandoYoutube = !!space?.subir_youtube && !e.youtube_video_id;
+      const pct =
+        e.youtube_bytes_total && e.youtube_bytes_enviados
+          ? Math.round((e.youtube_bytes_enviados / e.youtube_bytes_total) * 100)
+          : 0;
+
+      let motivo: string;
+      if (!space) {
+        motivo = "A sala deste encontro não existe mais no painel.";
+      } else if (!space.curso_id) {
+        motivo =
+          "Este grupo não tem curso vinculado. Escolha o curso na aba Salas, em 'Gravações viram aulas de'.";
+      } else if (esperandoYoutube) {
+        motivo =
+          e.youtube_status === "erro"
+            ? `O envio ao YouTube falhou depois de ${e.youtube_tentativas || 0} tentativas: ${e.youtube_erro || "sem detalhe"}`
+            : e.youtube_status === "enviando"
+              ? `Subindo para o YouTube: ${pct}% enviado. A aula entra na fila quando terminar.`
+              : "Esperando o envio ao YouTube começar. O agendador pega uma gravação a cada quinze minutos.";
+      } else {
+        motivo =
+          "Motivo desconhecido: a gravação existe e o grupo tem curso, mas a sugestão não foi criada.";
+      }
+
       return {
         id: e.id,
         titulo: e.atividade_nome || "Encontro",
         data_reuniao: e.data_reuniao,
-        motivo: !space
-          ? "A sala deste encontro não existe mais no painel."
-          : !space.curso_id
-            ? "Este grupo não tem curso vinculado. Escolha o curso na aba Salas, em 'Gravações viram aulas de'."
-            : "Motivo desconhecido: a gravação existe e o grupo tem curso, mas a sugestão não foi criada.",
+        motivo,
+        esperando_youtube: esperandoYoutube,
+        youtube_status: e.youtube_status,
+        youtube_pct: pct,
+        curso_id: space?.curso_id || null,
       };
     });
 
@@ -148,6 +186,8 @@ export async function POST(req: NextRequest) {
     titulo?: string;
     encontro_id?: string;
     curso_id?: string;
+    /** Publicar com o arquivo do Drive mesmo sem o vídeo no YouTube. */
+    forcar_drive?: boolean;
   };
   try {
     body = await req.json();
@@ -168,13 +208,43 @@ export async function POST(req: NextRequest) {
 
     const { data: e } = await sb
       .from("formacao_meet_encontros")
-      .select("id, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_video_id")
+      .select(
+        "id, space_name, atividade_nome, data_reuniao, duracao_min, gravacao_uri, youtube_video_id, youtube_status, youtube_bytes_enviados, youtube_bytes_total, inicio_efetivo_seg"
+      )
       .eq("id", body.encontro_id)
       .maybeSingle();
 
     if (!e) return NextResponse.json({ error: "Encontro não encontrado" }, { status: 404 });
     if (!e.gravacao_uri) {
       return NextResponse.json({ error: "Este encontro não tem gravação." }, { status: 400 });
+    }
+
+    // Este era o caminho por onde o Drive entrava. Criar a aula na mão, com a
+    // gravação recém-chegada, pegava o link do Drive porque o envio ao YouTube
+    // ainda não tinha terminado; e depois de aprovada ninguém voltava lá. Agora
+    // a espera é explícita, e furar a fila é um clique separado.
+    const { data: space } = await sb
+      .from("formacao_meet_spaces")
+      .select("subir_youtube")
+      .eq("space_name", e.space_name)
+      .maybeSingle();
+
+    if (space?.subir_youtube && !e.youtube_video_id && !body.forcar_drive) {
+      const pct =
+        e.youtube_bytes_total && e.youtube_bytes_enviados
+          ? Math.round((e.youtube_bytes_enviados / e.youtube_bytes_total) * 100)
+          : 0;
+      return NextResponse.json(
+        {
+          error:
+            e.youtube_status === "erro"
+              ? "O envio desta gravação ao YouTube falhou. Resolva o envio, ou use 'publicar com o Drive' se quiser liberar assim mesmo."
+              : `A gravação ainda está subindo para o YouTube (${pct}%). A aula do curso é o vídeo do YouTube, não o arquivo do Drive. Espere terminar, ou use 'publicar com o Drive' se tiver pressa.`,
+          esperando_youtube: true,
+          youtube_pct: pct,
+        },
+        { status: 409 }
+      );
     }
 
     const dia = new Date(`${e.data_reuniao}T12:00:00`).toLocaleDateString("pt-BR", {
@@ -186,9 +256,7 @@ export async function POST(req: NextRequest) {
       encontro_id: e.id,
       curso_id: body.curso_id,
       titulo: body.titulo?.trim() || `${e.atividade_nome || "Encontro"} · ${dia}`,
-      video_url: e.youtube_video_id
-        ? `https://www.youtube.com/watch?v=${e.youtube_video_id}`
-        : e.gravacao_uri,
+      video_url: montarUrl(e.gravacao_uri, e.youtube_video_id, e.inicio_efetivo_seg),
       duracao_min: e.duracao_min || null,
       data_reuniao: e.data_reuniao,
     });
@@ -257,6 +325,43 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "A aula precisa de um título." }, { status: 400 });
   }
 
+  // O link é relido do encontro AGORA, e não confiado ao que a sugestão guardou.
+  // Entre a fila carregar na tela e o clique em publicar pode ter terminado o
+  // envio ao YouTube: em 04/08/2026 foram dezessete segundos, e a aula nasceu
+  // apontando para o Drive com o vídeo já pronto do outro lado.
+  let videoUrl: string = sug.video_url;
+
+  const { data: enc } = await sb
+    .from("formacao_meet_encontros")
+    .select("space_name, gravacao_uri, youtube_video_id, youtube_status, inicio_efetivo_seg")
+    .eq("id", sug.encontro_id)
+    .maybeSingle();
+
+  if (enc) {
+    if (enc.youtube_video_id) {
+      videoUrl = montarUrl(enc.gravacao_uri || videoUrl, enc.youtube_video_id, enc.inicio_efetivo_seg);
+    } else if (!body.forcar_drive) {
+      const { data: space } = await sb
+        .from("formacao_meet_spaces")
+        .select("subir_youtube")
+        .eq("space_name", enc.space_name)
+        .maybeSingle();
+
+      if (space?.subir_youtube) {
+        return NextResponse.json(
+          {
+            error:
+              enc.youtube_status === "erro"
+                ? "O envio desta gravação ao YouTube falhou. Resolva o envio, ou publique com o Drive se quiser liberar assim mesmo."
+                : "A gravação ainda está subindo para o YouTube. A aula do curso é o vídeo do YouTube, não o arquivo do Drive. Espere terminar, ou publique com o Drive se tiver pressa.",
+            esperando_youtube: true,
+          },
+          { status: 409 }
+        );
+      }
+    }
+  }
+
   // A seção: a escolhida no vínculo, ou a última do curso. Sem seção não há
   // onde pendurar a aula, então criamos uma.
   let secaoId: string | null = sug.secao_id;
@@ -290,11 +395,11 @@ export async function POST(req: NextRequest) {
   // Vídeo no YouTube já é não listado e não precisa de nada: quem tem o link
   // assiste. Só o do Drive precisa ser liberado, e sem isso o aluno abre a aula
   // e vê "solicitar acesso" no lugar do vídeo.
-  const fonte = detectVideoSource(sug.video_url);
+  const fonte = detectVideoSource(videoUrl);
   let avisoDrive: string | null = null;
 
   if (fonte === "google_drive") {
-    const fileId = extrairIdDaPasta(sug.video_url);
+    const fileId = extrairIdDaPasta(videoUrl);
     if (fileId) {
       try {
         await liberarPorLink(fileId);
@@ -319,7 +424,7 @@ export async function POST(req: NextRequest) {
     .insert({
       section_id: secaoId,
       title: titulo,
-      video_url: sug.video_url,
+      video_url: videoUrl,
       // O player decide o embed por esta coluna, e a mesma função que o admin
       // usa ao cadastrar aula à mão decide aqui.
       video_source: fonte,
@@ -341,6 +446,9 @@ export async function POST(req: NextRequest) {
     .update({
       status: "aprovada",
       titulo,
+      // Guarda o link de fato usado. É por ele que a rotina reconhece, depois,
+      // se a aula continua com o que ela pôs lá ou se alguém trocou à mão.
+      video_url: videoUrl,
       lesson_id: aula.id,
       decidido_por: auth.userId,
       decidido_em: new Date().toISOString(),
