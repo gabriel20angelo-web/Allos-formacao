@@ -2016,7 +2016,7 @@ export default function CalendarioPage() {
                             ) : (
                               <button
                                 onClick={() => setAddCondutorSlotId(slot.id)}
-                                className="flex items-center gap-1.5 text-xs font-dm py-1 transition-colors hover:opacity-80"
+                                className="flex items-center gap-1.5 text-xs font-dm py-2.5 md:py-1 min-h-[40px] md:min-h-0 transition-colors hover:opacity-80"
                                 style={{ color: "rgba(200,75,49,0.8)" }}
                               >
                                 <UserPlus className="h-3.5 w-3.5" />

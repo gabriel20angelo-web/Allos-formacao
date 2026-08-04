@@ -68,7 +68,7 @@ export default function AbaEncontro({
                   href={sala.meeting_uri}
                   target="_blank"
                   rel="noreferrer"
-                  className="inline-flex items-center gap-1 text-xs break-all"
+                  className="inline-flex items-center gap-1 text-xs break-all py-2 md:py-0"
                   style={{ color: ROXO }}
                 >
                   <Link2 className="h-3 w-3 shrink-0" /> {sala.meeting_code}

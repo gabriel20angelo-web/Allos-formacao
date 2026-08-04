@@ -1536,7 +1536,7 @@ export default function MeetAdminPage() {
                         onClick={() => alternarYoutube(space)}
                         disabled={trabalhando === space.space_name + "yt"}
                         title="Envia a gravação para o YouTube como não listada e usa esse vídeo na aula do curso, começando no ponto em que o encontro de fato começou."
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-2.5 py-2.5 md:py-1.5 min-h-[40px] md:min-h-0 rounded-lg text-xs transition-all disabled:opacity-40"
                         style={{
                           background: space.subir_youtube
                             ? "rgba(255,0,0,0.10)"
@@ -1556,7 +1556,7 @@ export default function MeetAdminPage() {
                           key={campo}
                           onClick={() => alternar(space, campo)}
                           disabled={trabalhando === space.space_name + campo}
-                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
+                          className="flex items-center gap-1.5 px-2.5 py-2.5 md:py-1.5 min-h-[40px] md:min-h-0 rounded-lg text-xs transition-all disabled:opacity-40"
                           style={{
                             background: space[campo] ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
                             color: space[campo] ? ROXO : "rgba(253,251,247,0.35)",
@@ -1579,7 +1579,7 @@ export default function MeetAdminPage() {
                         // diferentes do dia. Verde na sala aberta sugeria que
                         // aquele era o estado seguro, quando é o contrário:
                         // aberta é a sala em que qualquer um com o link entra.
-                        className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs transition-all disabled:opacity-40"
+                        className="flex items-center gap-1.5 px-2.5 py-2.5 md:py-1.5 min-h-[40px] md:min-h-0 rounded-lg text-xs transition-all disabled:opacity-40"
                         style={{
                           background:
                             space.access_type === "OPEN"
