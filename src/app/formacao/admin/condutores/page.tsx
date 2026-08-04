@@ -24,6 +24,7 @@ import {
   Users,
   Archive,
   ArchiveRestore,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
 import type { CertificadoCondutor, CertificadoSubmission } from "@/types";
@@ -474,6 +475,26 @@ export default function CondutoresPage() {
                     );
                   })()}
                 </div>
+                {/* Ficha sem conta ligada não abre nada para a pessoa: ela
+                    entra na área e lê "sua conta ainda não está ligada a uma
+                    ficha de condutor", sem ninguém saber por quê. O aviso
+                    estava só dentro do modal de edição, ou seja, só via quem
+                    já tinha ido conferir. Agora a lista conta sozinha. */}
+                {!(item as { user_id?: string | null }).user_id && item.ativo && (
+                  <button
+                    onClick={() => openEdit(item)}
+                    className="flex items-center gap-1 text-[10px] px-2 py-1 mt-1 rounded-full font-medium font-dm transition-opacity hover:opacity-80"
+                    style={{
+                      background: "rgba(245,158,11,0.10)",
+                      color: "#F59E0B",
+                      border: "1px solid rgba(245,158,11,0.25)",
+                    }}
+                    title="Sem isso a pessoa não consegue abrir a área do próprio grupo"
+                  >
+                    <AlertTriangle className="h-2.5 w-2.5" />
+                    sem conta ligada
+                  </button>
+                )}
                 {item.telefone && (
                   <p className="text-[11px] text-cream/30 mt-0.5 font-dm">{item.telefone}</p>
                 )}
