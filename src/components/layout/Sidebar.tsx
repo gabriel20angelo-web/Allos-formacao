@@ -14,8 +14,7 @@ import {
   Menu,
   ExternalLink,
   Sparkles,
-  Video,
-  CalendarDays,
+  Users,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import { areasDoSite, caminhosDoPainel, homeDoPainel } from "@/lib/areas";
@@ -38,15 +37,12 @@ interface ItemDeMenu {
  * ícones junto.
  */
 const ICONE_DA_AREA: Record<string, typeof Home> = {
-  "meu-grupo": Video,
-  dinamicas: Sparkles,
-  eventos: CalendarDays,
+  associados: Users,
 };
 
-// O que vale para todo mundo. No meio dos dois entram as áreas do catálogo que
-// couberem à pessoa — quem conduz um grupo, quem cuida dos eventos e quem é
-// associado veem coisas diferentes aqui, e é a mesma resposta que o painel e o
-// middleware dão, porque vem do mesmo lugar.
+// O que vale para todo mundo. No meio dos dois entra a casa de quem trabalha
+// nos grupos, para quem tiver cargo que a alcance — e é a mesma resposta que o
+// middleware dá, porque vem do mesmo lugar.
 const NAV_ABERTURA: ItemDeMenu[] = [
   { label: "Conteúdos", href: "/formacao", icon: Home },
   { label: "Meus cursos", href: "/formacao/meus-cursos", icon: BookOpen, auth: true },

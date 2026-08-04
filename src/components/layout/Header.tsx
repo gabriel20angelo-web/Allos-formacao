@@ -5,18 +5,24 @@ import Link from "next/link";
 import Image from "next/image";
 import { useAuth } from "@/hooks/useAuth";
 import Badge from "@/components/ui/Badge";
+import { circulaLivre, homeDaPessoa, homeDosAssociados } from "@/lib/areas";
 import { LogOut, User, LayoutDashboard, BookOpen } from "lucide-react";
 
 export default function Header() {
-  const { user, profile, loading, signOut, isAdmin, isInstructor, isEventos, isCondutor } =
-    useAuth();
+  const { user, profile, loading, signOut, cargos, isAdmin, isInstructor } = useAuth();
 
-  const temPainel = isAdmin || isInstructor || isEventos || isCondutor;
-  const destinoPainel = isEventos
-    ? "/formacao/admin/eventos"
-    : isCondutor
-      ? "/formacao/admin/meu-grupo"
-      : "/formacao/admin";
+  // Para onde leva o atalho de trabalho do topo.
+  //
+  // Era um ternário escrito à mão apontando para dois endereços do painel, e
+  // ele envelheceu sozinho: quando o Síncrono e os Eventos saíram para
+  // /formacao/associados, este link continuou mandando gente para caminhos que
+  // já não existiam. Agora a resposta vem do catálogo de áreas, a mesma que o
+  // middleware usa, e o nome do link acompanha — quem conduz um grupo não está
+  // indo para um painel de administração.
+  const livre = circulaLivre(cargos);
+  const temDestino = livre || !!homeDosAssociados(cargos);
+  const destinoDeTrabalho = homeDaPessoa(cargos);
+  const rotuloDoDestino = livre ? "Painel" : "Associados";
   const [scrolled, setScrolled] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -87,13 +93,13 @@ export default function Header() {
                   <BookOpen className="h-4 w-4" />
                   Meus cursos
                 </Link>
-                {temPainel && (
+                {temDestino && (
                   <Link
-                    href={destinoPainel}
+                    href={destinoDeTrabalho}
                     className="flex items-center gap-1.5 text-sm text-[rgba(253,251,247,0.5)] hover:text-[#C84B31] transition-colors duration-200"
                   >
                     <LayoutDashboard className="h-4 w-4" />
-                    Painel
+                    {rotuloDoDestino}
                   </Link>
                 )}
                 <div className="flex items-center gap-2">
@@ -195,13 +201,13 @@ export default function Header() {
                       >
                         Meus cursos
                       </Link>
-                      {temPainel && (
+                      {temDestino && (
                         <Link
-                          href={destinoPainel}
+                          href={destinoDeTrabalho}
                           className="block text-sm text-cream/70"
                           onClick={() => setOpen(false)}
                         >
-                          Painel Administrativo
+                          {rotuloDoDestino}
                         </Link>
                       )}
                       <button

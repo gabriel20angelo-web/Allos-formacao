@@ -96,15 +96,30 @@ CREATE POLICY "insert_aprimoramento_sugestoes" ON aprimoramento_sugestoes
 -- =============================================================
 -- Conferência
 -- =============================================================
--- Rode isto DEPOIS de aplicar, logado como uma conta sem cargo nenhum, para
--- confirmar que a leitura fechou de verdade. Ler a policy não basta: foi
--- exatamente lendo a policy que a leitura aberta passou despercebida.
+-- CUIDADO: não dá para conferir isto no SQL Editor. Ele roda como `postgres`,
+-- que ignora RLS por completo, e ali `auth.uid()` é nulo — um
+-- `SELECT count(*) FROM aprimoramento_exercicios` devolve a tabela inteira com
+-- ou sem esta migration, e não prova nada.
 --
---   SELECT public.tem_algum_cargo(ARRAY['associado','condutor']);  -- false
---   SELECT count(*) FROM aprimoramento_exercicios;                  -- 0
+-- No SQL Editor só cabe perguntar se a migration ENTROU, olhando o catálogo,
+-- que não está sujeito a RLS:
 --
--- E com a chave anônima, de fora:
+--   SELECT proname FROM pg_proc WHERE proname = 'tem_algum_cargo';
+--   SELECT policyname, qual FROM pg_policies
+--    WHERE tablename = 'aprimoramento_exercicios' AND cmd = 'SELECT';
+--   -- o `qual` tem que citar tem_algum_cargo
+--
+-- Se a policy FUNCIONA é pergunta de fora, com um token de verdade. Anônimo:
 --
 --   curl "$SUPABASE_URL/rest/v1/aprimoramento_exercicios?select=slug&limit=1" \
 --        -H "apikey: $ANON_KEY"
+--   -- esperado: []
+--
+-- E o caso que de fato importa, que é uma conta logada SEM cargo (um aluno):
+--
+--   TOKEN=$(curl -s "$SUPABASE_URL/auth/v1/token?grant_type=password" \
+--     -H "apikey: $ANON_KEY" -H "Content-Type: application/json" \
+--     -d '{"email":"...","password":"..."}' | jq -r .access_token)
+--   curl "$SUPABASE_URL/rest/v1/aprimoramento_exercicios?select=slug&limit=1" \
+--        -H "apikey: $ANON_KEY" -H "Authorization: Bearer $TOKEN"
 --   -- esperado: []

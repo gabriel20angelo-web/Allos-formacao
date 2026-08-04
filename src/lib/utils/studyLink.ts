@@ -10,6 +10,7 @@ export const RESERVED_STUDY_LINK_SLUGS = new Set<string>([
   "admin",
   "api",
   "aprimoramento-dinamicas",
+  "associados",
   "auth",
   "cadastro",
   "certificado",

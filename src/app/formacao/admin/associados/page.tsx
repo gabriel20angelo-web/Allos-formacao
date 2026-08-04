@@ -30,7 +30,7 @@ const SUB_AREAS: Card[] = [
     pretitle: "Conteúdo",
     title: "Aprimoramento de Dinâmicas",
     description:
-      "Lista, edita, cria, cura e arquiva os exercícios que aparecem em /aprimoramento-dinamicas. Inclui os criados por associados (não-curados).",
+      "Lista, edita, cria, cura e arquiva os exercícios que aparecem em /formacao/associados/aprimoramento. Inclui os criados por associados (não-curados).",
     Icon: Sparkles,
     color: "#C84B31",
     tint: "rgba(200,75,49,0.10)",

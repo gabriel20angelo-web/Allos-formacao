@@ -78,11 +78,11 @@ export default async function ExerciseDetailPage({ params }: PageProps) {
             { label: "Formação", href: "/formacao" },
             {
               label: "Aprimoramento",
-              href: "/formacao/aprimoramento-dinamicas",
+              href: "/formacao/associados/aprimoramento",
             },
             {
               label: cat.label,
-              href: `/formacao/aprimoramento-dinamicas?cat=${cat.slug}`,
+              href: `/formacao/associados/aprimoramento?cat=${cat.slug}`,
             },
             { label: exercise.title },
           ]}

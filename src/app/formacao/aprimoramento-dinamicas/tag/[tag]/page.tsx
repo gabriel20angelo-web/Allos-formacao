@@ -55,7 +55,7 @@ export default async function TagPage({ params }: PageProps) {
             { label: "Formação", href: "/formacao" },
             {
               label: "Aprimoramento",
-              href: "/formacao/aprimoramento-dinamicas",
+              href: "/formacao/associados/aprimoramento",
             },
             { label: `#${tag}` },
           ]}

@@ -8,6 +8,12 @@
 //
 // Aqui a resposta é escrita uma vez. Os quatro derivam desta lista.
 //
+// A divisão de fundo é entre duas cascas. Quem conduz um grupo, quem cuida dos
+// eventos e quem é associado trabalha no SITE, em /formacao/associados: são
+// pessoas fazendo o trabalho delas, não gente administrando a plataforma, e a
+// casca escura de painel dizia o contrário. O painel ficou para quem de fato
+// administra.
+//
 // O que este arquivo NÃO faz: proteger nada. Ele governa a tela e o gate de
 // rota, que são a mesma resposta dita duas vezes — a proteção de verdade está
 // nas policies do Postgres, e as duas precisam ser conferidas juntas quando um
@@ -17,13 +23,9 @@ import type { Cargo } from "./cargos";
 import { conjuntoTemAlgum } from "./cargos";
 
 /** As seções da navegação do painel, na ordem em que aparecem. */
-export type GrupoPainel = "conducao" | "formacao" | "sistema";
+export type GrupoPainel = "formacao" | "sistema";
 
 export const GRUPOS: { id: GrupoPainel; titulo: string }[] = [
-  // Quem conduz um grupo, quem cuida dos eventos e quem responde pelos
-  // associados fazem partes do mesmo trabalho, e antes estavam em três cantos
-  // diferentes do painel.
-  { id: "conducao", titulo: "Condução" },
   { id: "formacao", titulo: "Formação" },
   { id: "sistema", titulo: "Sistema" },
 ];
@@ -32,16 +34,8 @@ export interface Area {
   id: string;
   /** Como se chama para quem trabalha nela. */
   rotulo: string;
-  /**
-   * Como o administrador a chama, quando o nome muda de dono.
-   *
-   * Para quem conduz, a tela do grupo é "Meu grupo". Para quem administra, a
-   * mesma tela é "Visão do condutor" — não é o grupo dele, é o que o condutor
-   * está vendo. Um nome só obrigaria um dos dois a ler a frase errada.
-   */
-  rotuloAdmin?: string;
   href: string;
-  /** Uma frase sobre o que se faz aqui. Aparece nos cards do hub. */
+  /** Uma frase sobre o que se faz aqui. */
   resumo?: string;
   /**
    * Quem vê. O administrador não entra nesta lista: passa em tudo, e repetir
@@ -51,72 +45,39 @@ export interface Area {
   cargos: Cargo[];
   /** Em que menus ela aparece. */
   onde: ("site" | "painel")[];
+  /** A seção do painel. Sem grupo, aparece no topo, sem título. */
   grupo?: GrupoPainel;
-  /**
-   * O link sai do painel e cai no site. O Aprimoramento mora fora de /admin
-   * porque quem usa não está administrando nada — está procurando uma dinâmica
-   * para o encontro de amanhã.
-   */
-  saiDoPainel?: boolean;
 }
+
+/** O endereço da área de quem trabalha nos grupos. */
+export const CASA_DOS_ASSOCIADOS = "/formacao/associados";
 
 /**
  * O catálogo.
  *
  * A ordem importa: é a ordem da tela, e o primeiro item que couber para uma
- * pessoa vira o destino dela quando ela abre o painel.
+ * pessoa vira o destino dela.
  */
 export const AREAS: Area[] = [
   {
-    id: "conducao",
-    rotulo: "Início",
-    rotuloAdmin: "Condução",
-    href: "/formacao/admin/conducao",
-    resumo: "O ponto de partida de quem conduz: o seu grupo, as dinâmicas e os eventos num lugar só.",
-    cargos: ["condutor", "eventos"],
-    onde: ["painel"],
-    grupo: "conducao",
-  },
-  {
-    id: "meu-grupo",
-    rotulo: "Meu grupo",
-    rotuloAdmin: "Visão do condutor",
-    href: "/formacao/admin/meu-grupo",
-    resumo:
-      "Os ajustes do encontro da semana — gravar, transcrever, abrir a porta — e a curadoria do que saiu dele.",
-    cargos: ["condutor"],
-    onde: ["site", "painel"],
-    grupo: "conducao",
-  },
-  {
-    id: "dinamicas",
-    rotulo: "Aprimoramento",
-    href: "/formacao/aprimoramento-dinamicas",
-    resumo:
-      "O acervo de exercícios para levar ao grupo: trilhas, categorias e o que já foi curado.",
-    cargos: ["associado", "condutor"],
-    onde: ["site", "painel"],
-    grupo: "conducao",
-    saiDoPainel: true,
-  },
-  {
-    id: "eventos",
-    rotulo: "Eventos",
-    href: "/formacao/admin/eventos",
-    resumo: "Os eventos que aparecem no calendário público da formação.",
-    cargos: ["eventos"],
-    onde: ["site", "painel"],
-    grupo: "conducao",
-  },
-  {
     id: "associados",
     rotulo: "Associados",
-    href: "/formacao/admin/associados",
+    href: CASA_DOS_ASSOCIADOS,
     resumo:
-      "A curadoria do acervo de dinâmicas e a fila de sugestões que os associados mandam.",
+      "O seu grupo, o acervo de dinâmicas para levar até ele e os eventos, num lugar só.",
+    cargos: ["associado", "condutor", "eventos"],
+    onde: ["site"],
+  },
+  {
+    // O outro "Associados". Este é o de quem responde pelo acervo: curar
+    // exercício e decidir sugestão. Fica no painel porque é administração, e
+    // não o trabalho de quem usa as dinâmicas.
+    id: "associados-admin",
+    rotulo: "Associados",
+    href: "/formacao/admin/associados",
+    resumo: "Curadoria do acervo de dinâmicas e a fila de sugestões.",
     cargos: [],
     onde: ["painel"],
-    grupo: "conducao",
   },
   {
     id: "dashboard",
@@ -160,12 +121,57 @@ export const AREAS: Area[] = [
   },
 ];
 
+// =============================================================
+// As subseções de /formacao/associados
+// =============================================================
+// As três coisas que estavam em três cantos do sistema. É a mesma pessoa
+// usando: quem conduz um grupo procura uma dinâmica para levar nele, e às
+// vezes cuida de um evento. Cada uma aparece só para quem lhe cabe, e quem tem
+// um cargo só vê uma subseção — o que está certo, e continua sendo um lugar
+// que faz sentido.
+
+export interface Secao {
+  id: string;
+  rotulo: string;
+  href: string;
+  resumo: string;
+  cargos: Cargo[];
+}
+
+export const SECOES: Secao[] = [
+  {
+    id: "sincrono",
+    rotulo: "Síncrono",
+    href: `${CASA_DOS_ASSOCIADOS}/sincrono`,
+    resumo:
+      "O encontro da semana: o que gravar, quem entra, e a curadoria do que saiu dele.",
+    cargos: ["condutor"],
+  },
+  {
+    id: "aprimoramento",
+    rotulo: "Aprimoramento",
+    href: `${CASA_DOS_ASSOCIADOS}/aprimoramento`,
+    resumo: "O acervo de dinâmicas: trilhas, categorias e o que já foi curado.",
+    cargos: ["associado", "condutor"],
+  },
+  {
+    id: "eventos",
+    rotulo: "Eventos",
+    href: `${CASA_DOS_ASSOCIADOS}/eventos`,
+    resumo: "Os eventos que aparecem no calendário público da formação.",
+    cargos: ["eventos"],
+  },
+];
+
+/** Os cargos que dão entrada em /formacao/associados. */
+export const CARGOS_DOS_ASSOCIADOS: Cargo[] = ["associado", "condutor", "eventos"];
+
 export const AREA_POR_ID: Record<string, Area> = Object.fromEntries(
   AREAS.map((a) => [a.id, a])
 );
 
 /** Esta pessoa alcança esta área? */
-export function podeVer(area: Area, cargos: Set<string>): boolean {
+export function podeVer(area: Area | Secao, cargos: Set<string>): boolean {
   return conjuntoTemAlgum(cargos, area.cargos);
 }
 
@@ -179,37 +185,57 @@ export function areasDoPainel(cargos: Set<string>): Area[] {
   return AREAS.filter((a) => a.onde.includes("painel") && podeVer(a, cargos));
 }
 
+/** As subseções de /formacao/associados que cabem a esta pessoa. */
+export function secoesDaPessoa(cargos: Set<string>): Secao[] {
+  return SECOES.filter((s) => podeVer(s, cargos));
+}
+
 /**
  * Quem circula pelo painel inteiro.
  *
- * Um cargo restrito entra no painel e fica na própria área; estes dois andam
- * por tudo, então não são presos a lugar nenhum.
+ * O painel é de quem administra. Condutor, eventos e associado não entram —
+ * eles têm a própria casa, no site.
  */
 export function circulaLivre(cargos: Set<string>): boolean {
   return cargos.has("admin") || cargos.has("instructor");
 }
 
 /**
- * Onde esta pessoa cai ao abrir o painel.
+ * Os caminhos do painel que esta pessoa pode abrir.
  *
- * Administrador vai para o Dashboard. Cargo restrito vai para o próprio começo
- * — que é o hub, quando ele couber, e não a primeira tela solta que aparecer:
- * cair direto numa área não conta que existem as outras duas.
- */
-export function homeDoPainel(cargos: Set<string>): string {
-  if (circulaLivre(cargos)) return "/formacao/admin";
-  const suas = areasDoPainel(cargos);
-  return suas[0]?.href || "/formacao";
-}
-
-/**
- * Os caminhos do painel que um cargo restrito pode abrir.
- *
- * Só serve ao middleware, que compara por prefixo e não conhece React. Áreas
- * que saem do painel ficam de fora: elas não são /formacao/admin.
+ * Só serve ao middleware, que compara por prefixo e não conhece React.
  */
 export function caminhosDoPainel(cargos: Set<string>): string[] {
   return areasDoPainel(cargos)
-    .filter((a) => !a.saiDoPainel && a.href.startsWith("/formacao/admin"))
+    .filter((a) => a.href.startsWith("/formacao/admin"))
     .map((a) => a.href);
+}
+
+/** Onde esta pessoa cai ao abrir o painel. */
+export function homeDoPainel(cargos: Set<string>): string {
+  if (circulaLivre(cargos)) return "/formacao/admin";
+  return homeDaPessoa(cargos);
+}
+
+/**
+ * A primeira tela de /formacao/associados para esta pessoa.
+ *
+ * Quem tem um cargo só é levado direto à subseção dele: uma tela de índice com
+ * um card só não conta nada que a própria subseção não conte melhor.
+ */
+export function homeDosAssociados(cargos: Set<string>): string | null {
+  const suas = secoesDaPessoa(cargos);
+  if (!suas.length) return null;
+  return suas[0].href;
+}
+
+/**
+ * Onde mandar alguém que caiu num lugar que não é dela.
+ *
+ * Administrador e professor vão para o painel; quem trabalha nos grupos vai
+ * para a própria casa; o resto vai para o site.
+ */
+export function homeDaPessoa(cargos: Set<string>): string {
+  if (circulaLivre(cargos)) return "/formacao/admin";
+  return homeDosAssociados(cargos) || "/formacao";
 }

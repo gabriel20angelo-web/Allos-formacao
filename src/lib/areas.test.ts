@@ -17,7 +17,10 @@ import {
   areasDoPainel,
   caminhosDoPainel,
   circulaLivre,
+  homeDaPessoa,
   homeDoPainel,
+  homeDosAssociados,
+  secoesDaPessoa,
 } from "./areas";
 
 /** Uma pessoa, do jeito que ela sai de `profiles`. */
@@ -27,6 +30,8 @@ const idsDoSite = (p: { role: string; cargos: string[] }) =>
   areasDoSite(cargosDe(p)).map((a) => a.id);
 const idsDoPainel = (p: { role: string; cargos: string[] }) =>
   areasDoPainel(cargosDe(p)).map((a) => a.id);
+const idsDasSecoes = (p: { role: string; cargos: string[] }) =>
+  secoesDaPessoa(cargosDe(p)).map((s) => s.id);
 
 describe("cargos acumuláveis", () => {
   it("junta o papel principal e os extras", () => {
@@ -54,92 +59,120 @@ describe("cargos acumuláveis", () => {
   });
 });
 
-describe("o que cada pessoa vê no menu do site", () => {
-  it("associado vê o Aprimoramento e mais nada de restrito", () => {
-    expect(idsDoSite(quem("associado"))).toEqual(["dinamicas"]);
+describe("o painel é de quem administra", () => {
+  it("condutor não entra no painel", () => {
+    // A casca escura dizia que essa gente administra a plataforma, e não é o
+    // caso: elas fazem o trabalho delas, no site.
+    expect(caminhosDoPainel(cargosDe(quem("condutor")))).toEqual([]);
+    expect(circulaLivre(cargosDe(quem("condutor")))).toBe(false);
   });
 
-  it("condutor vê o próprio grupo e o Aprimoramento, não os eventos", () => {
-    expect(idsDoSite(quem("condutor")).sort()).toEqual(["dinamicas", "meu-grupo"]);
+  it("quem cuida de eventos não entra no painel", () => {
+    expect(caminhosDoPainel(cargosDe(quem("eventos")))).toEqual([]);
   });
 
-  it("quem cuida de eventos vê só os eventos", () => {
-    // O Aprimoramento saiu do contrato deste cargo: quem cuida do calendário
-    // não trabalha com dinâmicas de grupo.
-    expect(idsDoSite(quem("eventos"))).toEqual(["eventos"]);
+  it("associado não entra no painel", () => {
+    expect(caminhosDoPainel(cargosDe(quem("associado")))).toEqual([]);
   });
 
-  it("administrador vê tudo", () => {
-    expect(idsDoSite(quem("admin")).sort()).toEqual(["dinamicas", "eventos", "meu-grupo"]);
+  it("nem quem acumula os três cargos entra", () => {
+    expect(caminhosDoPainel(cargosDe(quem("condutor", "eventos", "associado")))).toEqual([]);
   });
 
-  it("aluno não vê nenhuma área restrita", () => {
-    expect(idsDoSite(quem("student"))).toEqual([]);
+  it("administrador vê o painel inteiro", () => {
+    expect(idsDoPainel(quem("admin"))).toEqual([
+      "associados-admin",
+      "dashboard",
+      "formacao-base",
+      "certificados",
+      "moderacao",
+      "configuracoes",
+    ]);
   });
 
-  it("quem não está logado não vê nada restrito", () => {
-    expect(areasDoSite(new Set())).toEqual([]);
-  });
-});
-
-describe("quem acumula cargo não perde área", () => {
-  it("eventos + condutor alcança as duas áreas", () => {
-    // Era o caso que o ternário apagava: a pessoa via só Eventos, e a tela do
-    // grupo dela ficava sem link apontando para ela.
-    const ids = idsDoPainel(quem("eventos", "condutor"));
-    expect(ids).toContain("eventos");
-    expect(ids).toContain("meu-grupo");
-  });
-
-  it("administrador com o cargo de eventos não perde o painel", () => {
-    // O outro lado do mesmo ternário: `isEventos` já incluía os extras, então
-    // o administrador caía no primeiro ramo e ficava só com Eventos.
-    const ids = idsDoPainel(quem("admin", "eventos"));
+  it("professor vê o painel menos o que é só do administrador", () => {
+    const ids = idsDoPainel(quem("instructor"));
     expect(ids).toContain("dashboard");
-    expect(ids).toContain("configuracoes");
-    expect(homeDoPainel(cargosDe(quem("admin", "eventos")))).toBe("/formacao/admin");
+    expect(ids).toContain("certificados");
+    expect(ids).toContain("moderacao");
+    expect(ids).not.toContain("configuracoes");
+    expect(ids).not.toContain("associados-admin");
+  });
+
+  it("o grupo Condução não existe mais no painel", () => {
+    const ids = idsDoPainel(quem("admin"));
+    for (const sumido of ["conducao", "meu-grupo", "dinamicas", "eventos"]) {
+      expect(ids).not.toContain(sumido);
+    }
   });
 });
 
-describe("o gate de rota do painel", () => {
-  it("manda o condutor para o hub, não para uma área solta", () => {
-    // Cair direto na tela do grupo não conta que existem as outras duas.
-    expect(homeDoPainel(cargosDe(quem("condutor")))).toBe("/formacao/admin/conducao");
-  });
-
-  it("prende o condutor às áreas dele", () => {
-    const caminhos = caminhosDoPainel(cargosDe(quem("condutor")));
-    expect(caminhos).toContain("/formacao/admin/conducao");
-    expect(caminhos).toContain("/formacao/admin/meu-grupo");
-    expect(caminhos).not.toContain("/formacao/admin/eventos");
-    expect(caminhos).not.toContain("/formacao/admin/configuracoes");
-  });
-
-  it("deixa de fora as áreas que saem do painel", () => {
-    // O Aprimoramento mora fora de /formacao/admin. Se entrasse nesta lista, o
-    // middleware compararia um prefixo que nunca casa e prenderia a pessoa.
-    expect(caminhosDoPainel(cargosDe(quem("condutor")))).not.toContain(
-      "/formacao/aprimoramento-dinamicas"
-    );
-  });
-
-  it("não deixa o painel inteiro aberto por causa do prefixo do dashboard", () => {
-    // `/formacao/admin` casa por prefixo com todo o painel. Enquanto ele só
-    // couber a quem circula livre, isso é inofensivo — este teste é o alarme
-    // para o dia em que alguém der o dashboard a um cargo restrito.
-    for (const p of [quem("condutor"), quem("eventos"), quem("condutor", "eventos")]) {
-      expect(caminhosDoPainel(cargosDe(p))).not.toContain("/formacao/admin");
+describe("a casa de quem trabalha nos grupos", () => {
+  it("aparece no menu do site para os três cargos", () => {
+    for (const p of [quem("associado"), quem("condutor"), quem("eventos")]) {
+      expect(idsDoSite(p)).toEqual(["associados"]);
     }
   });
 
-  it("nega o painel a quem não tem área nenhuma nele", () => {
-    expect(caminhosDoPainel(cargosDe(quem("associado")))).toEqual([]);
-    expect(caminhosDoPainel(cargosDe(quem("student")))).toEqual([]);
+  it("não aparece para aluno nem para quem não está logado", () => {
+    expect(idsDoSite(quem("student"))).toEqual([]);
+    expect(areasDoSite(new Set())).toEqual([]);
   });
 
-  it("só administrador e professor circulam livres", () => {
-    expect(circulaLivre(cargosDe(quem("admin")))).toBe(true);
-    expect(circulaLivre(cargosDe(quem("instructor")))).toBe(true);
-    expect(circulaLivre(cargosDe(quem("condutor", "eventos")))).toBe(false);
+  it("condutor vê Síncrono e Aprimoramento, não os Eventos", () => {
+    expect(idsDasSecoes(quem("condutor"))).toEqual(["sincrono", "aprimoramento"]);
+  });
+
+  it("associado vê só o Aprimoramento", () => {
+    expect(idsDasSecoes(quem("associado"))).toEqual(["aprimoramento"]);
+  });
+
+  it("quem cuida de eventos vê só os Eventos", () => {
+    // O Aprimoramento saiu do contrato deste cargo: quem cuida do calendário
+    // não trabalha com dinâmicas de grupo.
+    expect(idsDasSecoes(quem("eventos"))).toEqual(["eventos"]);
+  });
+
+  it("quem acumula eventos e condução vê as três", () => {
+    // Era o caso que o ternário do painel apagava.
+    expect(idsDasSecoes(quem("eventos", "condutor"))).toEqual([
+      "sincrono",
+      "aprimoramento",
+      "eventos",
+    ]);
+  });
+
+  it("administrador vê as três", () => {
+    expect(idsDasSecoes(quem("admin"))).toEqual(["sincrono", "aprimoramento", "eventos"]);
+  });
+
+  it("aluno não vê nenhuma", () => {
+    expect(idsDasSecoes(quem("student"))).toEqual([]);
+    expect(homeDosAssociados(cargosDe(quem("student")))).toBeNull();
+  });
+});
+
+describe("para onde cada pessoa é mandada", () => {
+  it("quem tem um cargo só cai direto na subseção dele", () => {
+    expect(homeDaPessoa(cargosDe(quem("condutor")))).toBe("/formacao/associados/sincrono");
+    expect(homeDaPessoa(cargosDe(quem("associado")))).toBe(
+      "/formacao/associados/aprimoramento"
+    );
+    expect(homeDaPessoa(cargosDe(quem("eventos")))).toBe("/formacao/associados/eventos");
+  });
+
+  it("administrador e professor vão para o painel", () => {
+    expect(homeDaPessoa(cargosDe(quem("admin")))).toBe("/formacao/admin");
+    expect(homeDoPainel(cargosDe(quem("instructor")))).toBe("/formacao/admin");
+  });
+
+  it("quem não tem nada vai para o site", () => {
+    expect(homeDaPessoa(cargosDe(quem("student")))).toBe("/formacao");
+  });
+
+  it("o condutor expulso do painel cai na casa dele, não na home", () => {
+    // Sem isto ele seria despejado em /formacao e teria de descobrir sozinho
+    // onde fica o trabalho dele.
+    expect(homeDoPainel(cargosDe(quem("condutor")))).toBe("/formacao/associados/sincrono");
   });
 });

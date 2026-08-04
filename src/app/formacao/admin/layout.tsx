@@ -20,12 +20,7 @@ import {
   X,
   User,
   Calendar,
-  CalendarDays,
   Users,
-  Video,
-  Compass,
-  Sparkles,
-  ArrowUpRight,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
 import { NOME_DO_CARGO } from "@/lib/cargos";
@@ -34,9 +29,7 @@ import {
   GRUPOS,
   areasDoPainel,
   caminhosDoPainel,
-  circulaLivre,
   homeDoPainel,
-  type Area,
 } from "@/lib/areas";
 
 /**
@@ -46,11 +39,7 @@ import {
  * que roda no edge e não deve arrastar a biblioteca de ícones junto.
  */
 const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
-  conducao: Compass,
-  "meu-grupo": Video,
-  dinamicas: Sparkles,
-  eventos: CalendarDays,
-  associados: Users,
+  "associados-admin": Users,
   dashboard: LayoutDashboard,
   "formacao-base": Calendar,
   certificados: Award,
@@ -59,7 +48,7 @@ const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
 };
 
 /** Onde o contador de sugestões pendentes aparece. */
-const AREA_COM_PENDENCIAS = "associados";
+const AREA_COM_PENDENCIAS = "associados-admin";
 
 // Telas que não são áreas do catálogo, mas têm nome próprio na barra de cima.
 const TITULOS_EXTRAS: Record<string, string> = {
@@ -83,15 +72,16 @@ export default function AdminLayout({
   // grupo via só Eventos, e um administrador com o cargo de eventos marcado
   // perdia o painel inteiro. O erro nem aparecia como erro: a área continuava
   // existindo, funcionando, e sem link nenhum apontando para ela.
-  const livre = circulaLivre(cargos);
   const minhasAreas = areasDoPainel(cargos);
-  const secoes = GRUPOS.map((g) => ({
-    ...g,
-    itens: minhasAreas.filter((a) => a.grupo === g.id),
-  })).filter((s) => s.itens.length > 0);
-
-  /** O nome muda de dono: o grupo é "meu" para quem conduz e "do condutor" para quem administra. */
-  const nomeDaArea = (a: Area) => (livre && a.rotuloAdmin ? a.rotuloAdmin : a.rotulo);
+  const secoes = [
+    // Área sem grupo abre a lista, sem título. Hoje é só Associados, que não
+    // pertence nem à Formação nem ao Sistema.
+    { id: "", titulo: "", itens: minhasAreas.filter((a) => !a.grupo) },
+    ...GRUPOS.map((g) => ({
+      ...g,
+      itens: minhasAreas.filter((a) => a.grupo === g.id),
+    })),
+  ].filter((s) => s.itens.length > 0);
 
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [pendingSugestoes, setPendingSugestoes] = useState(0);
@@ -143,7 +133,7 @@ export default function AdminLayout({
   const titulosPorCaminho: [string, string][] = [
     ...Object.entries(TITULOS_EXTRAS),
     ...AREAS.filter((a) => a.href.startsWith("/formacao/admin")).map(
-      (a) => [a.href, nomeDaArea(a)] as [string, string]
+      (a) => [a.href, a.rotulo] as [string, string]
     ),
   ].sort((a, b) => b[0].length - a[0].length);
 
@@ -180,8 +170,13 @@ export default function AdminLayout({
           <h1 className="font-fraunces font-bold text-2xl text-cream">
             Acesso restrito
           </h1>
+          {/* O painel ficou para quem administra a plataforma. Quem conduz um
+              grupo, é associado ou cuida dos eventos trabalha em
+              /formacao/associados, no site, e o middleware já leva para lá — só
+              chega nesta tela quem não tem nenhum dos dois. */}
           <p className="text-cream/50 text-sm">
-            Você precisa de uma conta de administrador, instrutor, de eventos ou de condutor pra acessar esta área.
+            Esta área é de quem administra a plataforma. Se você conduz um grupo, é associado ou
+            cuida dos eventos, o seu lugar é em Associados, no menu do site.
           </p>
           <Link
             href="/formacao"
@@ -214,13 +209,12 @@ export default function AdminLayout({
       {/* Nav */}
       <nav className="flex-1 p-4 space-y-5 overflow-y-auto">
         {secoes.map((secao) => (
-          <div key={secao.id} className="space-y-1">
-            {/* O título nomeia o lugar. Para quem conduz, esta é a única seção
-                que existe, e sem ela o painel pareceria uma lista solta de
-                três links sem parentesco. */}
-            <p className="px-4 pb-1 font-dm text-[10px] font-semibold tracking-[0.22em] uppercase text-cream/25">
-              {secao.titulo}
-            </p>
+          <div key={secao.id || "sem-grupo"} className="space-y-1">
+            {secao.titulo && (
+              <p className="px-4 pb-1 font-dm text-[10px] font-semibold tracking-[0.22em] uppercase text-cream/25">
+                {secao.titulo}
+              </p>
+            )}
 
             {secao.itens.map((area) => {
               const Icone = ICONE_DA_AREA[area.id] ?? LayoutDashboard;
@@ -253,16 +247,7 @@ export default function AdminLayout({
                   }
                 >
                   <Icone className="h-4 w-4 flex-shrink-0" />
-                  <span className="flex-1">{nomeDaArea(area)}</span>
-
-                  {/* Este link sai do painel. Avisar é mais honesto do que
-                      deixar a pessoa descobrir pelo cabeçalho que mudou. */}
-                  {area.saiDoPainel && (
-                    <ArrowUpRight
-                      className="h-3 w-3 flex-shrink-0 opacity-45"
-                      aria-label="abre fora do painel"
-                    />
-                  )}
+                  <span className="flex-1">{area.rotulo}</span>
 
                   {area.id === AREA_COM_PENDENCIAS && pendingSugestoes > 0 && (
                     <span

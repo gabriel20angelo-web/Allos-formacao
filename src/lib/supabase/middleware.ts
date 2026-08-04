@@ -8,7 +8,7 @@
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 import { cargosDe } from "@/lib/cargos";
-import { caminhosDoPainel, circulaLivre, homeDoPainel } from "@/lib/areas";
+import { caminhosDoPainel, circulaLivre, homeDaPessoa, homeDoPainel } from "@/lib/areas";
 
 const BASE_URL = process.env.APP_URL || process.env.NEXT_PUBLIC_APP_URL || "https://allos.org.br";
 
@@ -116,7 +116,10 @@ export async function updateSession(request: NextRequest) {
     }
 
     // Protected routes that require authentication
-    const protectedPaths = ["/formacao/admin", "/formacao/curso"];
+    // /formacao/associados é a casa de quem conduz grupo, é associado ou cuida
+    // dos eventos. Fica fora do painel de propósito: essas pessoas fazem o
+    // trabalho delas, não administram a plataforma.
+    const protectedPaths = ["/formacao/admin", "/formacao/curso", "/formacao/associados"];
     const isProtected = protectedPaths.some((p) => pathname.startsWith(p));
 
     // If accessing a protected route without auth, redirect to login
@@ -164,9 +167,11 @@ export async function updateSession(request: NextRequest) {
       const meus = cargosDe({ role, cargos });
       const suas = caminhosDoPainel(meus);
 
-      // Nenhuma área no painel: esta pessoa não tem o que fazer aqui.
+      // Nenhuma área no painel: esta pessoa não tem o que fazer aqui. Vai para
+      // a casa dela, e não para a home — despejar quem conduz um grupo em
+      // /formacao a obrigaria a descobrir sozinha onde foi parar o trabalho.
       if (!suas.length) {
-        return hardRedirect("/formacao", supabaseResponse);
+        return hardRedirect(homeDaPessoa(meus), supabaseResponse);
       }
 
       // Preso à própria área só quem não circula livre. Quem acumula eventos e

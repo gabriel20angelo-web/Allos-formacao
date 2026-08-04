@@ -9,5 +9,9 @@ export const config = {
   // Só roda nas rotas que precisam de auth/role check no servidor.
   // Demais rotas (home, /cursos, /auth, /api/*) passam direto, evitando
   // 1-2 round-trips ao Supabase por request.
-  matcher: ["/formacao/admin/:path*", "/formacao/curso/:path*"],
+  matcher: [
+    "/formacao/admin/:path*",
+    "/formacao/curso/:path*",
+    "/formacao/associados/:path*",
+  ],
 };
