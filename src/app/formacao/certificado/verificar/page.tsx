@@ -41,6 +41,23 @@ interface Resultado {
   emitido_em?: string;
   anulado_em?: string | null;
   anulado_motivo?: string | null;
+  /** curso, formacao ou avulso. */
+  tipo?: string;
+  /** Rótulo pronto do tipo, escrito pela rota para quem lê a tela. */
+  tipo_documento?: string;
+}
+
+/**
+ * Como chamar aquilo a que o documento se refere.
+ *
+ * "Curso" está certo para o certificado de curso e errado para os outros dois:
+ * o de formação atesta participação nas atividades e a declaração avulsa não
+ * tem curso nenhum por trás. Quem confere precisa entender o que tem em mãos.
+ */
+function rotuloDoObjeto(tipo?: string): string {
+  if (tipo === "formacao") return "Atividade";
+  if (tipo === "avulso") return "Objeto";
+  return "Curso";
 }
 
 function dataLonga(iso?: string | null): string {
@@ -268,7 +285,13 @@ function Verificador() {
 
               <div className="space-y-3">
                 <Linha rotulo="Titular" valor={resultado.titular || "-"} />
-                <Linha rotulo="Curso" valor={resultado.curso || "-"} />
+                {resultado.tipo_documento && (
+                  <Linha rotulo="Documento" valor={resultado.tipo_documento} />
+                )}
+                <Linha
+                  rotulo={rotuloDoObjeto(resultado.tipo)}
+                  valor={resultado.curso || "-"}
+                />
                 {/* Carga horária só aparece quando o curso a declara: certificado
                     antigo pode não ter o dado, e inventar um número aqui seria
                     declarar carga horária que ninguém assinou. */}
@@ -316,7 +339,13 @@ function Verificador() {
 
               <div className="space-y-3">
                 <Linha rotulo="Titular" valor={resultado.titular || "-"} />
-                <Linha rotulo="Curso" valor={resultado.curso || "-"} />
+                {resultado.tipo_documento && (
+                  <Linha rotulo="Documento" valor={resultado.tipo_documento} />
+                )}
+                <Linha
+                  rotulo={rotuloDoObjeto(resultado.tipo)}
+                  valor={resultado.curso || "-"}
+                />
                 <Linha
                   rotulo="Emitido em"
                   valor={dataLonga(resultado.emitido_em)}

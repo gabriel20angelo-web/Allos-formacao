@@ -78,8 +78,34 @@ interface RegistroCertificado {
   anulado: boolean | null;
   anulado_em: string | null;
   anulado_motivo: string | null;
+  tipo: string | null;
+  horas: number | null;
+  nome_certificado: string | null;
   user: { full_name: string | null } | null;
   course: { title: string | null; certificate_hours: number | null } | null;
+}
+
+/**
+ * O que o documento certifica, em uma linha, para quem está conferindo.
+ *
+ * O certificado de curso aponta para um curso e diz o título dele. Os outros
+ * dois não têm curso por trás: o de formação atesta participação nas
+ * atividades, e a declaração avulsa é escrita caso a caso. Devolver "Curso não
+ * identificado" para esses dois, como acontecia quando o join vinha vazio,
+ * faria a verificação parecer defeituosa justamente no documento legítimo.
+ */
+function objetoDoCertificado(r: RegistroCertificado): string {
+  if (r.course?.title) return r.course.title;
+  if (r.tipo === "formacao") return "Participação nas atividades da Formação Allos";
+  if (r.tipo === "avulso") return "Declaração emitida pela Associação Allos";
+  return "Curso não identificado";
+}
+
+/** Rótulo do tipo de documento, para o texto público não chamar tudo de curso. */
+function rotuloDoTipo(tipo: string | null): string {
+  if (tipo === "formacao") return "Certificado de participação (Formação)";
+  if (tipo === "avulso") return "Declaração avulsa";
+  return "Certificado de curso";
 }
 
 // Resposta sem cache em lugar nenhum: uma anulação precisa aparecer na consulta
@@ -125,10 +151,13 @@ export async function GET(req: NextRequest) {
   // full_name, nunca email nem id; courses traz título e carga horária. Ao mexer
   // aqui, lembre que tudo o que entrar no select pode acabar no corpo da
   // resposta pública.
+  // nome_certificado entra na lista porque o titular de um certificado de
+  // formação frequentemente não tem conta na plataforma: o nome que vale é o
+  // que a própria pessoa escreveu no formulário, gravado no ato da emissão.
   const { data, error } = await sb
     .from("certificates")
     .select(
-      "certificate_code, issued_at, anulado, anulado_em, anulado_motivo, user:profiles!user_id(full_name), course:courses!course_id(title, certificate_hours)"
+      "certificate_code, issued_at, anulado, anulado_em, anulado_motivo, tipo, horas, nome_certificado, user:profiles!user_id(full_name), course:courses!course_id(title, certificate_hours)"
     )
     .eq("certificate_code", codigo)
     .maybeSingle();
@@ -147,8 +176,15 @@ export async function GET(req: NextRequest) {
     return semCache({ situacao: "nao_encontrado", codigo });
   }
 
-  const titular = registro.user?.full_name || "Titular não identificado";
-  const curso = registro.course?.title || "Curso não identificado";
+  // A conta ligada vence o nome gravado quando existe, porque o perfil é
+  // corrigido pela própria pessoa e o nome do formulário é uma foto do dia da
+  // emissão.
+  const titular =
+    registro.user?.full_name ||
+    registro.nome_certificado ||
+    "Titular não identificado";
+  const curso = objetoDoCertificado(registro);
+  const tipo_documento = rotuloDoTipo(registro.tipo);
 
   if (registro.anulado) {
     // O certificado anulado devolve titular e curso para que quem consultou
@@ -160,6 +196,8 @@ export async function GET(req: NextRequest) {
       codigo: registro.certificate_code,
       titular,
       curso,
+      tipo: registro.tipo || "curso",
+      tipo_documento,
       emitido_em: registro.issued_at,
       anulado_em: registro.anulado_em,
       anulado_motivo: registro.anulado_motivo,
@@ -171,7 +209,11 @@ export async function GET(req: NextRequest) {
     codigo: registro.certificate_code,
     titular,
     curso,
-    carga_horaria: registro.course?.certificate_hours ?? null,
+    tipo: registro.tipo || "curso",
+    tipo_documento,
+    // A carga horária do certificado de curso vive no curso; a dos outros dois
+    // é decidida na emissão e fica no próprio registro.
+    carga_horaria: registro.course?.certificate_hours ?? registro.horas ?? null,
     emitido_em: registro.issued_at,
   });
 }

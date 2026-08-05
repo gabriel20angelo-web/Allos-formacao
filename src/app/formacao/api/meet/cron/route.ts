@@ -26,6 +26,7 @@ import { sugerirAulasDeGravacoes } from "@/lib/meet/aulas";
 import { publicarProximoVideo } from "@/lib/meet/publicar-video";
 import { conciliarPendentes } from "@/lib/meet/conciliar";
 import { identificarPorCertificado } from "@/lib/meet/certificados";
+import { identificarPorContaGoogle } from "@/lib/meet/identidade-google";
 import { processarClipes } from "@/lib/meet/clipes";
 import { encerrarReunioesLongas } from "@/lib/meet/encerramento";
 import { sincronizarExcecoes } from "@/lib/meet/excecoes";
@@ -148,6 +149,13 @@ export async function GET(req: NextRequest) {
   // que é a pessoa sem conta nenhuma se identificando no formulário de
   // certificado logo depois do encontro.
   await executar("certificados", () => identificarPorCertificado(sb));
+
+  // Por último entre as três, porque se alimenta do que as outras duas
+  // resolveram: aprende qual conta Google pertence a cada pessoa já
+  // identificada e usa isso para reconhecer os nomes de tela novos dela. É o
+  // que impede que trocar "Andréa" por "Dreh" mande a mesma pessoa de volta
+  // para a fila toda semana.
+  await executar("conta-google", () => identificarPorContaGoogle(sb));
 
   // Sugere, não publica. A aula só existe quando alguém aprovar.
   await executar("aulas", () => sugerirAulasDeGravacoes(sb));

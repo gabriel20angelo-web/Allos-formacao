@@ -81,6 +81,55 @@ export default function AdminEnviosPage() {
   const [importing, setImporting] = useState(false);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [showCertFor, setShowCertFor] = useState<string | null>(null);
+  // Código de verificação por envio, e qual envio está sendo registrado agora.
+  const [codigosEnvio, setCodigosEnvio] = useState<Record<string, string>>({});
+  const [registrandoCert, setRegistrandoCert] = useState<string | null>(null);
+
+  // Abrir o certificado de um envio passou a ser o ato de emitir.
+  //
+  // Antes o preview aparecia na hora e o PDF saía sem rastro nenhum: não havia
+  // como conferir o documento depois, nem como anulá-lo. Agora o registro vem
+  // primeiro e o preview só abre com o código na mão, que é o que vai impresso
+  // no rodapé. A chave é o próprio id do envio, então reabrir a mesma linha
+  // devolve o mesmo certificado em vez de emitir outro.
+  async function abrirCertificado(s: CertificadoSubmission, ch: number) {
+    if (codigosEnvio[s.id]) {
+      setShowCertFor(s.id);
+      return;
+    }
+
+    setRegistrandoCert(s.id);
+    try {
+      const res = await fetch("/formacao/api/admin/certificado-registrar", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          tipo: "formacao",
+          nome: s.nome_social || s.nome_completo,
+          horas: ch,
+          email: s.email,
+          chave: `envio:${s.id}`,
+          detalhes: {
+            atividade: s.atividade_nome,
+            submissao_id: s.id,
+            declarado_em: s.created_at,
+            origem: "envios",
+          },
+        }),
+      });
+      const json = await res.json();
+      if (!res.ok || !json.code) {
+        toast.error(json.error || "Não foi possível registrar o certificado.");
+        return;
+      }
+      setCodigosEnvio((antes) => ({ ...antes, [s.id]: json.code }));
+      setShowCertFor(s.id);
+    } catch {
+      toast.error("Erro de rede ao registrar o certificado.");
+    } finally {
+      setRegistrandoCert(null);
+    }
+  }
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -611,7 +660,14 @@ export default function AdminEnviosPage() {
                                     {showCertFor === s.id ? (
                                       <div className="space-y-3">
                                         <div className="flex items-center justify-between">
-                                          <p className="text-xs text-[#FDFBF7]/40">Certificado de Participação</p>
+                                          <p className="text-xs text-[#FDFBF7]/40">
+                                            Certificado de Participação
+                                            {codigosEnvio[s.id] && (
+                                              <span className="text-emerald-400/70 ml-2">
+                                                {codigosEnvio[s.id]}
+                                              </span>
+                                            )}
+                                          </p>
                                           <button
                                             onClick={() => setShowCertFor(null)}
                                             className="text-xs text-[#FDFBF7]/30 hover:text-[#FDFBF7]/60"
@@ -626,16 +682,20 @@ export default function AdminEnviosPage() {
                                             data: s.created_at.split("T")[0],
                                             cargaHoraria: ch,
                                             cargaHorariaExtenso: horasExtenso(ch),
+                                            codigo: codigosEnvio[s.id],
                                           }}
                                         />
                                       </div>
                                     ) : (
                                       <button
-                                        onClick={() => setShowCertFor(s.id)}
-                                        className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium"
+                                        onClick={() => abrirCertificado(s, ch)}
+                                        disabled={registrandoCert === s.id}
+                                        className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium disabled:opacity-40"
                                       >
                                         <Download size={14} />
-                                        Gerar e baixar certificado
+                                        {registrandoCert === s.id
+                                          ? "Registrando..."
+                                          : "Gerar e baixar certificado"}
                                       </button>
                                     )}
                                   </div>
@@ -773,7 +833,14 @@ export default function AdminEnviosPage() {
                               {showCertFor === s.id ? (
                                 <div className="space-y-3">
                                   <div className="flex items-center justify-between">
-                                    <p className="text-xs text-[#FDFBF7]/40">Certificado de Participação</p>
+                                    <p className="text-xs text-[#FDFBF7]/40">
+                                      Certificado de Participação
+                                      {codigosEnvio[s.id] && (
+                                        <span className="text-emerald-400/70 ml-2">
+                                          {codigosEnvio[s.id]}
+                                        </span>
+                                      )}
+                                    </p>
                                     <button
                                       onClick={() => setShowCertFor(null)}
                                       className="text-xs text-[#FDFBF7]/30 hover:text-[#FDFBF7]/60"
@@ -788,16 +855,20 @@ export default function AdminEnviosPage() {
                                       data: s.created_at.split("T")[0],
                                       cargaHoraria: ch,
                                       cargaHorariaExtenso: horasExtenso(ch),
+                                      codigo: codigosEnvio[s.id],
                                     }}
                                   />
                                 </div>
                               ) : (
                                 <button
-                                  onClick={() => setShowCertFor(s.id)}
-                                  className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium"
+                                  onClick={() => abrirCertificado(s, ch)}
+                                  disabled={registrandoCert === s.id}
+                                  className="flex items-center gap-2 text-xs text-[#C84B31] hover:text-[#C84B31]/80 transition-colors font-dm font-medium disabled:opacity-40"
                                 >
                                   <Download size={14} />
-                                  Gerar e baixar certificado
+                                  {registrandoCert === s.id
+                                    ? "Registrando..."
+                                    : "Gerar e baixar certificado"}
                                 </button>
                               )}
                             </div>

@@ -80,15 +80,23 @@ export default function CertificadoAvulsoPage() {
   const [previewing, setPreviewing] = useState(false);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [signatureImg, setSignatureImg] = useState<HTMLImageElement | null>(null);
+  // Código de verificação do documento já registrado. Vazio enquanto o
+  // certificado é só uma prévia na tela.
+  const [codigo, setCodigo] = useState<string | null>(null);
+  const [registrando, setRegistrando] = useState(false);
 
   useEffect(() => {
     loadImage("/assinatura.jpg").then(setSignatureImg).catch(() => {});
   }, []);
 
+  // O código entra por parâmetro, e não só pelo estado, porque o download
+  // desenha e exporta na mesma função: esperar o React repintar para depois
+  // capturar o canvas é uma corrida que às vezes salva o PDF sem o rodapé.
   const drawCertificate = useCallback(
-    (canvas: HTMLCanvasElement) => {
+    (canvas: HTMLCanvasElement, codigoImpresso?: string | null) => {
       const ctx = canvas.getContext("2d");
       if (!ctx) return;
+      const cod = codigoImpresso !== undefined ? codigoImpresso : codigo;
 
       const W = 1684;
       const H = 1190;
@@ -216,13 +224,38 @@ export default function CertificadoAvulsoPage() {
         const sigY = H - 55 - sigDrawH;
         ctx.drawImage(signatureImg, sx, sy, sw, sh, sigX, sigY, sigDrawW, sigDrawH);
       }
+
+      // Rodapé de verificação, igual ao dos certificados de formação: o código
+      // sozinho não verifica nada se quem recebe não souber onde digitá-lo.
+      if (cod) {
+        ctx.textAlign = "center";
+        ctx.font = "400 15px 'Helvetica Neue', Arial, sans-serif";
+        ctx.fillStyle = "#8a8a8a";
+        ctx.fillText(`Código de verificação: ${cod}`, cx, H - 42);
+        ctx.font = "300 13px 'Helvetica Neue', Arial, sans-serif";
+        ctx.fillStyle = "#aaaaaa";
+        ctx.fillText(
+          "Confira a autenticidade em allos.org.br/formacao/certificado/verificar",
+          cx,
+          H - 24
+        );
+      }
     },
-    [nome, horas, tipo, textoCorpo, data, signatureImg]
+    [nome, horas, tipo, textoCorpo, data, signatureImg, codigo]
   );
 
   useEffect(() => {
     if (previewing && canvasRef.current) drawCertificate(canvasRef.current);
   }, [previewing, drawCertificate]);
+
+  // Mudou qualquer campo, mudou o documento, e o código anterior deixa de valer
+  // para ele. Sem isto, emitir para a segunda pessoa logo depois da primeira
+  // imprimiria no PDF dela o código do certificado da outra, que é o pior tipo
+  // de erro possível aqui: o documento pareceria verificável e apontaria para o
+  // registro errado.
+  useEffect(() => {
+    setCodigo(null);
+  }, [nome, horas, tipo, textoCorpo, data]);
 
   function preview() {
     if (!nome.trim()) {
@@ -232,15 +265,60 @@ export default function CertificadoAvulsoPage() {
     setPreviewing(true);
   }
 
-  function downloadPDF() {
+  // Baixar registra antes de gerar. A declaração avulsa é o documento com menos
+  // amarras da plataforma, feita à mão, com texto livre e para quem quase nunca
+  // tem conta: é justamente o que mais precisa de código para poder ser
+  // conferido depois, e de registro para poder ser anulado se for preciso.
+  async function downloadPDF() {
     const canvas = canvasRef.current;
     if (!canvas) return;
+
+    let cod = codigo;
+
+    if (!cod) {
+      setRegistrando(true);
+      try {
+        const res = await fetch("/formacao/api/admin/certificado-registrar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: "avulso",
+            nome: nome.trim(),
+            horas: parseInt(horas) || null,
+            detalhes: {
+              modalidade: tipo,
+              data_referencia: data,
+              texto: textoCorpo,
+              origem: "certificado-avulso",
+            },
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.code) {
+          toast.error(json.error || "Não foi possível registrar. O PDF não foi gerado.");
+          setRegistrando(false);
+          return;
+        }
+        cod = json.code as string;
+        setCodigo(cod);
+      } catch {
+        toast.error("Erro de rede ao registrar. O PDF não foi gerado.");
+        setRegistrando(false);
+        return;
+      }
+      setRegistrando(false);
+    }
+
+    // Redesenha com o código antes de capturar: o canvas na tela ainda é o de
+    // antes do registro.
+    drawCertificate(canvas, cod);
+
     const imgData = canvas.toDataURL("image/png", 1.0);
     const pdf = new jsPDF({ orientation: "landscape", unit: "mm", format: "a4" });
     pdf.addImage(imgData, "PNG", 0, 0, 297, 210);
     const safeName = nome.replace(/\s+/g, "_") || "Certificado";
     pdf.save(`Certificado_Allos_${safeName}.pdf`);
-    toast.success("PDF baixado!");
+    toast.success(`Certificado registrado com o código ${cod}.`);
   }
 
   return (
@@ -336,13 +414,23 @@ export default function CertificadoAvulsoPage() {
                 {previewing && (
                   <button
                     onClick={downloadPDF}
-                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-dm font-semibold transition-all"
+                    disabled={registrando}
+                    className="flex-1 flex items-center justify-center gap-2 px-4 py-2.5 rounded-lg text-sm font-dm font-semibold transition-all disabled:opacity-40"
                     style={{ background: "rgba(200,75,49,0.12)", color: "#C84B31", border: "1px solid rgba(200,75,49,0.2)" }}
                   >
-                    <Download className="h-4 w-4" /> Baixar PDF
+                    <Download className="h-4 w-4" />
+                    {registrando ? "Registrando..." : "Baixar PDF"}
                   </button>
                 )}
               </div>
+
+              {previewing && (
+                <p className="text-[11px] font-dm text-cream/30 leading-relaxed">
+                  {codigo
+                    ? `Registrado com o código ${codigo}. Baixar de novo devolve o mesmo documento; mudar qualquer campo cria um certificado novo.`
+                    : "Cada download registra um certificado com código verificável, que pode ser conferido publicamente e anulado depois se for preciso."}
+                </p>
+              )}
             </div>
           </Card>
         </motion.div>

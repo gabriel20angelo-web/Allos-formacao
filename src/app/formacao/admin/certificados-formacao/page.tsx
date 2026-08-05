@@ -67,6 +67,9 @@ export default function AdminCertificadosFormacaoPage() {
   const [totalHoras, setTotalHoras] = useState(0);
   const [searched, setSearched] = useState(false);
   const [showPreview, setShowPreview] = useState(false);
+  // Código de verificação por atividade, preenchido no resgate. Enquanto está
+  // vazio, o que a tela mostra é rascunho.
+  const [emitidos, setEmitidos] = useState<Record<string, string>>({});
 
   const fetchAtividades = useCallback(async () => {
     const supabase = createClient();
@@ -91,6 +94,7 @@ export default function AdminCertificadosFormacaoPage() {
     setLoading(true);
     setSearched(true);
     setShowPreview(false);
+    setEmitidos({});
 
     const supabase = createClient();
     const { data, error } = await supabase
@@ -151,9 +155,59 @@ export default function AdminCertificadosFormacaoPage() {
     setLoading(false);
   }, [search, atividades]);
 
+  // Resgatar é o momento em que o documento passa a existir de verdade, então é
+  // aqui que ele ganha registro e código. A ordem importa: registra primeiro,
+  // marca os booleans depois. Se o registro falhar no meio, nada é marcado como
+  // resgatado e a pessoa continua na fila, o que é recuperável; o contrário
+  // deixaria alguém com o certificado dado por entregue e sem rastro nenhum.
   const handleClaim = useCallback(async () => {
     if (!personName) return;
     setClaiming(true);
+
+    const emailDaPessoa = submissions[0]?.email ?? null;
+    const codigos: Record<string, string> = {};
+
+    for (const [atividade, info] of Object.entries(breakdown)) {
+      // A chave carrega o período: quem cursa a mesma atividade num semestre
+      // novo resgata um certificado novo, e quem clica duas vezes no mesmo
+      // resgate recebe o mesmo código de volta.
+      const chave = `formacao:${personName}:${atividade}:${info.dataInicio}:${info.dataFim}`;
+
+      try {
+        const res = await fetch("/formacao/api/admin/certificado-registrar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            tipo: "formacao",
+            nome: personName,
+            horas: info.horas,
+            email: emailDaPessoa,
+            chave,
+            detalhes: {
+              atividade,
+              presencas: info.count,
+              periodo_inicio: info.dataInicio,
+              periodo_fim: info.dataFim,
+              origem: "certificados-formacao",
+            },
+          }),
+        });
+        const json = await res.json();
+        if (!res.ok || !json.code) {
+          toast.error(
+            json.error ||
+              `Não foi possível registrar o certificado de ${atividade}. Nada foi resgatado.`
+          );
+          setClaiming(false);
+          return;
+        }
+        codigos[atividade] = json.code;
+      } catch {
+        toast.error("Erro de rede ao registrar. Nada foi resgatado.");
+        setClaiming(false);
+        return;
+      }
+    }
 
     const supabase = createClient();
     const { error } = await supabase
@@ -168,16 +222,15 @@ export default function AdminCertificadosFormacaoPage() {
       return;
     }
 
-    toast.success("Certificados resgatados com sucesso!");
+    // A tela não é mais limpa no fim. O certificado com código só existe depois
+    // do resgate, e limpar aqui obrigaria a baixar o PDF antes de ele estar
+    // pronto, que era o que acontecia: a pré-visualização era o único momento
+    // de baixar, e o que saía dali não tinha registro.
+    setEmitidos(codigos);
+    setShowPreview(true);
     setClaiming(false);
-    setSubmissions([]);
-    setBreakdown({});
-    setTotalHoras(0);
-    setPersonName("");
-    setSearch("");
-    setSearched(false);
-    setShowPreview(false);
-  }, [personName]);
+    toast.success("Certificados registrados. Agora eles têm código de verificação.");
+  }, [personName, breakdown, submissions]);
 
   if (!isAdmin) {
     return (
@@ -382,14 +435,22 @@ export default function AdminCertificadosFormacaoPage() {
                     variant="secondary"
                   >
                     <Award className="mr-2 h-4 w-4" />
-                    {showPreview ? "Ocultar pré-visualização" : "Pré-visualizar certificados"}
+                    {showPreview ? "Ocultar certificados" : "Pré-visualizar certificados"}
                   </Button>
 
-                  <Button onClick={handleClaim} disabled={claiming}>
-                    <FileCheck className="mr-2 h-4 w-4" />
-                    {claiming ? "Resgatando..." : "Resgatar certificados"}
-                  </Button>
+                  {Object.keys(emitidos).length === 0 && (
+                    <Button onClick={handleClaim} disabled={claiming}>
+                      <FileCheck className="mr-2 h-4 w-4" />
+                      {claiming ? "Registrando..." : "Resgatar certificados"}
+                    </Button>
+                  )}
                 </div>
+
+                <p className="font-dm text-xs text-zinc-500 leading-relaxed">
+                  {Object.keys(emitidos).length > 0
+                    ? "Certificados registrados. Os PDFs abaixo já saem com o código impresso no rodapé e podem ser conferidos por quem recebe."
+                    : "A pré-visualização é rascunho e sai sem código. O código de verificação nasce no resgate, e é ele que permite conferir o documento depois."}
+                </p>
 
                 {/* Certificate previews */}
                 <AnimatePresence>
@@ -405,9 +466,16 @@ export default function AdminCertificadosFormacaoPage() {
                           key={activityName}
                           className="rounded-lg border border-zinc-700/50 bg-zinc-800/30 p-4"
                         >
-                          <h3 className="mb-3 font-fraunces text-sm font-semibold text-zinc-200">
-                            {activityName}
-                          </h3>
+                          <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                            <h3 className="font-fraunces text-sm font-semibold text-zinc-200">
+                              {activityName}
+                            </h3>
+                            {emitidos[activityName] && (
+                              <span className="font-dm text-[11px] text-emerald-400/80">
+                                {emitidos[activityName]}
+                              </span>
+                            )}
+                          </div>
                           <CertificateGenerator
                             data={{
                               nomeParticipante: personName,
@@ -416,6 +484,7 @@ export default function AdminCertificadosFormacaoPage() {
                               dataFim: info.dataFim,
                               cargaHoraria: info.horas,
                               cargaHorariaExtenso: horasExtenso(info.horas),
+                              codigo: emitidos[activityName],
                             }}
                           />
                         </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useMemo } from "react";
+import { useEffect, useState, useMemo, useCallback } from "react";
 import dynamic from "next/dynamic";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -10,6 +10,7 @@ import { Search, ChevronDown, Award, Clock } from "lucide-react";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import VerificacoesTab from "@/components/admin/certificados/VerificacoesTab";
 import OcorrenciasTab from "@/components/admin/certificados/OcorrenciasTab";
+import AnularCertificado from "@/components/admin/certificados/AnularCertificado";
 import { formatDate } from "@/lib/utils/format";
 import type { Certificate } from "@/types";
 
@@ -30,6 +31,56 @@ interface Pendente {
   curso: string;
 }
 
+/**
+ * Quem é o titular, com ou sem conta.
+ *
+ * O certificado de curso aponta para um perfil; os outros dois carregam o nome
+ * escrito pela própria pessoa no formulário, porque a maioria de quem participa
+ * dos grupos não tem cadastro. Sem esta ordem a lista mostraria linhas em
+ * branco justamente para os documentos novos.
+ */
+function nomeDoTitular(cert: Certificate): string {
+  return cert.user?.full_name || cert.nome_certificado || "Titular não identificado";
+}
+
+/** A que o documento se refere: o curso, ou o que foi gravado na emissão. */
+function objetoDoCertificado(cert: Certificate): string {
+  if (cert.course?.title) return cert.course.title;
+  const detalhes = cert.detalhes as { atividade?: string; modalidade?: string } | null;
+  if (detalhes?.atividade) return detalhes.atividade;
+  if (detalhes?.modalidade) return `Declaração de ${detalhes.modalidade}`;
+  if (cert.horas) return `${cert.horas} horas`;
+  return "-";
+}
+
+const ROTULO_TIPO: Record<string, string> = {
+  curso: "Curso",
+  formacao: "Formação",
+  avulso: "Avulso",
+};
+
+const COR_TIPO: Record<string, string> = {
+  curso: "rgba(200,75,49,0.85)",
+  formacao: "rgba(46,158,143,0.9)",
+  avulso: "rgba(245,158,11,0.9)",
+};
+
+function EtiquetaTipo({ tipo }: { tipo?: string }) {
+  const t = tipo || "curso";
+  return (
+    <span
+      className="inline-block px-2 py-0.5 rounded-full text-[10px] font-medium"
+      style={{
+        color: COR_TIPO[t] || COR_TIPO.curso,
+        border: `1px solid ${COR_TIPO[t] || COR_TIPO.curso}`,
+        opacity: 0.85,
+      }}
+    >
+      {ROTULO_TIPO[t] || t}
+    </span>
+  );
+}
+
 export default function AdminCertificadosPage() {
   const { profile, isAdmin } = useAuth();
   const [certificates, setCertificates] = useState<Certificate[]>([]);
@@ -45,10 +96,13 @@ export default function AdminCertificadosPage() {
 
   const [courses, setCourses] = useState<CourseOption[]>([]);
   const [selectedCourseId, setSelectedCourseId] = useState<string>("all");
+  const [tipoFiltro, setTipoFiltro] = useState<"todos" | "curso" | "formacao" | "avulso">("todos");
   const [dateFrom, setDateFrom] = useState("");
   const [dateTo, setDateTo] = useState("");
 
-  useEffect(() => {
+  // A carga virou função nomeada porque a anulação precisa recarregar a lista:
+  // sem isso a linha continuaria com a cara de válida até a próxima visita.
+  const load = useCallback(
     async function load() {
       if (!profile) {
         setLoading(false);
@@ -80,6 +134,9 @@ export default function AdminCertificadosPage() {
       ]);
 
       if (certRes.data) {
+        // Instrutor vê o que é dos cursos dele. Certificado de formação e
+        // declaração avulsa não têm curso, então ficam de fora por construção,
+        // que é o certo: não são documentos do trabalho dele.
         const filtered = isAdmin
           ? certRes.data
           : certRes.data.filter((c) => c.course?.instructor_id === profile.id);
@@ -118,21 +175,35 @@ export default function AdminCertificadosPage() {
       );
 
       setLoading(false);
-    }
+    },
+    [profile, isAdmin]
+  );
+
+  useEffect(() => {
     load().catch(() => setLoading(false));
-  }, [profile, isAdmin]);
+  }, [load]);
 
   const filtered = useMemo(() => {
     let result = certificates;
 
     if (search) {
       const s = search.toLowerCase();
+      // O nome gravado entra na busca junto com o do perfil: quem recebeu
+      // certificado de formação em geral não tem conta, e procurar por essa
+      // pessoa é exatamente o caso de uso desta tela quando chega uma dúvida
+      // por e-mail.
       result = result.filter(
         (c) =>
           c.user?.full_name?.toLowerCase().includes(s) ||
           c.user?.email?.toLowerCase().includes(s) ||
+          c.nome_certificado?.toLowerCase().includes(s) ||
+          c.certificate_code?.toLowerCase().includes(s) ||
           c.course?.title?.toLowerCase().includes(s)
       );
+    }
+
+    if (tipoFiltro !== "todos") {
+      result = result.filter((c) => (c.tipo || "curso") === tipoFiltro);
     }
 
     if (selectedCourseId !== "all") {
@@ -147,7 +218,7 @@ export default function AdminCertificadosPage() {
     }
 
     return result;
-  }, [certificates, search, selectedCourseId, dateFrom, dateTo]);
+  }, [certificates, search, selectedCourseId, dateFrom, dateTo, tipoFiltro]);
 
   const uniqueCourses = useMemo(() => {
     const ids = new Set(certificates.map((c) => c.course_id));
@@ -323,12 +394,27 @@ export default function AdminCertificadosPage() {
           <Search className="absolute left-4 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
           <input
             type="text"
-            placeholder="Buscar por aluno, email ou curso..."
+            placeholder="Buscar por titular, email, código ou curso..."
             value={search}
             onChange={(e) => setSearch(e.target.value)}
             className="w-full pl-11 pr-4 py-2.5 dark-input rounded-[10px] text-sm"
             aria-label="Buscar certificados"
           />
+        </div>
+
+        <div className="relative w-full sm:w-auto">
+          <select
+            value={tipoFiltro}
+            onChange={(e) => setTipoFiltro(e.target.value as typeof tipoFiltro)}
+            className="appearance-none w-full sm:w-auto pl-4 pr-9 py-2.5 rounded-[10px] text-sm text-cream bg-transparent cursor-pointer focus:outline-none focus:ring-1 focus:ring-accent/40"
+            style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)" }}
+          >
+            <option value="todos" className="bg-[#1a1a1a] text-cream">Todos os tipos</option>
+            <option value="curso" className="bg-[#1a1a1a] text-cream">Curso</option>
+            <option value="formacao" className="bg-[#1a1a1a] text-cream">Formação</option>
+            <option value="avulso" className="bg-[#1a1a1a] text-cream">Avulso</option>
+          </select>
+          <ChevronDown className="absolute right-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-cream/30 pointer-events-none" />
         </div>
 
         <div className="relative w-full sm:w-auto">
@@ -429,10 +515,11 @@ export default function AdminCertificadosPage() {
           <table className="w-full text-sm">
             <thead>
               <tr style={{ borderBottom: "1px solid rgba(255,255,255,0.06)", background: "rgba(255,255,255,0.02)" }}>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50">Aluno</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50">Email</th>
-                <th className="text-left px-4 py-3 font-semibold text-cream/50">Curso</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Titular</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Documento</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Código</th>
                 <th className="text-left px-4 py-3 font-semibold text-cream/50">Emissão</th>
+                <th className="text-left px-4 py-3 font-semibold text-cream/50">Situação</th>
               </tr>
             </thead>
             <tbody>
@@ -446,24 +533,46 @@ export default function AdminCertificadosPage() {
                     <button
                       onClick={() =>
                         setPessoaAberta({
-                          nome: cert.user?.full_name || "Aluno",
+                          nome: nomeDoTitular(cert),
                           email: cert.user?.email || undefined,
                         })
                       }
-                      className="hover:underline decoration-dotted underline-offset-2"
+                      className="hover:underline decoration-dotted underline-offset-2 text-left"
                       title="Ver tudo o que essa pessoa fez"
                     >
-                      {cert.user?.full_name}
+                      {nomeDoTitular(cert)}
                     </button>
+                    {cert.user?.email && (
+                      <p className="text-xs text-cream/30 mt-0.5">{cert.user.email}</p>
+                    )}
+                    {!cert.user_id && (
+                      <p className="text-xs text-cream/25 mt-0.5">sem conta na plataforma</p>
+                    )}
                   </td>
-                  <td className="px-4 py-3 text-cream/40">{cert.user?.email}</td>
-                  <td className="px-4 py-3 text-cream/40">{cert.course?.title}</td>
+                  <td className="px-4 py-3 text-cream/40">
+                    <EtiquetaTipo tipo={cert.tipo} />
+                    <p className="text-xs text-cream/40 mt-1">{objetoDoCertificado(cert)}</p>
+                  </td>
+                  <td className="px-4 py-3 text-cream/40 text-xs font-mono">{cert.certificate_code}</td>
                   <td className="px-4 py-3 text-cream/30 text-xs">{formatDate(cert.issued_at)}</td>
+                  <td className="px-4 py-3">
+                    {cert.anulado && (
+                      <p className="text-xs mb-1.5" style={{ color: "rgba(239,68,68,0.85)" }}>
+                        Anulado em {formatDate(cert.anulado_em || cert.issued_at)}
+                      </p>
+                    )}
+                    <AnularCertificado
+                      certificateId={cert.id}
+                      codigo={cert.certificate_code}
+                      anulado={!!cert.anulado}
+                      onMudou={() => load()}
+                    />
+                  </td>
                 </tr>
               ))}
               {filtered.length === 0 && (
                 <tr>
-                  <td colSpan={4} className="px-4 py-8 text-center text-cream/35">
+                  <td colSpan={5} className="px-4 py-8 text-center text-cream/35">
                     Nenhum certificado encontrado.
                   </td>
                 </tr>
@@ -484,11 +593,28 @@ export default function AdminCertificadosPage() {
             style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}
           >
             <div className="flex items-start justify-between gap-2 mb-1">
-              <span className="text-sm text-cream font-medium leading-snug">{cert.user?.full_name}</span>
+              <span className="text-sm text-cream font-medium leading-snug">{nomeDoTitular(cert)}</span>
               <span className="text-xs text-cream/30 whitespace-nowrap shrink-0">{formatDate(cert.issued_at)}</span>
             </div>
-            <p className="text-xs text-cream/40 mb-1 truncate">{cert.user?.email}</p>
-            <p className="text-xs text-cream/50">{cert.course?.title}</p>
+            {cert.user?.email && (
+              <p className="text-xs text-cream/40 mb-1 truncate">{cert.user.email}</p>
+            )}
+            <div className="flex flex-wrap items-center gap-2 mb-1.5">
+              <EtiquetaTipo tipo={cert.tipo} />
+              <span className="text-xs text-cream/50">{objetoDoCertificado(cert)}</span>
+            </div>
+            <p className="text-[11px] text-cream/30 font-mono mb-2">{cert.certificate_code}</p>
+            {cert.anulado && (
+              <p className="text-xs mb-1.5" style={{ color: "rgba(239,68,68,0.85)" }}>
+                Anulado em {formatDate(cert.anulado_em || cert.issued_at)}
+              </p>
+            )}
+            <AnularCertificado
+              certificateId={cert.id}
+              codigo={cert.certificate_code}
+              anulado={!!cert.anulado}
+              onMudou={() => load()}
+            />
           </div>
         ))}
         {filtered.length === 0 && (

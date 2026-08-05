@@ -431,7 +431,7 @@ async function ligarAliasesAContaNova(sb: Sb): Promise<number> {
  * concluído. Sem refazer aqui, ligar dez pessoas a contas deixaria o cabeçalho
  * do encontro dizendo o número de antes — para sempre, e sem erro nenhum.
  */
-async function recontarIdentificados(sb: Sb, encontroIds: string[]): Promise<void> {
+export async function recontarIdentificados(sb: Sb, encontroIds: string[]): Promise<void> {
   for (const id of encontroIds) {
     const { count } = await sb
       .from("formacao_meet_participacoes")

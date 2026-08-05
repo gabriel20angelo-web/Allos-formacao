@@ -11,6 +11,14 @@ interface CertificateData {
   tipo?: 'participação' | 'conclusão' | 'supervisão' | 'palestra' | 'organização'
   cargaHoraria?: number
   cargaHorariaExtenso?: string
+  /**
+   * Código de verificação, quando o certificado já foi registrado.
+   *
+   * Vem vazio na pré-visualização, que é rascunho e não deve carregar um código
+   * que ainda não existe no banco. Depois do registro, o mesmo componente
+   * redesenha com o código no rodapé, e é esse PDF que a pessoa leva.
+   */
+  codigo?: string
 }
 
 interface CertificateGeneratorProps {
@@ -192,6 +200,31 @@ export default function CertificateGenerator({ data, onReady }: CertificateGener
       const sigX = cx - sigDrawW / 2
       const sigY = h - 55 - sigDrawH
       ctx.drawImage(signatureImg, sx, sy, sw, sh, sigX, sigY, sigDrawW, sigDrawH)
+    }
+
+    // Rodapé de verificação.
+    //
+    // Sem o código impresso, o registro no banco serve à Allos e não serve a
+    // quem recebeu o documento: para conferir seria preciso pedir o código a
+    // quem emitiu, e aí a conferência deixa de ser independente. O endereço vai
+    // junto pelo mesmo motivo, porque um código sem onde digitá-lo não verifica
+    // nada.
+    if (data.codigo) {
+      ctx.textAlign = 'center'
+      ctx.font = '400 15px "Helvetica Neue", Arial, sans-serif'
+      ctx.fillStyle = '#8a8a8a'
+      ctx.fillText(
+        `Código de verificação: ${data.codigo}`,
+        cx,
+        h - 42
+      )
+      ctx.font = '300 13px "Helvetica Neue", Arial, sans-serif'
+      ctx.fillStyle = '#aaaaaa'
+      ctx.fillText(
+        'Confira a autenticidade em allos.org.br/formacao/certificado/verificar',
+        cx,
+        h - 24
+      )
     }
   }, [data, signatureImg])
 

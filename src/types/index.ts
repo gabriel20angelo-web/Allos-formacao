@@ -194,12 +194,24 @@ export interface ExamAnswer {
 }
 
 export interface Certificate {
+  // user_id e course_id admitem ausência desde a unificação dos três
+  // certificados: o de formação costuma ser de quem não tem conta, e a
+  // declaração avulsa não se refere a curso nenhum.
   id: string;
-  user_id: string;
-  course_id: string;
+  user_id: string | null;
+  course_id: string | null;
   certificate_code: string;
   issued_at: string;
   pdf_url: string | null;
+  tipo?: "curso" | "formacao" | "avulso";
+  horas?: number | null;
+  /** Nome impresso no documento, para titular sem conta. */
+  nome_certificado?: string | null;
+  detalhes?: Record<string, unknown> | null;
+  anulado?: boolean | null;
+  anulado_em?: string | null;
+  anulado_motivo?: string | null;
+  anulado_por?: string | null;
   // Relations
   user?: Profile;
   course?: Course;
