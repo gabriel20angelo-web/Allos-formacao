@@ -7,22 +7,59 @@
 // As janelas são móveis (últimos N dias contando hoje), não de calendário —
 // é o que permite responder "depois da divulgação de terça, quem apareceu?".
 
-export type ActivityRange = "today" | "7d" | "30d" | "90d" | "6m" | "1y" | "all";
+export type ActivityRange =
+  | "today"
+  | "7d"
+  | "15d"
+  | "30d"
+  | "60d"
+  | "90d"
+  | "6m"
+  | "1y"
+  | "all";
 
+/**
+ * Tudo que o tipo aceita. Serve para validar o que chega por URL, e não para
+ * desenhar seletor: quem desenha seletor usa `JANELAS_PAINEL`.
+ */
 export const ACTIVITY_RANGES: ActivityRange[] = [
   "today",
   "7d",
+  "15d",
   "30d",
+  "60d",
   "90d",
   "6m",
   "1y",
   "all",
 ];
 
+/**
+ * As janelas que o painel oferece: hoje, 15, 30, 60, 90 e tudo.
+ *
+ * São seis e não nove porque um seletor com nove botões vira paisagem, e
+ * porque as três que saíram não decidiam nada aqui: 7 dias é ruído numa
+ * formação que se encontra uma vez por semana, e 6 meses e 1 ano devolvem
+ * praticamente o mesmo conjunto que "tudo" numa base que começou em abril.
+ *
+ * Os três valores continuam existindo no tipo porque a rota pública de ranking
+ * aceita `?period=` e endereços antigos ainda podem trazê-los.
+ */
+export const JANELAS_PAINEL: ActivityRange[] = [
+  "today",
+  "15d",
+  "30d",
+  "60d",
+  "90d",
+  "all",
+];
+
 export const RANGE_LABELS: Record<ActivityRange, string> = {
   today: "Hoje",
   "7d": "7 dias",
+  "15d": "15 dias",
   "30d": "30 dias",
+  "60d": "60 dias",
   "90d": "90 dias",
   "6m": "6 meses",
   "1y": "1 ano",
@@ -33,7 +70,9 @@ export const RANGE_LABELS: Record<ActivityRange, string> = {
 export const RANGE_PREVIOUS_LABELS: Record<ActivityRange, string> = {
   today: "vs. ontem",
   "7d": "vs. os 7 dias anteriores",
+  "15d": "vs. os 15 dias anteriores",
   "30d": "vs. os 30 dias anteriores",
+  "60d": "vs. os 60 dias anteriores",
   "90d": "vs. os 90 dias anteriores",
   "6m": "vs. os 6 meses anteriores",
   "1y": "vs. o ano anterior",
@@ -54,8 +93,12 @@ export function getRangeStart(range: ActivityRange, now = new Date()): Date | nu
       return today;
     case "7d":
       return startOfDay(new Date(today.getTime() - 6 * 86400000));
+    case "15d":
+      return startOfDay(new Date(today.getTime() - 14 * 86400000));
     case "30d":
       return startOfDay(new Date(today.getTime() - 29 * 86400000));
+    case "60d":
+      return startOfDay(new Date(today.getTime() - 59 * 86400000));
     case "90d":
       return startOfDay(new Date(today.getTime() - 89 * 86400000));
     case "6m": {
@@ -71,6 +114,25 @@ export function getRangeStart(range: ActivityRange, now = new Date()): Date | nu
     case "all":
       return null;
   }
+}
+
+/**
+ * A janela em dias corridos, para quem fala em número e não em data.
+ *
+ * É o caso das rotas que recebem `?dias=`. Existe porque a conversão vivia
+ * espalhada em ternários que só conheciam algumas janelas e mandavam o resto
+ * para um valor de fallback, e um fallback silencioso aqui não parece erro:
+ * devolve um número plausível sobre o período errado.
+ *
+ * "Tudo" vira um número grande em vez de nulo porque as rotas que consomem
+ * isto esperam um inteiro. Dez anos cobre a base inteira com folga.
+ */
+export function janelaEmDias(range: ActivityRange, now = new Date()): number {
+  if (range === "all") return 3650;
+  const inicio = getRangeStart(range, now);
+  if (!inicio) return 3650;
+  const dias = Math.ceil((startOfDay(now).getTime() - inicio.getTime()) / 86400000) + 1;
+  return Math.max(1, dias);
 }
 
 /**

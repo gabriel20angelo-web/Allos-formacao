@@ -28,16 +28,16 @@ import {
   type DashMode,
 } from "@/lib/utils/dashboard";
 import {
-  ACTIVITY_RANGES,
+  JANELAS_PAINEL,
   RANGE_LABELS,
   getRangeStart,
+  janelaEmDias,
   type ActivityRange,
   type TimelineEvent,
 } from "@/lib/utils/activity";
 import { anotarPresencaMedida, carregarEventosDeEncontros } from "@/lib/meet/eventos";
 import StatStrip from "@/components/admin/dashboard/StatStrip";
 import HintButton from "@/components/admin/dashboard/HintButton";
-import RankingCard from "@/components/admin/dashboard/RankingCard";
 import ActivityTimeline from "@/components/admin/dashboard/ActivityTimeline";
 import SinaisAtencao from "@/components/admin/dashboard/SinaisAtencao";
 import EmailsEnviados from "@/components/admin/dashboard/EmailsEnviados";
@@ -46,16 +46,55 @@ import AdminNotesSection from "@/components/admin/dashboard/AdminNotesSection";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
+import Link from "next/link";
 import {
   Award,
   Star,
-  UserX,
+  Users,
   TrendingUp,
-  Trophy,
-  Activity,
   BarChart3,
   Flame,
 } from "lucide-react";
+
+// ═══════════════════════════════════════════════════════════════
+// Leitura paginada
+// ═══════════════════════════════════════════════════════════════
+
+/**
+ * Lê a tabela inteira, de mil em mil.
+ *
+ * O PostgREST desta instância devolve no máximo mil linhas e NÃO avisa que
+ * cortou: a resposta chega com status 200 e a tela passa a mostrar números
+ * menores que a verdade, sem nenhum sintoma. Pior, o sintoma que ele produz
+ * (menos participação, menos progresso) é exatamente o diagnóstico que o
+ * painel existe para dar, então o erro se disfarça de descoberta.
+ *
+ * O teto de páginas existe para que um filtro errado não vire varredura
+ * infinita. A ordenação é por chave estável, senão a paginação repete e pula
+ * linhas entre uma página e outra.
+ */
+async function lerTudo<T>(
+  sb: ReturnType<typeof createClient>,
+  tabela: string,
+  colunas: string,
+  ordenarPor = "id",
+): Promise<T[]> {
+  const PAGINA = 1000;
+  const TETO = 50;
+  const out: T[] = [];
+  for (let p = 0; p < TETO; p++) {
+    const { data, error } = await sb
+      .from(tabela)
+      .select(colunas)
+      .order(ordenarPor, { ascending: true })
+      .range(p * PAGINA, p * PAGINA + PAGINA - 1);
+    if (error) throw new Error(`${tabela}: ${error.message}`);
+    const lote = (data ?? []) as T[];
+    out.push(...lote);
+    if (lote.length < PAGINA) break;
+  }
+  return out;
+}
 
 // ═══════════════════════════════════════════════════════════════
 // Types
@@ -63,13 +102,10 @@ import {
 
 interface DashboardStats {
   totalCourses: number;
-  totalStudents: number;
   totalCertificates: number;
-  avgRating: number;
   completionRate: number;
   totalRevenue: number;
   hasRevenue: boolean;
-  inactiveStudents: number;
 }
 
 // ─── Tipos locais pras queries Supabase ─────────────────────────────────
@@ -97,8 +133,6 @@ type ReviewJoinRow = {
 };
 
 type PaidEnrollmentRow = { courses?: { price_cents: number | null } | null };
-
-type AtividadeRow = { nome: string; carga_horaria: number };
 
 // ─── Fontes da timeline assíncrona ──────────────────────────────────────
 type NamedUser = { full_name: string | null; email?: string | null } | null;
@@ -168,7 +202,6 @@ export default function AdminDashboard() {
   const [asyncEngagement, setAsyncEngagement] = useState<{
     avgProgress: number;
     topCourses: { title: string; slug: string; watchCount: number; avgProgress: number }[];
-    topViewers: { name: string; lessonsWatched: number; hoursWatched: number }[];
   } | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -179,7 +212,9 @@ export default function AdminDashboard() {
   const [formacaoStats, setFormacaoStats] = useState<{
     totalFeedbacks: number;
     avgNotaGrupo: number;
+    /** Só as submissões que tinham condutor a avaliar. Ver o cálculo. */
     avgNotaCondutor: number;
+    notasDeCondutor: number;
     totalRelatos: number;
     topCondutores: {
       name: string;
@@ -187,18 +222,10 @@ export default function AdminDashboard() {
       count: number;
       relatos: { text: string; date: string }[];
     }[];
-    topParticipantes: { nome: string; horas: number; count: number }[];
     activityDist: { name: string; count: number }[];
-    avgFrequencyPerStudent: number;
-    uniqueParticipants: number;
-    activeStudents: number;
-    inactiveStudents: number;
-    retentionRate: number;
-    newStudentsThisPeriod: number;
+    atividadesOcultas: number;
     topGroups: { name: string; avgNota: number; count: number }[];
     ratingDistribution: { rating: number; count: number }[];
-    conductorRatingDist: { rating: number; count: number }[];
-    retentionByMonth: { month: string; active: number; churned: number }[];
   } | null>(null);
   const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null);
 
@@ -256,19 +283,19 @@ export default function AdminDashboard() {
       const { data: courseIds, count: courseCount } = await coursesQuery;
       const ids = courseIds?.map((c) => c.id) || [];
 
+      // Continua existindo mesmo tendo saído da tela: é o denominador da
+      // taxa de conclusão. O que saiu foi exibi-lo como "alunos matriculados",
+      // porque ele conta linhas de matrícula e não pessoas.
       let studentCount = 0;
       let certCount = 0;
-      let avgRating = 0;
       let completionRate = 0;
       let totalRevenue = 0;
       let hasRevenue = false;
-      let inactiveStudents = 0;
 
       if (ids.length > 0) {
         const [
           studentsRes,
           certsRes,
-          reviewsRes,
           completedRes,
           paidEnrollmentsRes,
         ] = await Promise.all([
@@ -280,7 +307,6 @@ export default function AdminDashboard() {
             .from("certificates")
             .select("*", { count: "exact", head: true })
             .in("course_id", ids),
-          supabase.from("reviews").select("rating").in("course_id", ids),
           supabase
             .from("enrollments")
             .select("*", { count: "exact", head: true })
@@ -297,12 +323,6 @@ export default function AdminDashboard() {
         certCount = certsRes.count || 0;
         const completedCount = completedRes.count || 0;
 
-        if (reviewsRes.data && reviewsRes.data.length > 0) {
-          avgRating =
-            reviewsRes.data.reduce((sum, r) => sum + r.rating, 0) /
-            reviewsRes.data.length;
-        }
-
         if (studentCount > 0) {
           completionRate = (completedCount / studentCount) * 100;
         }
@@ -316,27 +336,14 @@ export default function AdminDashboard() {
           hasRevenue = totalRevenue > 0;
         }
 
-        // Inactive students: enrolled > 30 days ago, not completed
-        const thirtyDaysAgo = new Date();
-        thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-        const { count: inactiveCount } = await supabase
-          .from("enrollments")
-          .select("*", { count: "exact", head: true })
-          .in("course_id", ids)
-          .neq("status", "completed")
-          .lt("enrolled_at", thirtyDaysAgo.toISOString());
-        inactiveStudents = inactiveCount || 0;
       }
 
       setStats({
         totalCourses: courseCount || 0,
-        totalStudents: studentCount,
         totalCertificates: certCount,
-        avgRating,
         completionRate,
         totalRevenue,
         hasRevenue,
-        inactiveStudents,
       });
 
       setLoading(false);
@@ -684,19 +691,13 @@ export default function AdminDashboard() {
 
       if (!progress || progress.length === 0) return;
 
-      // Lessons + profiles em paralelo (ambos só dependem de progress).
+      // A leitura de perfis saiu junto com o pódio de espectadores: ela
+      // existia só para trocar id por nome naquela lista.
       const lessonIds = Array.from(new Set(progress.map(p => p.lesson_id)));
-      const userIdsForProgress = Array.from(new Set(progress.map(p => p.user_id)));
-      const [{ data: lessons }, { data: profilesData }] = await Promise.all([
-        supabase
-          .from("lessons")
-          .select("id, section_id, duration_minutes")
-          .in("id", lessonIds),
-        supabase
-          .from("profiles")
-          .select("id, full_name")
-          .in("id", userIdsForProgress),
-      ]);
+      const { data: lessons } = await supabase
+        .from("lessons")
+        .select("id, section_id")
+        .in("id", lessonIds);
 
       if (!lessons) return;
 
@@ -719,7 +720,6 @@ export default function AdminDashboard() {
       // Build maps
       const sectionToCourse = new Map(sections.map(s => [s.id, s.course_id]));
       const lessonToSection = new Map(lessons.map(l => [l.id, l.section_id]));
-      const lessonDuration = new Map(lessons.map(l => [l.id, l.duration_minutes || 0]));
       const courseMap = new Map(courses.map(c => [c.id, c]));
 
       // Total lessons per course
@@ -784,27 +784,11 @@ export default function AdminDashboard() {
         .sort((a, b) => b.watchCount - a.watchCount)
         .slice(0, 5);
 
-      // Top viewers (users) — profiles já buscado em paralelo lá em cima.
-      const nameMap = new Map((profilesData || []).map(p => [p.id, p.full_name]));
-
-      const userStats = new Map<string, { lessonsWatched: number; minutes: number }>();
-      progress.filter(p => p.completed).forEach(p => {
-        const e = userStats.get(p.user_id) || { lessonsWatched: 0, minutes: 0 };
-        e.lessonsWatched++;
-        e.minutes += lessonDuration.get(p.lesson_id) || 0;
-        userStats.set(p.user_id, e);
-      });
-
-      const topViewers = Array.from(userStats.entries())
-        .map(([uid, d]) => ({
-          name: nameMap.get(uid) || "?",
-          lessonsWatched: d.lessonsWatched,
-          hoursWatched: Math.round(d.minutes / 60 * 10) / 10,
-        }))
-        .sort((a, b) => b.lessonsWatched - a.lessonsWatched)
-        .slice(0, 5);
-
-      setAsyncEngagement({ avgProgress, topCourses, topViewers });
+      // O pódio de espectadores saiu daqui: aulas assistidas e horas de
+      // plataforma agora são duas das ordenações da tabela de
+      // /formacao/admin/pessoas, onde a mesma pessoa aparece com o que fez nos
+      // grupos e nos cursos na mesma linha.
+      setAsyncEngagement({ avgProgress, topCourses });
     }
     if (profile) fetchEngagement();
   }, [profile]);
@@ -830,22 +814,21 @@ export default function AdminDashboard() {
         // então ela é do mesmo tipo de informação que o feedback, e ver uma sem
         // a outra é o que faz alguém parecer ausente por não ter preenchido
         // formulário, ou presente por ter preenchido dois.
-        const [subsRes, atividadesRes] = await Promise.all([
-          // submissions stay unfiltered here — the inactive/retention math
-          // below needs the full participant history to detect first/last
-          // appearance per person.
-          supabase
-            .from("certificado_submissions")
-            .select(
-              "id, nome_completo, email, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at"
-            ),
-          supabase
-            .from("certificado_atividades")
-            .select("nome, carga_horaria"),
-        ]);
-
-        const allSubs = (subsRes.data ?? []) as SubmissionRow[];
-        const atividades = (atividadesRes.data ?? []) as AtividadeRow[];
+        // Sem filtro de data: a timeline recorta a janela sozinha e precisa do
+        // histórico inteiro. Paginado porque o PostgREST corta em mil linhas
+        // sem avisar, e esta é a fonte de toda a aba síncrona: um corte aqui
+        // erraria feedbacks, médias, condutores e distribuição de uma vez só,
+        // todos para menos e sem nenhum sintoma na tela.
+        //
+        // O catálogo de atividades saiu daqui junto com o ranking de horas: as
+        // 19 atividades cadastradas valem 2 horas cada, então converter
+        // participação em hora era multiplicar tudo por dois e chamar de outra
+        // métrica.
+        const allSubs = await lerTudo<SubmissionRow>(
+          supabase,
+          "certificado_submissions",
+          "id, nome_completo, email, atividade_nome, nota_grupo, nota_condutor, condutores, relato, created_at",
+        );
 
         const eventosDeclarados: TimelineEvent[] = allSubs.map((s) => {
           const condutores = (s.condutores || []).filter(Boolean);
@@ -892,14 +875,30 @@ export default function AdminDashboard() {
         );
 
         const total = subs.length;
-        const avgG =
-          total > 0
-            ? subs.reduce((a, x) => a + (x.nota_grupo || 0), 0) / total
-            : 0;
-        const avgC =
-          total > 0
-            ? subs.reduce((a, x) => a + (x.nota_condutor || 0), 0) / total
-            : 0;
+
+        // Feedback sem nota fica fora do numerador E do denominador. Somar
+        // zero e dividir por todo mundo é a receita de uma média que cai
+        // sozinha toda vez que alguém pula a pergunta.
+        const notasG = subs.map((x) => x.nota_grupo).filter((n): n is number => n != null);
+        const avgG = notasG.length ? notasG.reduce((a, x) => a + x, 0) / notasG.length : 0;
+
+        // A nota do condutor só conta quando havia condutor a avaliar.
+        //
+        // Quando a atividade é evento sem condutor, o formulário público grava
+        // 5 fixo em `nota_condutor`. São 66 linhas assim, e a prova é que TODAS
+        // as 66 submissões sem condutor listado têm nota exatamente 5, contra
+        // uma única entre as 402 que têm condutor. Sem este filtro a média sai
+        // 9,07 onde a real é 9,74, e o painel subestima os condutores em dois
+        // terços de ponto por causa de uma pergunta que nunca foi feita. O
+        // filtro é por `condutores` vazio, e não por nota maior que zero: cinco
+        // é um valor válido da escala, então testar o valor deixaria as 66
+        // linhas passarem inteiras.
+        const notasC = subs
+          .filter((x) => (x.condutores ?? []).filter(Boolean).length > 0)
+          .map((x) => x.nota_condutor)
+          .filter((n): n is number => n != null);
+        const avgC = notasC.length ? notasC.reduce((a, x) => a + x, 0) / notasC.length : 0;
+
         const totalRelatos = subs.filter(
           (s) => s.relato && s.relato.trim().length > 0
         ).length;
@@ -913,6 +912,8 @@ export default function AdminDashboard() {
             relatos: { text: string; date: string }[];
           }
         >();
+        // Este laço já era imune ao 5 fixo, porque só entra quem tem nome no
+        // array de condutores. Fica registrado para ninguém "consertar" depois.
         subs.forEach((x) => {
           (x.condutores || []).forEach((c: string) => {
             const e = cMap.get(c) || { sum: 0, count: 0, relatos: [] };
@@ -924,6 +925,13 @@ export default function AdminDashboard() {
             cMap.set(c, e);
           });
         });
+        // Por volume, não por nota.
+        //
+        // Ordenar por média fazia quem tem uma avaliação nota 10 passar na
+        // frente de quem tem quarenta avaliações nota 9,8. Com 21 condutores
+        // entre 9,14 e 10, a ordem por nota é decidida por ruído, e o rodapé
+        // que prometia "pondera nota e volume" descrevia um cálculo que não
+        // existia: o volume era só critério de desempate.
         const topC = Array.from(cMap.entries())
           .map(([name, d]) => ({
             name,
@@ -931,116 +939,42 @@ export default function AdminDashboard() {
             count: d.count,
             relatos: d.relatos,
           }))
-          .sort((a, b) => b.avg - a.avg || b.count - a.count)
+          .sort((a, b) => b.count - a.count || b.relatos.length - a.relatos.length)
           .slice(0, 10);
 
-        // Participant ranking (hours)
-        const horasMap = new Map<string, number>();
-        atividades.forEach((a) =>
-          horasMap.set(a.nome.toLowerCase(), a.carga_horaria)
-        );
-        // Pelo e-mail, e rotulado com o nome mais completo que a pessoa já
-        // digitou.
-        //
-        // Agrupar por nome errava dos dois lados ao mesmo tempo. Fragmentava:
-        // a mesma conta assinou "Mariana Alves" e "Mariana Alves Ribeiro do
-        // Nascimento", e as 56 horas dela apareciam como 36. E fundia: três
-        // contas diferentes digitaram "Arthur de Assis Souza", e as horas das
-        // três eram somadas numa linha só. O ranking tinha 163 nomes para 149
-        // pessoas, e duas das cinco posições do pódio estavam erradas.
-        const pMap = new Map<
-          string,
-          { count: number; horas: number; nome: string }
-        >();
-        subs.forEach((s) => {
-          const nome = (s.nome_completo || "").trim();
-          if (!nome) return;
-          const chave = personKey({ person: nome, personEmail: s.email || undefined });
-          const e = pMap.get(chave) || { count: 0, horas: 0, nome };
-          e.count++;
-          e.horas += horasMap.get(s.atividade_nome?.toLowerCase() || "") || 2;
-          // O nome mais longo é o mais completo, e é por ele que a pessoa é
-          // reconhecida na lista.
-          if (nome.length > e.nome.length) e.nome = nome;
-          pMap.set(chave, e);
-        });
-        const topP = Array.from(pMap.values())
-          .map((d) => ({ nome: d.nome, count: d.count, horas: d.horas }))
-          .sort((a, b) => b.horas - a.horas || b.count - a.count)
-          .slice(0, 5);
+        // O ranking de participantes saiu daqui e virou a tabela ordenável de
+        // /formacao/admin/pessoas. Ele era pódio de cinco por horas, e como
+        // todas as 19 atividades cadastradas valem 2 horas, "por horas" era
+        // "por participações" com outra escala. Lá a mesma pessoa aparece uma
+        // vez só, com frequência, relatos, aulas, fala no grupo e recência na
+        // mesma linha, que é o que serve para decidir com quem conversar.
 
-        // Activity distribution
+        // Distribuição por atividade
         const actMap = new Map<string, number>();
         subs.forEach((s) => {
           const name = s.atividade_nome || "Sem nome";
           actMap.set(name, (actMap.get(name) || 0) + 1);
         });
-        const activityDist = Array.from(actMap.entries())
+        const activityDistTodas = Array.from(actMap.entries())
           .map(([name, count]) => ({ name, count }))
           .sort((a, b) => b.count - a.count);
+        // Doze é onde a lista ainda cabe na tela. Sem corte ela cresce com o
+        // catálogo e o card vira rolagem infinita de nomes com uma linha cada.
+        const activityDist = activityDistTodas.slice(0, 12);
+        const atividadesOcultas = activityDistTodas.length - activityDist.length;
 
-        // Quantas pessoas, não quantos nomes: seis contas apareciam duas vezes
-        // aqui só por terem digitado o nome de outro jeito, e esse número é o
-        // denominador da frequência média logo abaixo — inflá-lo fazia a
-        // frequência do grupo parecer menor do que é.
-        const uniquePeople = new Set<string>();
-        subs.forEach((s) => {
-          const nome = (s.nome_completo || "").trim();
-          if (nome) uniquePeople.add(personKey({ person: nome, personEmail: s.email || undefined }));
-        });
-        const uniqueParticipants = uniquePeople.size;
-
-        const avgFrequencyPerStudent =
-          uniqueParticipants > 0 ? total / uniqueParticipants : 0;
-
-        // Active vs inactive (based on ALL submissions)
-        const thirtyDaysAgoDate = new Date();
-        thirtyDaysAgoDate.setDate(thirtyDaysAgoDate.getDate() - 30);
-
-        const allParticipantDates = new Map<
-          string,
-          { first: Date; last: Date }
-        >();
-        // Pelo e-mail também aqui, e este era o mais caro dos três: quem passou
-        // a assinar de outro jeito virava duas pessoas, uma ativa (o nome de
-        // agora) e uma inativa (o nome que ela deixou de usar). A retenção caía
-        // sozinha, e a pessoa era contada como nova no período em que só mudou
-        // a forma de escrever o próprio nome.
-        allSubs.forEach((s) => {
-          const nome = (s.nome_completo || "").trim();
-          if (!nome) return;
-          const chave = personKey({ person: nome, personEmail: s.email || undefined });
-          const d = new Date(s.created_at);
-          const existing = allParticipantDates.get(chave);
-          if (!existing) {
-            allParticipantDates.set(chave, { first: d, last: d });
-          } else {
-            if (d < existing.first) existing.first = d;
-            if (d > existing.last) existing.last = d;
-          }
-        });
-
-        let activeStudents = 0;
-        let inactiveFormacaoStudents = 0;
-        let newStudentsThisPeriod = 0;
-
-        allParticipantDates.forEach((dates) => {
-          if (dates.last >= thirtyDaysAgoDate) {
-            activeStudents++;
-          } else {
-            inactiveFormacaoStudents++;
-          }
-          if (dates.first >= periodStart) {
-            newStudentsThisPeriod++;
-          }
-        });
-
-        const retentionRate =
-          activeStudents + inactiveFormacaoStudents > 0
-            ? (activeStudents /
-                (activeStudents + inactiveFormacaoStudents)) *
-              100
-            : 0;
+        // A faixa de pessoas saiu daqui inteira: quantas pessoas diferentes,
+        // vezes por pessoa, quem veio pela primeira vez, ativas em 30 dias,
+        // sumiram e retenção. Ela vive em /formacao/admin/pessoas, onde a
+        // unidade é a pessoa e presença conta os dois lados, formulário e sala.
+        //
+        // Três desses seis números eram calculados sobre janela fixa de trinta
+        // dias e ficavam lado a lado com números que obedeciam ao seletor,
+        // sem nada na tela dizendo qual era qual. E dois deles, "sumiram" e
+        // "retenção", tinham no denominador todo mundo que já participou:
+        // ninguém sai desse conjunto, então a conta só podia piorar para
+        // sempre. Quem responde a essa pergunta hoje é o retorno por coorte de
+        // estreia, que compara cada turma com ela mesma.
 
         // Group rankings by avg nota_grupo
         const groupNotaMap = new Map<
@@ -1075,101 +1009,38 @@ export default function AdminDashboard() {
           });
         }
 
-        // Conductor rating distribution (nota_condutor 1-10)
-        const conductorRatingDist: { rating: number; count: number }[] = [];
-        for (let r = 1; r <= 10; r++) {
-          conductorRatingDist.push({
-            rating: r,
-            count: subs.filter(
-              (s) => Math.round(s.nota_condutor || 0) === r
-            ).length,
-          });
-        }
-
-        // Retention by month (last 6 months)
-        const retentionByMonth: {
-          month: string;
-          active: number;
-          churned: number;
-        }[] = [];
-        const now = new Date();
-        for (let i = 5; i >= 0; i--) {
-          const monthStart = new Date(
-            now.getFullYear(),
-            now.getMonth() - i,
-            1
-          );
-          const monthEnd = new Date(
-            now.getFullYear(),
-            now.getMonth() - i + 1,
-            0,
-            23,
-            59,
-            59
-          );
-          const prevMonthStart = new Date(
-            now.getFullYear(),
-            now.getMonth() - i - 1,
-            1
-          );
-          const prevMonthEnd = new Date(
-            now.getFullYear(),
-            now.getMonth() - i,
-            0,
-            23,
-            59,
-            59
-          );
-
-          const activeInMonth = new Set<string>();
-          const activeInPrev = new Set<string>();
-
-          allSubs.forEach((s) => {
-            const nome = (s.nome_completo || "").trim().toLowerCase();
-            if (!nome) return;
-            const d = new Date(s.created_at);
-            if (d >= monthStart && d <= monthEnd) activeInMonth.add(nome);
-            if (d >= prevMonthStart && d <= prevMonthEnd)
-              activeInPrev.add(nome);
-          });
-
-          let churned = 0;
-          activeInPrev.forEach((nome) => {
-            if (!activeInMonth.has(nome)) churned++;
-          });
-
-          const monthLabel = monthStart.toLocaleDateString("pt-BR", {
-            month: "short",
-            year: "2-digit",
-          });
-          retentionByMonth.push({
-            month: monthLabel,
-            active: activeInMonth.size,
-            churned,
-          });
-        }
+        // A distribuição da nota do condutor saiu da tela. Ela desenhava uma
+        // barra de 67 casos no valor 5 que se lia como insatisfação, e nenhum
+        // desses 67 era avaliação ruim: são eventos sem condutor, onde o
+        // formulário grava 5 fixo. O gráfico mostrava a ausência de uma
+        // pergunta como se fosse uma resposta.
+        //
+        // A retenção mensal saiu junto, por outro motivo. Ela era o último
+        // lugar do arquivo que agrupava pessoa por nome digitado, enquanto os
+        // cards logo acima agrupavam por e-mail, então os dois mediam
+        // populações diferentes na mesma tela. Quem mudava a forma de assinar
+        // virava duas pessoas, uma que apareceu e uma que sumiu, e o churn
+        // subia sozinho. O retorno por coorte de estreia, em
+        // /formacao/admin/pessoas, responde à mesma pergunta comparando cada
+        // turma com ela mesma.
 
         setFormacaoStats({
           totalFeedbacks: total,
           avgNotaGrupo: avgG,
           avgNotaCondutor: avgC,
           totalRelatos,
+          notasDeCondutor: notasC.length,
           topCondutores: topC,
-          topParticipantes: topP,
           activityDist,
-          avgFrequencyPerStudent,
-          uniqueParticipants,
-          activeStudents,
-          inactiveStudents: inactiveFormacaoStudents,
-          retentionRate,
-          newStudentsThisPeriod,
+          atividadesOcultas,
           topGroups,
           ratingDistribution,
-          conductorRatingDist,
-          retentionByMonth,
         });
-      } catch {
-        // Formação tables may not exist yet
+      } catch (e) {
+        // Sem isto o erro some e a aba fica em "Carregando..." para sempre,
+        // sem nada no console: o modo de falha mais caro que existe, porque
+        // ninguém sabe se está lento ou quebrado.
+        console.error("[dashboard/sincrona]", e);
       }
     }
 
@@ -1184,7 +1055,11 @@ export default function AdminDashboard() {
   useEffect(() => {
     async function fetchQuorumAuto() {
       if (!profile) return;
-      const dias = dashPeriod === "7d" ? 7 : dashPeriod === "30d" ? 30 : dashPeriod === "90d" ? 90 : 730;
+      // A conversão era um ternário que entendia três janelas e mandava todas
+      // as outras para 730 dias. Escolher "hoje" fazia esta faixa mostrar dois
+      // anos enquanto o resto da tela mostrava um dia, e ninguém via, porque um
+      // quórum médio de dois anos é um número perfeitamente plausível.
+      const dias = janelaEmDias(dashPeriod);
       try {
         const r = await fetch(`/formacao/api/admin/meet/metricas?dias=${dias}`);
         if (!r.ok) return setQuorumAuto(null);
@@ -1215,25 +1090,12 @@ export default function AdminDashboard() {
       `Nota Média Condutor,${formacaoStats.avgNotaCondutor.toFixed(1)}`
     );
     lines.push(`Total Relatos,${formacaoStats.totalRelatos}`);
-    lines.push(
-      `Participantes Únicos,${formacaoStats.uniqueParticipants}`
-    );
-    lines.push(`Ativos (30d),${formacaoStats.activeStudents}`);
-    lines.push(`Inativos,${formacaoStats.inactiveStudents}`);
-    lines.push(
-      `Taxa de Retenção,${formacaoStats.retentionRate.toFixed(0)}%`
-    );
+    lines.push(`Notas de condutor consideradas,${formacaoStats.notasDeCondutor}`);
     lines.push("");
-    lines.push("=== RANKING CONDUTORES ===");
+    lines.push("=== CONDUTORES ===");
     lines.push("Nome,Nota Média,Avaliações");
     formacaoStats.topCondutores.forEach((c) =>
       lines.push(`${c.name},${c.avg.toFixed(1)},${c.count}`)
-    );
-    lines.push("");
-    lines.push("=== TOP PARTICIPANTES ===");
-    lines.push("Nome,Horas,Participações");
-    formacaoStats.topParticipantes.forEach((p) =>
-      lines.push(`${p.nome},${p.horas},${p.count}`)
     );
     lines.push("");
     lines.push("=== DISTRIBUIÇÃO POR ATIVIDADE ===");
@@ -1254,17 +1116,8 @@ export default function AdminDashboard() {
       lines.push(`${r.rating},${r.count}`)
     );
     lines.push("");
-    lines.push("=== DISTRIBUIÇÃO NOTAS CONDUTOR (1-10) ===");
-    lines.push("Nota,Quantidade");
-    formacaoStats.conductorRatingDist.forEach((r) =>
-      lines.push(`${r.rating},${r.count}`)
-    );
-    lines.push("");
-    lines.push("=== RETENÇÃO MENSAL ===");
-    lines.push("Mês,Ativos,Inativos");
-    formacaoStats.retentionByMonth.forEach((r) =>
-      lines.push(`${r.month},${r.active},${r.churned}`)
-    );
+    lines.push("O que é por pessoa sai no CSV de /formacao/admin/pessoas,");
+    lines.push("onde a mesma gente aparece uma vez só.");
     const csv = "\uFEFF" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);
@@ -1387,7 +1240,7 @@ export default function AdminDashboard() {
           {/* Period selector + Export */}
           <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6">
             <div className="flex flex-wrap gap-2">
-              {ACTIVITY_RANGES.map((p) => (
+              {JANELAS_PAINEL.map((p) => (
                 <button
                   key={p}
                   onClick={() => {
@@ -1450,6 +1303,8 @@ export default function AdminDashboard() {
                     value: formacaoStats.avgNotaCondutor.toFixed(1),
                     suffix: "/10",
                     color: "#2E9E8F",
+                    sub: `${formacaoStats.notasDeCondutor} de ${formacaoStats.totalFeedbacks} avaliaram alguém`,
+                    hint: "Só entram as submissões que tinham condutor a avaliar. Quando a atividade é evento sem condutor, o formulário grava 5 fixo, e essas linhas puxavam a média para baixo por causa de uma pergunta que nunca foi feita.",
                   },
                   {
                     label: "Com relato escrito",
@@ -1469,52 +1324,46 @@ export default function AdminDashboard() {
 
               <div className="h-3" />
 
-              <StatStrip
-                title="Pessoas"
-                delay={0.16}
-                items={[
-                  {
-                    label: "Pessoas diferentes",
-                    value: String(formacaoStats.uniqueParticipants),
-                    hint: "Total de pessoas únicas que participaram de pelo menos um grupo no período.",
-                  },
-                  {
-                    label: "Vezes por pessoa",
-                    value: formacaoStats.avgFrequencyPerStudent.toFixed(1) + "x",
-                    hint: "Em média, quantas vezes cada pessoa participou de grupos no período (presenças / participantes únicos).",
-                    color: "#D4854A",
-                  },
-                  {
-                    label: "Primeira vez",
-                    value: String(formacaoStats.newStudentsThisPeriod),
-                    hint: "Pessoas que apareceram pela primeira vez nos grupos síncronos durante este período.",
-                    color: "#22C55E",
-                  },
-                  {
-                    label: "Ativas (30 dias)",
-                    value: String(formacaoStats.activeStudents),
-                    hint: "Pessoas que enviaram pelo menos 1 feedback nos últimos 30 dias.",
-                    color: "#22C55E",
-                  },
-                  {
-                    label: "Sumiram",
-                    value: String(formacaoStats.inactiveStudents),
-                    hint: "Pessoas que já participaram antes mas não aparecem há mais de 30 dias.",
-                    color: "#EF4444",
-                  },
-                  {
-                    label: "Retenção",
-                    value: formacaoStats.retentionRate.toFixed(0) + "%",
-                    hint: "Participantes ativos nos últimos 30 dias sobre o total histórico.",
-                    color:
-                      formacaoStats.retentionRate > 70
-                        ? "#22C55E"
-                        : formacaoStats.retentionRate > 40
-                          ? "#F59E0B"
-                          : "#EF4444",
-                  },
-                ]}
-              />
+              {/* ── Ponte para a tela de Pessoas ──
+                  Aqui havia seis números sobre pessoas, e eles saíram inteiros.
+                  Repetir número é pior que não ter: as duas telas contavam com
+                  chaves diferentes e mostravam totais que não fechavam, sem
+                  nada explicando por quê. Esta faixa não traz número nenhum de
+                  propósito, só a porta. */}
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.16 }}
+              >
+                <Link
+                  href="/formacao/admin/pessoas"
+                  className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 px-4 py-3.5 rounded-[14px] transition-colors hover:bg-white/[.04]"
+                  style={{
+                    background: "rgba(255,255,255,0.02)",
+                    border: "1px solid rgba(255,255,255,0.06)",
+                  }}
+                >
+                  <div className="flex items-start gap-2.5">
+                    <Users
+                      className="h-4 w-4 mt-0.5 flex-shrink-0"
+                      style={{ color: "#C84B31" }}
+                    />
+                    <div>
+                      <p className="font-dm text-sm text-cream/80">Pessoas</p>
+                      <p className="font-dm text-[11px] text-cream/35 mt-0.5 leading-relaxed">
+                        Núcleo ativo, quem sumiu, retorno da estreia, o processo seletivo
+                        e a lista inteira com a mesma gente aparecendo uma vez só.
+                      </p>
+                    </div>
+                  </div>
+                  <span
+                    className="font-dm text-xs whitespace-nowrap self-start sm:self-center"
+                    style={{ color: "#C84B31" }}
+                  >
+                    Abrir
+                  </span>
+                </Link>
+              </motion.div>
 
               {/* ── Quórum medido no Meet ──
                   Só aparece quando existe encontro capturado. Presença aqui é
@@ -1794,19 +1643,11 @@ export default function AdminDashboard() {
                   )}
                 </div>
 
-                {/* Right: Participant ranking + Activity distribution */}
+                {/* Right: Activity distribution.
+                    O ranking de participantes que ficava aqui virou a tabela
+                    ordenável de /formacao/admin/pessoas, onde a pessoa aparece
+                    uma vez só e com todos os sinais na mesma linha. */}
                 <div className="space-y-4">
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.85, duration: 0.4 }}
-                  >
-                    <RankingCard
-                      period={dashPeriod}
-                      initialData={formacaoStats.topParticipantes}
-                    />
-                  </motion.div>
-
                   <motion.div
                     initial={{ opacity: 0, y: 12 }}
                     animate={{ opacity: 1, y: 0 }}
@@ -1824,12 +1665,15 @@ export default function AdminDashboard() {
                       </div>
                       {formacaoStats.activityDist.length > 0 ? (
                         <div className="space-y-2.5">
-                          {formacaoStats.activityDist.map((act) => {
-                            const totalAct =
-                              formacaoStats.activityDist.reduce(
-                                (s, a) => s + a.count,
-                                0
-                              );
+                          {/* O total sai do laço: ele era recalculado uma vez
+                              por linha renderizada, varrendo a lista inteira
+                              a cada barra. */}
+                          {(() => {
+                            const totalAct = formacaoStats.activityDist.reduce(
+                              (s, a) => s + a.count,
+                              0
+                            );
+                            return formacaoStats.activityDist.map((act) => {
                             const pct =
                               totalAct > 0
                                 ? (act.count / totalAct) * 100
@@ -1867,7 +1711,17 @@ export default function AdminDashboard() {
                                 </div>
                               </div>
                             );
-                          })}
+                            });
+                          })()}
+                          {formacaoStats.atividadesOcultas > 0 && (
+                            <p className="font-dm text-[11px] text-cream/25 pt-1">
+                              mais {formacaoStats.atividadesOcultas}{" "}
+                              {formacaoStats.atividadesOcultas === 1
+                                ? "atividade com menos feedbacks"
+                                : "atividades com menos feedbacks"}
+                              , no CSV
+                            </p>
+                          )}
                         </div>
                       ) : (
                         <p className="text-xs text-cream/30 text-center py-4">
@@ -1946,8 +1800,14 @@ export default function AdminDashboard() {
 
               </div>
 
-              {/* ── Rating distributions ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
+              {/* ── Distribuição das notas de grupo ──
+                  Sozinha agora. A distribuição da nota de condutor, que ficava
+                  ao lado, saiu: 67 dos casos dela estavam na barra do 5 e
+                  nenhum era avaliação ruim, eram eventos sem condutor onde o
+                  formulário grava 5 fixo. E a retenção mensal, que vinha logo
+                  abaixo, saiu para /formacao/admin/pessoas como retorno por
+                  coorte de estreia. */}
+              <div className="mb-6">
                 <motion.div
                   initial={{ opacity: 0, y: 12 }}
                   animate={{ opacity: 1, y: 0 }}
@@ -2023,212 +1883,7 @@ export default function AdminDashboard() {
                     })()}
                   </Card>
                 </motion.div>
-
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.1, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <BarChart3
-                        className="h-4 w-4"
-                        style={{ color: "#2E9E8F" }}
-                      />
-                      <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                        Distribuição Nota Condutores
-                      </h3>
-                    </div>
-                    {(() => {
-                      const maxRatingCount = Math.max(
-                        ...formacaoStats.conductorRatingDist.map(
-                          (r) => r.count
-                        ),
-                        1
-                      );
-                      return formacaoStats.conductorRatingDist.some(
-                        (r) => r.count > 0
-                      ) ? (
-                        <div className="space-y-1.5">
-                          {formacaoStats.conductorRatingDist.map(
-                            (r) => {
-                              const barWidth =
-                                maxRatingCount > 0
-                                  ? (r.count / maxRatingCount) * 100
-                                  : 0;
-                              const hue =
-                                ((r.rating - 1) / 9) * 120;
-                              const barColor = `hsl(${hue}, 70%, 50%)`;
-                              return (
-                                <div
-                                  key={r.rating}
-                                  className="flex items-center gap-2"
-                                >
-                                  <span className="font-fraunces font-bold text-xs text-cream/50 w-5 text-right tabular-nums">
-                                    {r.rating}
-                                  </span>
-                                  <div
-                                    className="flex-1 h-4 rounded overflow-hidden"
-                                    style={{
-                                      background:
-                                        "rgba(255,255,255,0.04)",
-                                    }}
-                                  >
-                                    <div
-                                      className="h-full rounded transition-all duration-500"
-                                      style={{
-                                        width: `${barWidth}%`,
-                                        background: barColor,
-                                        opacity: 0.7,
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="font-dm text-[10px] text-cream/30 w-6 text-right tabular-nums">
-                                    {r.count}
-                                  </span>
-                                </div>
-                              );
-                            }
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-cream/30 text-center py-4">
-                          Sem dados
-                        </p>
-                      );
-                    })()}
-                  </Card>
-                </motion.div>
               </div>
-
-              {/* ── Retention trend ── */}
-              <motion.div
-                initial={{ opacity: 0, y: 12 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: 1.2, duration: 0.4 }}
-                className="mb-6"
-              >
-                <Card>
-                  <div className="flex items-center gap-2 mb-4">
-                    <Activity
-                      className="h-4 w-4"
-                      style={{ color: "#2E9E8F" }}
-                    />
-                    <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                      Retenção mensal
-                    </h3>
-                  </div>
-                  {formacaoStats.retentionByMonth.length > 0 &&
-                  formacaoStats.retentionByMonth.some(
-                    (m) => m.active > 0 || m.churned > 0
-                  )
-                    ? (() => {
-                        const maxVal = Math.max(
-                          ...formacaoStats.retentionByMonth.map((m) =>
-                            Math.max(m.active, m.churned)
-                          ),
-                          1
-                        );
-                        return (
-                          <div className="space-y-3">
-                            {/* sem items-end: ele tira a altura das colunas e
-                                as barras percentuais colapsam no min-h */}
-                            <div className="flex gap-3 h-36">
-                              {formacaoStats.retentionByMonth.map(
-                                (m) => {
-                                  const activeH =
-                                    maxVal > 0
-                                      ? (m.active / maxVal) * 100
-                                      : 0;
-                                  const churnedH =
-                                    maxVal > 0
-                                      ? (m.churned / maxVal) * 100
-                                      : 0;
-                                  return (
-                                    <div
-                                      key={m.month}
-                                      className="flex-1 flex flex-col items-center justify-end gap-1"
-                                    >
-                                      <div
-                                        className="flex items-end gap-0.5 w-full justify-center"
-                                        style={{ height: "100%" }}
-                                      >
-                                        <div
-                                          className="flex flex-col items-center justify-end flex-1"
-                                          style={{ height: "100%" }}
-                                        >
-                                          <div
-                                            className="w-full rounded-t-md min-h-[5px] transition-all duration-500"
-                                            style={{
-                                              height: `${Math.max(activeH, 6)}%`,
-                                              background:
-                                                "linear-gradient(180deg, rgba(34,197,94,0.95) 0%, rgba(34,197,94,0.55) 100%)",
-                                              boxShadow:
-                                                "0 0 8px rgba(34,197,94,0.25)",
-                                            }}
-                                          />
-                                        </div>
-                                        <div
-                                          className="flex flex-col items-center justify-end flex-1"
-                                          style={{ height: "100%" }}
-                                        >
-                                          <div
-                                            className="w-full rounded-t-md min-h-[5px] transition-all duration-500"
-                                            style={{
-                                              height: `${Math.max(churnedH, 6)}%`,
-                                              background:
-                                                "linear-gradient(180deg, rgba(239,68,68,0.85) 0%, rgba(239,68,68,0.45) 100%)",
-                                              boxShadow:
-                                                "0 0 8px rgba(239,68,68,0.2)",
-                                            }}
-                                          />
-                                        </div>
-                                      </div>
-                                      <span className="text-[8px] text-cream/30 font-dm mt-1 whitespace-nowrap">
-                                        {m.month}
-                                      </span>
-                                    </div>
-                                  );
-                                }
-                              )}
-                            </div>
-                            <div className="flex items-center justify-center gap-6">
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="w-2.5 h-2.5 rounded-sm"
-                                  style={{
-                                    background:
-                                      "rgba(34,197,94,0.5)",
-                                  }}
-                                />
-                                <span className="font-dm text-[10px] text-cream/40">
-                                  Ativos
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-1.5">
-                                <div
-                                  className="w-2.5 h-2.5 rounded-sm"
-                                  style={{
-                                    background:
-                                      "rgba(239,68,68,0.4)",
-                                  }}
-                                />
-                                <span className="font-dm text-[10px] text-cream/40">
-                                  Saíram
-                                </span>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      })()
-                    : (
-                      <p className="text-xs text-cream/30 text-center py-6">
-                        Sem dados
-                      </p>
-                    )}
-                </Card>
-              </motion.div>
-
             </>
           ) : (
             <div className="text-center py-12">
@@ -2259,23 +1914,16 @@ export default function AdminDashboard() {
                 delay={0.1}
                 items={[
                   { label: "Cursos publicados", value: String(stats.totalCourses) },
-                  { label: "Alunos matriculados", value: String(stats.totalStudents) },
                   {
                     label: "Certificados emitidos",
                     value: String(stats.totalCertificates),
-                  },
-                  {
-                    label: "Rating médio",
-                    value: stats.avgRating ? stats.avgRating.toFixed(1) : "\u2014",
-                    suffix: stats.avgRating ? "/5" : undefined,
-                    color: "#F59E0B",
                   },
                   {
                     label: "Taxa de conclusão",
                     value: stats.completionRate
                       ? `${stats.completionRate.toFixed(1)}%`
                       : "\u2014",
-                    hint: "Matrículas concluídas sobre o total de matrículas.",
+                    hint: "Matrículas concluídas sobre o total de matrículas. Quem estuda e nunca clica em concluir não aparece aqui, então este número está por baixo do que de fato acontece.",
                   },
                   ...(stats.hasRevenue
                     ? [
@@ -2291,43 +1939,23 @@ export default function AdminDashboard() {
 
               <div className="h-5" />
 
-              {/* Inactive students alert */}
-              {stats.inactiveStudents > 0 && (
-                <motion.div
-                  initial={{ opacity: 0, y: 16 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.55, duration: 0.5 }}
-                  className="mb-8"
-                >
-                  <div
-                    className="flex items-center gap-3 px-5 py-3.5 rounded-[12px]"
-                    style={{
-                      background: "rgba(251,191,36,0.06)",
-                      border: "1px solid rgba(251,191,36,0.15)",
-                    }}
-                  >
-                    <UserX
-                      className="h-5 w-5 flex-shrink-0"
-                      style={{ color: "#F59E0B" }}
-                    />
-                    <div>
-                      <p className="text-sm font-dm text-cream">
-                        <span className="font-semibold">
-                          {stats.inactiveStudents}
-                        </span>{" "}
-                        aluno
-                        {stats.inactiveStudents !== 1 ? "s" : ""}{" "}
-                        inativo
-                        {stats.inactiveStudents !== 1 ? "s" : ""}
-                      </p>
-                      <p className="text-xs text-cream/35 mt-0.5">
-                        Matriculados há mais de 30 dias sem concluir o
-                        curso.
-                      </p>
-                    </div>
-                  </div>
-                </motion.div>
-              )}
+              {/*
+                Dois blocos saíram daqui.
+
+                "Alunos matriculados" contava linhas de matrícula e chamava de
+                alunos: são 526 matrículas para 272 pessoas, porque quem cria
+                conta se matricula em vários cursos de uma vez. "Rating médio"
+                exibia a média de oito avaliações em trinta e seis cursos ao
+                lado de números de centenas.
+
+                E o alerta de alunos inativos, que contava matrícula sem
+                conclusão com mais de trinta dias: como quase toda matrícula
+                está nessa condição por construção, ele disparava sempre, e um
+                alerta que dispara sempre não é alerta. Quem responde a essa
+                pergunta agora é o recorte "só na plataforma" em
+                /formacao/admin/pessoas, que conta pessoa e olha tempo de tela
+                em vez de conclusão.
+              */}
 
               <EmailsEnviados />
 
@@ -2382,7 +2010,14 @@ export default function AdminDashboard() {
                     </Card>
                   </motion.div>
 
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                  {/* O ranking "Quem mais assiste" saiu daqui: era o segundo
+                      pódio de pessoas do painel, e a mesma gente aparecia com
+                      um número aqui e outro no ranking síncrono, porque as
+                      duas listas usavam chaves de identidade diferentes. Agora
+                      a pessoa está em /formacao/admin/pessoas, uma linha só,
+                      com aulas e horas de plataforma entre os critérios de
+                      ordenação. */}
+                  <div className="grid grid-cols-1 gap-5">
                     {/* Top courses */}
                     <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.4 }}>
                       <Card>
@@ -2417,39 +2052,6 @@ export default function AdminDashboard() {
                       </Card>
                     </motion.div>
 
-                    {/* Top viewers */}
-                    <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.75, duration: 0.4 }}>
-                      <Card>
-                        <div className="flex items-center gap-2 mb-4">
-                          <Trophy className="h-4 w-4" style={{ color: "#D4854A" }} />
-                          <h3 className="font-dm text-sm font-semibold text-cream/70">Quem mais assiste</h3>
-                        </div>
-                        {asyncEngagement.topViewers.length > 0 ? (
-                          <div className="space-y-3">
-                            {asyncEngagement.topViewers.map((viewer, i) => {
-                              const medals = ["#D4854A", "rgba(253,251,247,0.5)", "rgba(212,133,74,0.6)"];
-                              const isMedal = i < 3;
-                              const maxLessons = asyncEngagement.topViewers[0]?.lessonsWatched || 1;
-                              return (
-                                <div key={viewer.name} className="space-y-1">
-                                  <div className="flex items-center gap-3">
-                                    <span className="font-fraunces font-bold text-sm w-5 text-center" style={{ color: isMedal ? medals[i] : "rgba(253,251,247,0.2)" }}>{i + 1}</span>
-                                    <span className="font-dm text-xs flex-1 text-cream/70 truncate">{viewer.name.split(" ").slice(0, 2).join(" ")}</span>
-                                    <span className="font-dm text-[10px] text-cream/30">{viewer.lessonsWatched} aulas</span>
-                                    <span className="font-dm text-[10px] font-semibold" style={{ color: "#D4854A" }}>{viewer.hoursWatched}h</span>
-                                  </div>
-                                  <div className="ml-8 h-1.5 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.04)" }}>
-                                    <div className="h-full rounded-full" style={{ width: `${(viewer.lessonsWatched / maxLessons) * 100}%`, background: isMedal ? medals[i] : "rgba(253,251,247,0.15)", opacity: isMedal ? 0.6 : 0.3 }} />
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-cream/30 text-center py-4">Nenhum dado.</p>
-                        )}
-                      </Card>
-                    </motion.div>
                   </div>
                 </div>
               )}

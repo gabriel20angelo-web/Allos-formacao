@@ -14,10 +14,8 @@ import {
   MessageSquare,
   CheckCircle,
   Clock,
-  AlertTriangle,
   ChevronDown,
   GraduationCap,
-  Target,
 } from "lucide-react";
 
 // ═══════════════════════════════════════════════════════════════
@@ -30,7 +28,6 @@ interface CourseOption {
   slug: string;
   status: string;
   course_type: string;
-  exam_enabled: boolean;
 }
 
 interface EnrollmentRow {
@@ -55,24 +52,6 @@ interface ReviewRow {
   rating: number;
   comment: string | null;
   created_at: string;
-}
-
-interface ExamAttemptRow {
-  id: string;
-  user_id: string;
-  course_id: string;
-  score: number;
-  passed: boolean;
-  answers: { question_id: string; selected_option_id: string; correct: boolean }[];
-  attempted_at: string;
-}
-
-interface ExamQuestionRow {
-  id: string;
-  course_id: string;
-  question_text: string;
-  options: { id: string; text: string; is_correct: boolean }[];
-  position: number;
 }
 
 interface SectionRow {
@@ -116,14 +95,50 @@ function pct(n: number, total: number): number {
 }
 
 // O PostgREST devolve no máximo um teto de linhas por resposta (1000 por padrão
-// no Supabase). Cada linha de usage_sessions é uma janela de presença, então um
-// curso com algumas dezenas de alunos passa desse teto e a soma sairia truncada
-// para menos: exatamente o erro que esta coluna não pode cometer, já que ela
-// existe para não acusar ninguém por falta de dado. Por isso avançamos pelo
-// tamanho da página que o servidor devolveu, até vir vazia, em vez de confiar
-// num limite fixo. O teto de páginas é só uma trava contra laço infinito.
-const PAGINA_USAGE = 1000;
-const MAX_PAGINAS_USAGE = 50;
+// no Supabase) e não avisa que cortou: a resposta chega bem-formada, só que
+// menor que a verdade. Por isso toda leitura grande desta tela pagina, não só a
+// de usage_sessions: enrollments, lesson_progress, profiles, lessons e sections
+// crescem com o uso da plataforma. O caso mais perigoso é lesson_progress,
+// porque uma linha truncada ali vira "aluno sem progresso" na tela, que é
+// exatamente o problema que esta página existe para detectar: o modo de falha
+// se disfarça de diagnóstico. O teto de páginas é só uma trava contra laço
+// infinito, caso um filtro errado faça a leitura nunca terminar.
+const PAGINA_LEITURA = 1000;
+const MAX_PAGINAS = 50;
+
+type ClienteSupabase = ReturnType<typeof createClient>;
+
+/**
+ * Lê a tabela inteira, de mil em mil.
+ *
+ * Ordena por chave primária porque sem ordem estável o servidor pode devolver
+ * as linhas em ordens diferentes entre uma página e outra, e aí o paginar
+ * repete umas e pula outras. A ordem de exibição é decidida depois, em memória,
+ * por quem usa o resultado.
+ *
+ * Falha alto de propósito: preferimos a tela vazia com erro no console a uma
+ * tela cheia de números menores do que a realidade.
+ */
+async function lerTudo<T>(
+  sb: ClienteSupabase,
+  tabela: string,
+  colunas: string,
+  ordenarPor = "id"
+): Promise<T[]> {
+  const out: T[] = [];
+  for (let p = 0; p < MAX_PAGINAS; p++) {
+    const { data, error } = await sb
+      .from(tabela)
+      .select(colunas)
+      .order(ordenarPor, { ascending: true })
+      .range(p * PAGINA_LEITURA, p * PAGINA_LEITURA + PAGINA_LEITURA - 1);
+    if (error) throw new Error(`${tabela}: ${error.message}`);
+    const lote = (data ?? []) as T[];
+    out.push(...lote);
+    if (lote.length < PAGINA_LEITURA) break;
+  }
+  return out;
+}
 
 function daysBetween(a: string, b: string): number {
   return Math.round(
@@ -189,8 +204,6 @@ export default function AnalyticsPage() {
   const [enrollments, setEnrollments] = useState<EnrollmentRow[]>([]);
   const [lessonProgress, setLessonProgress] = useState<LessonProgressRow[]>([]);
   const [reviews, setReviews] = useState<ReviewRow[]>([]);
-  const [examAttempts, setExamAttempts] = useState<ExamAttemptRow[]>([]);
-  const [examQuestions, setExamQuestions] = useState<ExamQuestionRow[]>([]);
   const [sections, setSections] = useState<SectionRow[]>([]);
   const [lessons, setLessons] = useState<LessonRow[]>([]);
   const [profiles, setProfiles] = useState<Map<string, string>>(new Map());
@@ -203,55 +216,56 @@ export default function AnalyticsPage() {
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
+      // O catálogo publicado é a única leitura que continua em uma tentada só:
+      // ela já vem filtrada por status e é da ordem de dezenas de linhas, longe
+      // do teto. Todo o resto passa por lerTudo.
       const [
         coursesRes,
         enrollmentsRes,
         progressRes,
         reviewsRes,
-        attemptsRes,
-        questionsRes,
         sectionsRes,
         lessonsRes,
         profilesRes,
       ] = await Promise.all([
         supabase
           .from("courses")
-          .select("id, title, slug, status, course_type, exam_enabled")
+          .select("id, title, slug, status, course_type")
           .eq("status", "published")
           .order("title"),
-        supabase.from("enrollments").select("user_id, course_id, status, enrolled_at, completed_at"),
-        supabase.from("lesson_progress").select("user_id, lesson_id, completed, completed_at"),
-        supabase
-          .from("reviews")
-          .select("id, user_id, course_id, rating, comment, created_at")
-          .order("created_at", { ascending: false }),
-        supabase
-          .from("exam_attempts")
-          .select("id, user_id, course_id, score, passed, answers, attempted_at")
-          .order("attempted_at", { ascending: false }),
-        supabase
-          .from("exam_questions")
-          .select("id, course_id, question_text, options, position")
-          .order("position"),
-        supabase.from("sections").select("id, course_id, title, position").order("position"),
-        supabase
-          .from("lessons")
-          .select("id, section_id, title, position, duration_minutes")
-          .order("position"),
-        supabase.from("profiles").select("id, full_name"),
+        lerTudo<EnrollmentRow>(
+          supabase,
+          "enrollments",
+          "user_id, course_id, status, enrolled_at, completed_at"
+        ),
+        lerTudo<LessonProgressRow>(
+          supabase,
+          "lesson_progress",
+          "user_id, lesson_id, completed, completed_at"
+        ),
+        lerTudo<ReviewRow>(
+          supabase,
+          "reviews",
+          "id, user_id, course_id, rating, comment, created_at"
+        ),
+        lerTudo<SectionRow>(supabase, "sections", "id, course_id, title, position"),
+        lerTudo<LessonRow>(
+          supabase,
+          "lessons",
+          "id, section_id, title, position, duration_minutes"
+        ),
+        lerTudo<ProfileRow>(supabase, "profiles", "id, full_name"),
       ]);
 
       setCourses((coursesRes.data as CourseOption[]) || []);
-      setEnrollments((enrollmentsRes.data as EnrollmentRow[]) || []);
-      setLessonProgress((progressRes.data as LessonProgressRow[]) || []);
-      setReviews((reviewsRes.data as ReviewRow[]) || []);
-      setExamAttempts((attemptsRes.data as ExamAttemptRow[]) || []);
-      setExamQuestions((questionsRes.data as ExamQuestionRow[]) || []);
-      setSections((sectionsRes.data as SectionRow[]) || []);
-      setLessons((lessonsRes.data as LessonRow[]) || []);
+      setEnrollments(enrollmentsRes);
+      setLessonProgress(progressRes);
+      setReviews(reviewsRes);
+      setSections(sectionsRes);
+      setLessons(lessonsRes);
 
       const pMap = new Map<string, string>();
-      ((profilesRes.data as ProfileRow[]) || []).forEach((p) => pMap.set(p.id, p.full_name));
+      profilesRes.forEach((p) => pMap.set(p.id, p.full_name));
       setProfiles(pMap);
     } catch (err) {
       console.error("Analytics fetch error", err);
@@ -286,14 +300,14 @@ export default function AnalyticsPage() {
         const acumulado = new Map<string, number>();
         let offset = 0;
 
-        for (let pagina = 0; pagina < MAX_PAGINAS_USAGE; pagina++) {
+        for (let pagina = 0; pagina < MAX_PAGINAS; pagina++) {
           const { data, error } = await supabase
             .from("usage_sessions")
             .select("user_id, seconds")
             .eq("course_id", selectedCourseId)
             // Sem ordem estável o paginar poderia repetir ou pular linhas.
             .order("id", { ascending: true })
-            .range(offset, offset + PAGINA_USAGE - 1);
+            .range(offset, offset + PAGINA_LEITURA - 1);
 
           if (error) {
             if (cancelado) return;
@@ -372,17 +386,16 @@ export default function AnalyticsPage() {
     // Most popular
     const popularSorted = [...courseStats].sort((a, b) => b.enrolled - a.enrolled);
 
-    // Low completion alert (below 30%)
-    const lowCompletion = dropoutSorted.filter(
-      (c) => c.completionRate < 30 && c.enrolled >= 2
-    );
-
-    // Recent reviews with comments
+    // Avaliações com comentário, da mais nova para a mais velha. A ordem é
+    // feita aqui porque a leitura vem paginada por chave primária, e não por
+    // data: sem este sort, "recentes" seriam só as dez primeiras que o banco
+    // devolvesse.
     const recentReviews = reviews
       .filter((r) => r.comment && r.comment.trim().length > 0)
+      .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
       .slice(0, 10);
 
-    return { courseStats, dropoutSorted, popularSorted, lowCompletion, recentReviews };
+    return { courseStats, dropoutSorted, popularSorted, recentReviews };
   }, [selectedCourseId, courses, enrollments, reviews]);
 
   // ═══════════════════════════════════════════════════════════
@@ -435,41 +448,6 @@ export default function AnalyticsPage() {
       completed: completionByLesson.get(l.id) || 0,
       rate: pct(completionByLesson.get(l.id) || 0, totalEnrolled),
     }));
-
-    // Exam performance
-    const courseAttempts = examAttempts.filter((a) => a.course_id === selectedCourseId);
-    const courseQuestions = examQuestions
-      .filter((q) => q.course_id === selectedCourseId)
-      .sort((a, b) => a.position - b.position);
-    const avgScore =
-      courseAttempts.length > 0
-        ? Math.round(courseAttempts.reduce((s, a) => s + a.score, 0) / courseAttempts.length)
-        : 0;
-    const passRate = pct(
-      courseAttempts.filter((a) => a.passed).length,
-      courseAttempts.length
-    );
-
-    // Per-question difficulty
-    const questionDifficulty = courseQuestions.map((q) => {
-      let totalAnswers = 0;
-      let wrongAnswers = 0;
-      courseAttempts.forEach((attempt) => {
-        const answer = attempt.answers?.find((a) => a.question_id === q.id);
-        if (answer) {
-          totalAnswers++;
-          if (!answer.correct) wrongAnswers++;
-        }
-      });
-      return {
-        id: q.id,
-        position: q.position,
-        text: q.question_text,
-        totalAnswers,
-        wrongAnswers,
-        errorRate: pct(wrongAnswers, totalAnswers),
-      };
-    });
 
     // Time analysis: average days from enrollment to completion
     const completedEnrollments = courseEnrollments.filter(
@@ -547,11 +525,6 @@ export default function AnalyticsPage() {
       totalEnrolled,
       orderedLessons,
       lessonCompletionData,
-      courseAttempts,
-      courseQuestions,
-      avgScore,
-      passRate,
-      questionDifficulty,
       avgDays,
       completedCount: completedEnrollments.length,
       students,
@@ -563,8 +536,6 @@ export default function AnalyticsPage() {
     sections,
     lessons,
     lessonProgress,
-    examAttempts,
-    examQuestions,
     reviews,
     profiles,
     usagePorAluno,
@@ -704,78 +675,41 @@ export default function AnalyticsPage() {
             )}
           </Card>
 
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            {/* Most Popular Courses */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Users className="w-5 h-5 text-[#C84B31]" />
-                <h3 className="font-fraunces text-lg text-[#FDFBF7]">Cursos Mais Populares</h3>
-              </div>
-              {overviewData.popularSorted.length === 0 ? (
-                <p className="font-dm text-sm text-[#FDFBF7]/40">Sem dados.</p>
-              ) : (
-                <div className="space-y-2">
-                  {overviewData.popularSorted.slice(0, 10).map((c, i) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between py-1.5"
-                      style={{
-                        borderBottom:
-                          i < Math.min(overviewData.popularSorted.length, 10) - 1
-                            ? "1px solid rgba(255,255,255,0.04)"
-                            : "none",
-                      }}
+          {/* Most Popular Courses */}
+          <Card>
+            <div className="flex items-center gap-2 mb-4">
+              <Users className="w-5 h-5 text-[#C84B31]" />
+              <h3 className="font-fraunces text-lg text-[#FDFBF7]">Cursos Mais Populares</h3>
+            </div>
+            {overviewData.popularSorted.length === 0 ? (
+              <p className="font-dm text-sm text-[#FDFBF7]/40">Sem dados.</p>
+            ) : (
+              <div className="space-y-2">
+                {overviewData.popularSorted.slice(0, 10).map((c, i) => (
+                  <div
+                    key={c.id}
+                    className="flex items-center justify-between py-1.5"
+                    style={{
+                      borderBottom:
+                        i < Math.min(overviewData.popularSorted.length, 10) - 1
+                          ? "1px solid rgba(255,255,255,0.04)"
+                          : "none",
+                    }}
+                  >
+                    <button
+                      onClick={() => setSelectedCourseId(c.id)}
+                      className="font-dm text-sm text-[#FDFBF7]/80 hover:text-[#C84B31] transition-colors truncate max-w-[70%] text-left"
                     >
-                      <button
-                        onClick={() => setSelectedCourseId(c.id)}
-                        className="font-dm text-sm text-[#FDFBF7]/80 hover:text-[#C84B31] transition-colors truncate max-w-[70%] text-left"
-                      >
-                        {c.title}
-                      </button>
-                      <span className="font-dm text-xs text-[#C84B31] font-medium">
-                        {c.enrolled} inscritos
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-
-            {/* Low Completion Alert */}
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <AlertTriangle className="w-5 h-5 text-amber-500" />
-                <h3 className="font-fraunces text-lg text-[#FDFBF7]">
-                  Alerta: Baixa Conclusao
-                </h3>
+                      {c.title}
+                    </button>
+                    <span className="font-dm text-xs text-[#C84B31] font-medium">
+                      {c.enrolled} inscritos
+                    </span>
+                  </div>
+                ))}
               </div>
-              {overviewData.lowCompletion.length === 0 ? (
-                <p className="font-dm text-sm text-[#FDFBF7]/40">
-                  Nenhum curso com taxa abaixo de 30%.
-                </p>
-              ) : (
-                <div className="space-y-2">
-                  {overviewData.lowCompletion.map((c) => (
-                    <div
-                      key={c.id}
-                      className="flex items-center justify-between py-1.5 px-3 rounded-lg"
-                      style={{ background: "rgba(239,68,68,0.06)" }}
-                    >
-                      <button
-                        onClick={() => setSelectedCourseId(c.id)}
-                        className="font-dm text-sm text-[#FDFBF7]/80 hover:text-[#C84B31] transition-colors truncate max-w-[65%] text-left"
-                      >
-                        {c.title}
-                      </button>
-                      <span className="font-dm text-xs text-red-400 font-medium">
-                        {c.completionRate}% concluido
-                      </span>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </Card>
-          </div>
+            )}
+          </Card>
 
           {/* Recent Reviews */}
           <Card>
@@ -902,78 +836,6 @@ export default function AnalyticsPage() {
               </div>
             )}
           </Card>
-
-          {/* Exam performance */}
-          {selectedCourse?.exam_enabled && detailData.courseQuestions.length > 0 && (
-            <Card>
-              <div className="flex items-center gap-2 mb-4">
-                <Target className="w-5 h-5 text-[#C84B31]" />
-                <h3 className="font-fraunces text-lg text-[#FDFBF7]">
-                  Desempenho no Exame
-                </h3>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4 mb-6">
-                <div
-                  className="p-3 rounded-lg"
-                  style={{ background: "rgba(255,255,255,0.02)" }}
-                >
-                  <p className="font-dm text-xs text-[#FDFBF7]/50 mb-1">Nota media</p>
-                  <p className="font-fraunces text-2xl text-[#FDFBF7]">
-                    {detailData.avgScore}%
-                  </p>
-                </div>
-                <div
-                  className="p-3 rounded-lg"
-                  style={{ background: "rgba(255,255,255,0.02)" }}
-                >
-                  <p className="font-dm text-xs text-[#FDFBF7]/50 mb-1">Taxa de aprovacao</p>
-                  <p className="font-fraunces text-2xl text-[#FDFBF7]">
-                    {detailData.passRate}%
-                  </p>
-                </div>
-              </div>
-
-              <p className="font-dm text-xs text-[#FDFBF7]/40 mb-3">
-                Dificuldade por questao (% de erro)
-              </p>
-              <div className="space-y-2">
-                {detailData.questionDifficulty.map((q) => (
-                  <div key={q.id} className="space-y-0.5">
-                    <div className="flex items-center justify-between">
-                      <span className="font-dm text-sm text-[#FDFBF7]/70 truncate max-w-[75%]">
-                        Q{q.position}: {q.text}
-                      </span>
-                      <span
-                        className="font-dm text-xs font-medium"
-                        style={{
-                          color:
-                            q.errorRate > 60
-                              ? "#ef4444"
-                              : q.errorRate > 30
-                              ? "#f59e0b"
-                              : "#22c55e",
-                        }}
-                      >
-                        {q.errorRate}% erro
-                      </span>
-                    </div>
-                    <Bar
-                      value={q.errorRate}
-                      max={100}
-                      color={
-                        q.errorRate > 60
-                          ? "#ef4444"
-                          : q.errorRate > 30
-                          ? "#f59e0b"
-                          : "rgba(255,255,255,0.15)"
-                      }
-                    />
-                  </div>
-                ))}
-              </div>
-            </Card>
-          )}
 
           {/* Student list */}
           <Card>

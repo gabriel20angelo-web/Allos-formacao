@@ -23,10 +23,23 @@
 // mundo: é ver todo mundo de metade das pessoas, e nunca enxergar a outra.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
+import { getRangeStart, type ActivityRange } from "@/lib/utils/activity";
 
 // ═══════════════════════════════════════════════════════════════
 // Tipos
 // ═══════════════════════════════════════════════════════════════
+
+/** O que o processo seletivo sabe sobre esta pessoa. */
+export interface SeletivoDaPessoa {
+  /** Status da tentativa mais recente, como veio do AvaliAllos. */
+  status: string | null;
+  /** `true` quando alguma tentativa saiu como aprovada. */
+  aprovado: boolean;
+  /** Melhor nota entre as tentativas, na escala de 0 a 100. */
+  nota: number | null;
+  tentativas: number;
+  ultimaEm: string | null;
+}
 
 export interface PessoaLinha {
   id: string;
@@ -37,6 +50,11 @@ export interface PessoaLinha {
   presencas: number;
   /** Presenças nos últimos 90 dias. É o que define o núcleo. */
   presencas90: number;
+  /**
+   * Presenças dentro da janela escolhida no seletor. Igual a `presencas`
+   * quando a janela é "tudo".
+   */
+  presencasJanela: number;
   atividades: number;
   /** Relatos com mais de 200 caracteres: o sinal barato de quem topa conversar. */
   relatosLongos: number;
@@ -50,6 +68,8 @@ export interface PessoaLinha {
   ultimoFormulario: string | null;
   ultimoMeet: string | null;
   estreia: string | null;
+  /** `null` quando a pessoa nunca fez o processo seletivo. */
+  seletivo: SeletivoDaPessoa | null;
 }
 
 export interface CondutorLinha {
@@ -62,8 +82,49 @@ export interface CondutorLinha {
   falaPct: number | null;
 }
 
+/** O que o processo seletivo mostra sobre o conjunto, não sobre uma pessoa. */
+export interface RetratoSeletivo {
+  /** Quantas candidaturas existem no banco. Zero antes da primeira importação. */
+  candidatos: number;
+  aprovados: number;
+  rejeitados: number;
+  semStatus: number;
+  /** Nota de corte observada: a menor nota entre os aprovados. */
+  corte: number | null;
+  /** Quantos candidatos o banco reconheceu como pessoa já conhecida. */
+  jaEramPessoa: number;
+  /**
+   * Aprovados que depois apareceram em algum grupo. São poucos por natureza,
+   * então vêm com nome: contar dois numa base de 33 e escrever "6%" seria
+   * inventar precisão.
+   */
+  aprovadosQueVieram: PessoaLinha[];
+  /** Aprovados sem nenhuma presença. É a fila de convite. */
+  aprovadosQueNaoVieram: PessoaLinha[];
+  /** Reprovados que apareceram assim mesmo. A formação é aberta, então acontece. */
+  rejeitadosQueVieram: PessoaLinha[];
+}
+
+/**
+ * O movimento dentro da janela. É o que o dashboard mostrava numa faixa de seis
+ * números, três dos quais ignoravam o próprio seletor ao lado deles.
+ */
+export interface FluxoNaJanela {
+  presencas: number;
+  pessoas: number;
+  /** Presenças divididas por pessoas. Média, com a mediana ao lado na tela. */
+  vezesPorPessoa: number | null;
+  /** Mediana de presenças por pessoa: com 62% vindo uma vez, ela costuma ser 1. */
+  medianaVezes: number;
+  /** Pessoas cuja primeira presença de todas caiu dentro da janela. */
+  estreantes: number;
+}
+
 export interface RetratoPessoas {
   geradoEm: string;
+  /** A janela que o servidor de fato aplicou, ecoada para a tela conferir. */
+  janela: ActivityRange;
+  fluxo: FluxoNaJanela;
   cobertura: {
     encontrosCapturados: number;
     presencasMedidas: number;
@@ -82,6 +143,7 @@ export interface RetratoPessoas {
   coortes: { mes: string; rotulo: string; estreantes: number; voltaram: number }[];
   pessoas: PessoaLinha[];
   condutores: CondutorLinha[];
+  seletivo: RetratoSeletivo;
   totais: {
     pessoas: number;
     comConta: number;
@@ -90,6 +152,9 @@ export interface RetratoPessoas {
     nosDois: number;
     umaVezSo: number;
     escrevemRelato: number;
+    doSeletivo: number;
+    /** Quantas pessoas a base conhece, ignorando a janela. Denominador honesto. */
+    pessoasNaBase: number;
   };
 }
 
@@ -145,11 +210,37 @@ const MESES_PT = [
 // O retrato
 // ═══════════════════════════════════════════════════════════════
 
-export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas> {
+/**
+ * Monta o retrato.
+ *
+ * A janela vale para o que é fluxo (quem apareceu, quem foi avaliado, quem se
+ * candidatou) e NÃO vale para o que é definição. Núcleo é cinco presenças em
+ * noventa dias porque essa é a definição do núcleo, não porque noventa é o
+ * valor de um seletor; sumiço é quarenta e cinco dias pelo mesmo motivo; coorte
+ * é por mês de estreia. Se esses três seguissem o seletor, escolher "hoje"
+ * devolveria um núcleo de zero pessoas, medido no banco, e a tela estaria
+ * dizendo que a formação acabou.
+ *
+ * Os recortes que falam do histórico da pessoa (veio uma vez só, escreve
+ * relato, está nos dois mundos) continuam olhando a vida inteira dela. A janela
+ * decide QUEM entra na lista, não o que se sabe de quem entrou. Assim "vieram
+ * uma vez só" dentro de trinta dias lê como "estreantes do mês que não
+ * voltaram", que é a pergunta útil, e não como "todo mundo que apareceu".
+ */
+export async function montarRetrato(
+  sb: SupabaseClient,
+  opcoes: { janela?: ActivityRange } = {},
+): Promise<RetratoPessoas> {
   const agora = Date.now();
+  const janela = opcoes.janela ?? "all";
+  const inicioJanela = getRangeStart(janela, new Date(agora))?.getTime() ?? null;
+  const naJanela = (t: number | null | undefined) =>
+    t != null && (inicioJanela === null || t >= inicioJanela);
 
-  const [pessoas, idents, subs, profs, participacoes, encontros, aulas, sessoes] =
-    await Promise.all([
+  const [
+    pessoas, idents, subs, profs, participacoes, encontros, aulas, sessoes,
+    candidaturas, tentativas,
+  ] = await Promise.all([
       lerTudo<{ id: string; nome_canonico: string }>(
         sb, "pessoas", "id,nome_canonico", "id"),
       lerTudo<{ pessoa_id: string; tipo: string; valor: string }>(
@@ -171,10 +262,19 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
         condutor_nome: string | null; descartado: boolean | null; fala_condutor_pct: number | null;
       }>(sb, "formacao_meet_encontros",
         "id,data_reuniao,atividade_nome,condutor_nome,descartado,fala_condutor_pct", "id"),
-      lerTudo<{ user_id: string; completed: boolean | null }>(
-        sb, "lesson_progress", "user_id,completed", "id"),
-      lerTudo<{ user_id: string; seconds: number | null }>(
-        sb, "usage_sessions", "user_id,seconds", "id"),
+      lerTudo<{ user_id: string; completed: boolean | null; completed_at: string | null }>(
+        sb, "lesson_progress", "user_id,completed,completed_at", "id"),
+      lerTudo<{ user_id: string; seconds: number | null; created_at: string | null }>(
+        sb, "usage_sessions", "user_id,seconds,created_at", "id"),
+      // O seletivo pode não ter sido importado ainda, e nesse caso as duas
+      // tabelas voltam vazias. Vazio aqui é estado normal, não erro: a tela
+      // trata isso mostrando o convite para soltar o CSV.
+      lerTudo<{ id: string; pessoa_id: string | null; nome: string; email: string | null }>(
+        sb, "seletivo_candidaturas", "id,pessoa_id,nome,email", "id"),
+      lerTudo<{
+        candidatura_id: string; nota: number | null; status: string | null;
+        realizada_em: string | null;
+      }>(sb, "seletivo_tentativas", "candidatura_id,nota,status,realizada_em", "id"),
     ]);
 
   // ── Índices de identidade ────────────────────────────────────
@@ -200,6 +300,7 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
   interface Acc {
     presencaDias: Set<string>;
     presencaDias90: Set<string>;
+    presencaDiasJanela: Set<string>;
     atividades: Set<string>;
     relatosLongos: number;
     aulas: number;
@@ -210,12 +311,21 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
     ultimoFormulario: number | null;
     ultimoMeet: number | null;
     estreia: number | null;
+    /**
+     * Deu qualquer sinal dentro da janela, inclusive sinal de plataforma.
+     * Sem isso, quem só assiste aula sumiria da lista em toda janela que não
+     * fosse "tudo", e o recorte "só na plataforma" ficaria permanentemente
+     * vazio justamente onde ele deveria aparecer.
+     */
+    sinalNaJanela: boolean;
   }
   const acc = new Map<string, Acc>();
   const vazio = (): Acc => ({
-    presencaDias: new Set(), presencaDias90: new Set(), atividades: new Set(),
+    presencaDias: new Set(), presencaDias90: new Set(), presencaDiasJanela: new Set(),
+    atividades: new Set(),
     relatosLongos: 0, aulas: 0, segundos: 0, encontrosMeet: 0, minutosMeet: 0,
     turnosFala: 0, ultimoFormulario: null, ultimoMeet: null, estreia: null,
+    sinalNaJanela: false,
   });
   const de = (id: string) => {
     let a = acc.get(id);
@@ -236,6 +346,10 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
     // (existem 20 dessas na base, de reenvio do formulário).
     a.presencaDias.add(`${d}|${norm(s.atividade_nome)}`);
     if (agora - t <= 90 * DIA) a.presencaDias90.add(`${d}|${norm(s.atividade_nome)}`);
+    if (naJanela(t)) {
+      a.presencaDiasJanela.add(`${d}|${norm(s.atividade_nome)}`);
+      a.sinalNaJanela = true;
+    }
     if (s.atividade_nome) a.atividades.add(s.atividade_nome);
     if ((s.relato ?? "").trim().length > 200) a.relatosLongos++;
     if (!a.ultimoFormulario || t > a.ultimoFormulario) a.ultimoFormulario = t;
@@ -263,6 +377,10 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
       const t = new Date(d).getTime();
       a.presencaDias.add(`${d}|${norm(enc.atividade_nome)}`);
       if (agora - t <= 90 * DIA) a.presencaDias90.add(`${d}|${norm(enc.atividade_nome)}`);
+      if (naJanela(t)) {
+        a.presencaDiasJanela.add(`${d}|${norm(enc.atividade_nome)}`);
+        a.sinalNaJanela = true;
+      }
       if (!a.ultimoMeet || t > a.ultimoMeet) a.ultimoMeet = t;
       if (!a.estreia || t < a.estreia) a.estreia = t;
       if (emailPresencaDia.has(`${pid}|${d}`)) formulariosNoMesmoDia++;
@@ -277,15 +395,80 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
   for (const l of aulas) {
     if (!l.completed) continue;
     const pid = pessoaPorPerfil.get(l.user_id);
-    if (pid) de(pid).aulas++;
+    if (!pid) continue;
+    const a = de(pid);
+    a.aulas++;
+    // Aula concluída conta como sinal, mas nunca como presença: presença é
+    // encontro com outras pessoas, e assistir vídeo sozinho não é isso. A
+    // diferença importa porque o núcleo se define por presença.
+    if (l.completed_at && naJanela(new Date(l.completed_at).getTime())) a.sinalNaJanela = true;
   }
   for (const u of sessoes) {
     const pid = pessoaPorPerfil.get(u.user_id);
-    if (pid) de(pid).segundos += u.seconds ?? 0;
+    if (!pid) continue;
+    const a = de(pid);
+    a.segundos += u.seconds ?? 0;
+    if (u.created_at && naJanela(new Date(u.created_at).getTime())) a.sinalNaJanela = true;
   }
   // Sobra de segurança: perfil sem identificador (não deveria existir depois da
   // 089, mas se existir a pessoa some da tela em vez de dar erro).
   void emailPorPerfil;
+
+  // ── Processo seletivo ────────────────────────────────────────
+  // O status vem do AvaliAllos e não é normalizado lá, então a comparação é
+  // frouxa de propósito: hoje o arquivo escreve "Ativo" e "Rejeitado", e um dia
+  // vai escrever outra coisa. O que não pode acontecer é uma mudança de rótulo
+  // transformar aprovado em reprovado em silêncio, então tudo que não for
+  // reconhecido como aprovado fica em `semStatus` e aparece separado na tela.
+  const APROVADO = new Set(["ativo", "aprovado", "aprovada", "selecionado", "selecionada"]);
+  const REPROVADO = new Set(["rejeitado", "rejeitada", "reprovado", "reprovada", "recusado"]);
+
+  const tentPorCand = new Map<string, typeof tentativas>();
+  for (const t of tentativas) {
+    const arr = tentPorCand.get(t.candidatura_id) ?? [];
+    arr.push(t);
+    tentPorCand.set(t.candidatura_id, arr);
+  }
+
+  // O seletivo NÃO segue a janela. Ele é um evento com data própria, e não um
+  // fluxo: filtrar "aprovados" por trinta dias esconderia justamente as pessoas
+  // aprovadas há mais tempo que nunca vieram, que são as que interessam.
+  const seletivoPorPessoa = new Map<string, SeletivoDaPessoa>();
+  let jaEramPessoa = 0;
+  for (const c of candidaturas) {
+    const ts = (tentPorCand.get(c.id) ?? [])
+      .slice()
+      .sort((x, y) => (x.realizada_em ?? "").localeCompare(y.realizada_em ?? ""));
+    const ultima = ts.at(-1) ?? null;
+    const notas = ts.map((t) => t.nota).filter((n): n is number => n != null);
+    const aprovado = ts.some((t) => APROVADO.has(norm(t.status)));
+    const dado: SeletivoDaPessoa = {
+      status: ultima?.status ?? null,
+      aprovado,
+      nota: notas.length ? Math.max(...notas) : null,
+      tentativas: ts.length,
+      ultimaEm: ultima?.realizada_em ?? null,
+    };
+    if (c.pessoa_id) {
+      jaEramPessoa++;
+      // Uma pessoa pode ter duas candidaturas se o e-mail e o WhatsApp dela
+      // caíram em linhas diferentes do arquivo. Fica a melhor: aprovado vence
+      // reprovado, e entre iguais vence a nota maior.
+      const antes = seletivoPorPessoa.get(c.pessoa_id);
+      const melhor =
+        !antes ||
+        (dado.aprovado && !antes.aprovado) ||
+        (dado.aprovado === antes.aprovado && (dado.nota ?? -1) > (antes.nota ?? -1));
+      if (melhor) {
+        seletivoPorPessoa.set(c.pessoa_id, {
+          ...dado,
+          tentativas: (antes?.tentativas ?? 0) + dado.tentativas,
+        });
+      } else if (antes) {
+        antes.tentativas += dado.tentativas;
+      }
+    }
+  }
 
   // ── Linhas ───────────────────────────────────────────────────
   const linhas: PessoaLinha[] = pessoas.map((p) => {
@@ -298,6 +481,7 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
       temConta: temConta.has(p.id),
       presencas: a.presencaDias.size,
       presencas90: a.presencaDias90.size,
+      presencasJanela: a.presencaDiasJanela.size,
       atividades: a.atividades.size,
       relatosLongos: a.relatosLongos,
       aulas: a.aulas,
@@ -309,8 +493,13 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
       ultimoFormulario: a.ultimoFormulario ? new Date(a.ultimoFormulario).toISOString() : null,
       ultimoMeet: a.ultimoMeet ? new Date(a.ultimoMeet).toISOString() : null,
       estreia: a.estreia ? new Date(a.estreia).toISOString() : null,
+      seletivo: seletivoPorPessoa.get(p.id) ?? null,
     };
   });
+
+  /** Deu algum sinal dentro da janela escolhida. Com "tudo", todo mundo dá. */
+  const dentroDaJanela = (l: PessoaLinha) =>
+    inicioJanela === null || (acc.get(l.id)?.sinalNaJanela ?? false);
 
   // O e-mail entra por mapa invertido, não por varredura dentro do map acima:
   // com 511 pessoas a busca linear seria irrelevante, mas ela é O(n²) e vira
@@ -386,6 +575,7 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
   // que nunca foi feita.
   const cond = new Map<string, { soma: number; n: number; relatos: { texto: string; data: string }[] }>();
   for (const s of subs) {
+    if (!naJanela(new Date(s.created_at).getTime())) continue;
     const nomes = (s.condutores ?? []).filter(Boolean);
     if (nomes.length === 0) continue;
     for (const c of nomes) {
@@ -400,6 +590,7 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
   const meetPorCondutor = new Map<string, { n: number; fala: number[] }>();
   for (const e of encontros) {
     if (e.descartado || !e.condutor_nome) continue;
+    if (e.data_reuniao && !naJanela(new Date(dia(e.data_reuniao)).getTime())) continue;
     const m = meetPorCondutor.get(e.condutor_nome) ?? { n: 0, fala: [] };
     m.n++;
     // Zero aqui não quer dizer que o condutor ficou calado, quer dizer que a
@@ -432,12 +623,64 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
     })
     .sort((a, b) => b.encontros - a.encontros);
 
+  // ── O retrato do seletivo ────────────────────────────────────
+  // Quem foi aprovado e ainda não veio é a fila de convite mais óbvia que a
+  // formação tem, e até hoje ela não existia em lugar nenhum: o resultado do
+  // seletivo morria no AvaliAllos e a presença morria no formulário.
+  const doSeletivo = linhas.filter((l) => l.seletivo != null);
+  const aprovados = doSeletivo.filter((l) => l.seletivo!.aprovado);
+  const rejeitados = doSeletivo.filter(
+    (l) => !l.seletivo!.aprovado && REPROVADO.has(norm(l.seletivo!.status)),
+  );
+  const notasAprovados = aprovados
+    .map((l) => l.seletivo!.nota)
+    .filter((n): n is number => n != null);
+  const porPresenca = (a: PessoaLinha, b: PessoaLinha) =>
+    b.presencas - a.presencas || (b.seletivo?.nota ?? 0) - (a.seletivo?.nota ?? 0);
+
+  const seletivo: RetratoSeletivo = {
+    candidatos: candidaturas.length,
+    aprovados: aprovados.length,
+    rejeitados: rejeitados.length,
+    semStatus: doSeletivo.length - aprovados.length - rejeitados.length,
+    corte: notasAprovados.length ? Math.min(...notasAprovados) : null,
+    jaEramPessoa,
+    aprovadosQueVieram: aprovados.filter((l) => l.presencas > 0).sort(porPresenca),
+    aprovadosQueNaoVieram: aprovados
+      .filter((l) => l.presencas === 0)
+      .sort((a, b) => (b.seletivo?.nota ?? 0) - (a.seletivo?.nota ?? 0)),
+    rejeitadosQueVieram: rejeitados.filter((l) => l.presencas > 0).sort(porPresenca),
+  };
+
   // ── Totais dos recortes ──────────────────────────────────────
-  const comGrupo = linhas.filter((l) => l.presencas > 0);
-  const validas = linhas.filter((l) => l.presencas > 0 || l.temConta);
+  // A janela decide quem entra na lista; os recortes continuam lendo a vida
+  // inteira de quem entrou. Ver o comentário da assinatura da função.
+  const naBase = linhas.filter((l) => l.presencas > 0 || l.temConta);
+  const validas = naBase.filter(dentroDaJanela);
+  const comGrupo = validas.filter((l) => l.presencas > 0);
+
+  // ── O movimento da janela ────────────────────────────────────
+  // A média de vezes por pessoa vem acompanhada da mediana porque as duas
+  // discordam muito aqui: com 62% da base vindo uma única vez, a média fica
+  // perto de 2 e a mediana é 1. Publicar só a média descreveria uma formação
+  // que não existe.
+  const presentesNaJanela = validas.filter((l) => l.presencasJanela > 0);
+  const presencasNaJanela = presentesNaJanela.reduce((s, l) => s + l.presencasJanela, 0);
+  const vezes = presentesNaJanela.map((l) => l.presencasJanela).sort((a, b) => a - b);
+  const fluxo: FluxoNaJanela = {
+    presencas: presencasNaJanela,
+    pessoas: presentesNaJanela.length,
+    vezesPorPessoa: presentesNaJanela.length
+      ? Math.round((presencasNaJanela / presentesNaJanela.length) * 10) / 10
+      : null,
+    medianaVezes: vezes.length ? vezes[Math.floor(vezes.length / 2)] : 0,
+    estreantes: validas.filter((l) => l.estreia && naJanela(new Date(l.estreia).getTime())).length,
+  };
 
   return {
     geradoEm: new Date(agora).toISOString(),
+    janela,
+    fluxo,
     cobertura: {
       encontrosCapturados: encontros.filter((e) => !e.descartado).length,
       presencasMedidas,
@@ -459,10 +702,11 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
       soFormulario: sumidos.filter((l) => recente(l.ultimoMeet)),
     },
     coortes,
-    pessoas: linhas
-      .filter((l) => l.presencas > 0 || l.temConta)
+    pessoas: validas
+      .slice()
       .sort((a, b) => b.presencas - a.presencas || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9)),
     condutores,
+    seletivo,
     totais: {
       pessoas: validas.length,
       comConta: validas.filter((l) => l.temConta).length,
@@ -471,6 +715,8 @@ export async function montarRetrato(sb: SupabaseClient): Promise<RetratoPessoas>
       nosDois: validas.filter((l) => l.presencas > 0 && l.temConta).length,
       umaVezSo: comGrupo.filter((l) => l.presencas === 1).length,
       escrevemRelato: validas.filter((l) => l.relatosLongos > 0).length,
+      doSeletivo: validas.filter((l) => l.seletivo != null).length,
+      pessoasNaBase: naBase.length,
     },
   };
 }

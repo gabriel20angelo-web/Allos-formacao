@@ -56,7 +56,11 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: auth.erro }, { status: auth.status });
   }
 
-  const dias = Math.min(Math.max(Number(req.nextUrl.searchParams.get("dias")) || 90, 7), 730);
+  // Piso 1, e não 7: o painel oferece a janela "hoje", e com piso 7 pedir hoje
+  // devolvia a semana inteira. O teto sobe para dez anos porque "tudo" também
+  // é uma opção do seletor, e cortar em dois anos esconderia o começo da base
+  // sem dizer nada.
+  const dias = Math.min(Math.max(Number(req.nextUrl.searchParams.get("dias")) || 90, 1), 3650);
   const desde = new Date(Date.now() - dias * 24 * 60 * 60 * 1000)
     .toISOString()
     .slice(0, 10);

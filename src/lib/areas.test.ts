@@ -85,6 +85,7 @@ describe("o painel é de quem administra", () => {
       "associados-admin",
       "dashboard",
       "formacao-base",
+      "pessoas",
       "certificados",
       "moderacao",
       "configuracoes",

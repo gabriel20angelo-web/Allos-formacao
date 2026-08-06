@@ -65,13 +65,36 @@ export default function AtividadeDetailPage() {
 
   const stats = useMemo(() => {
     if (submissions.length === 0)
-      return { notaGrupoMedia: 0, notaCondutorMedia: 0, totalFeedbacks: 0, condutores: [] as CondutorStats[] };
+      return {
+        notaGrupoMedia: 0,
+        notaCondutorMedia: null as number | null,
+        notasDeCondutor: 0,
+        totalFeedbacks: 0,
+        condutores: [] as CondutorStats[],
+      };
 
     const totalFeedbacks = submissions.length;
     const notaGrupoMedia =
       submissions.reduce((sum, s) => sum + s.nota_grupo, 0) / totalFeedbacks;
-    const notaCondutorMedia =
-      submissions.reduce((sum, s) => sum + s.nota_condutor, 0) / totalFeedbacks;
+
+    // A nota do condutor só entra quando havia condutor a avaliar.
+    //
+    // Quando a atividade é evento sem condutor, o formulário público grava 5
+    // fixo em `nota_condutor`. Somando essas linhas no numerador E no
+    // denominador, as duas pontas puxavam a média para 5: numa atividade cujos
+    // condutores tiram perto de 10, cada linha fantasma derrubava o card, e
+    // numa atividade sem condutor nenhum ele exibia exatamente 5,0, que se lê
+    // como nota mediana real onde ninguém foi avaliado.
+    //
+    // O filtro é por `condutores` vazio, e não por nota maior que zero: cinco é
+    // um valor válido da escala, então testar o valor deixaria essas linhas
+    // passarem inteiras.
+    const comCondutor = submissions.filter(
+      (s) => (s.condutores || []).filter(Boolean).length > 0,
+    );
+    const notaCondutorMedia = comCondutor.length
+      ? comCondutor.reduce((sum, s) => sum + s.nota_condutor, 0) / comCondutor.length
+      : null;
 
     // Aggregate by conductor
     const condMap = new Map<string, CondutorStats>();
@@ -98,9 +121,18 @@ export default function AtividadeDetailPage() {
           c.feedbacks.reduce((sum, f) => sum + f.nota_condutor, 0) /
           c.totalAvaliacoes,
       }))
-      .sort((a, b) => b.notaMedia - a.notaMedia);
+      // Por volume. Ordenar por nota fazia quem tem uma avaliação nota 10
+      // passar na frente de quem tem quarenta nota 9,8, e com todas as notas
+      // entre 9 e 10 a ordem era decidida por ruído.
+      .sort((a, b) => b.totalAvaliacoes - a.totalAvaliacoes || b.notaMedia - a.notaMedia);
 
-    return { notaGrupoMedia, notaCondutorMedia, totalFeedbacks, condutores };
+    return {
+      notaGrupoMedia,
+      notaCondutorMedia,
+      notasDeCondutor: comCondutor.length,
+      totalFeedbacks,
+      condutores,
+    };
   }, [submissions]);
 
   if (!isAdmin) {
@@ -201,7 +233,12 @@ export default function AtividadeDetailPage() {
             </span>
           </div>
           <p className="text-3xl font-fraunces font-bold text-[#FDFBF7]">
-            {stats.notaCondutorMedia > 0 ? stats.notaCondutorMedia.toFixed(1) : "—"}
+            {stats.notaCondutorMedia != null ? stats.notaCondutorMedia.toFixed(1) : "—"}
+          </p>
+          <p className="text-[11px] text-[#FDFBF7]/30 font-dm mt-1">
+            {stats.notasDeCondutor === 0
+              ? "nenhum feedback aqui listou condutor"
+              : `${stats.notasDeCondutor} de ${stats.totalFeedbacks} avaliaram alguém`}
           </p>
         </div>
       </div>

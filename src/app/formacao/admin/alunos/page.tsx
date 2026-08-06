@@ -2,6 +2,7 @@
 
 import { useEffect, useState, useMemo } from "react";
 import dynamic from "next/dynamic";
+import Link from "next/link";
 import Image from "next/image";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
@@ -40,10 +41,15 @@ function getActivityColor(enrollments: StudentWithEnrollments["enrollments"]): "
   return "yellow";
 }
 
+// Os rótulos dizem "matriculou", e não "ativo", porque é o que a conta faz:
+// ela olha `enrolled_at`, ou seja, a data em que a pessoa se inscreveu no
+// curso. Chamar isso de atividade fazia quem se matriculou ontem e nunca abriu
+// uma aula aparecer como ativo, e quem estuda toda semana num curso antigo
+// aparecer como sumido. Atividade de verdade está em /formacao/admin/pessoas.
 const activityDotStyles: Record<string, { bg: string; label: string }> = {
-  green: { bg: "rgb(34,197,94)", label: "Ativo recentemente" },
-  yellow: { bg: "rgb(234,179,8)", label: "Ativo há 7-30 dias" },
-  red: { bg: "rgb(239,68,68)", label: "Inativo há mais de 30 dias" },
+  green: { bg: "rgb(34,197,94)", label: "Matriculou nos últimos 7 dias" },
+  yellow: { bg: "rgb(234,179,8)", label: "Matriculou entre 7 e 30 dias atrás" },
+  red: { bg: "rgb(239,68,68)", label: "Matriculou há mais de 30 dias" },
 };
 
 export default function AdminAlunosPage() {
@@ -331,9 +337,11 @@ export default function AdminAlunosPage() {
       >
         <div>
           <h1 className="font-fraunces font-bold text-2xl text-cream tracking-tight">
-            Alunos
+            Matrículas
           </h1>
-          <p className="text-sm text-cream/35 mt-1">{students.length} alunos matriculados</p>
+          <p className="text-sm text-cream/35 mt-1">
+            {students.length} pessoas com matrícula em algum curso
+          </p>
         </div>
         {students.length > 0 && (
           <Button variant="secondary" size="sm" onClick={exportCSV}>
@@ -372,6 +380,29 @@ export default function AdminAlunosPage() {
       {view === "envios" && <EnviosPage />}
 
       {view === "alunos" && (<>
+      {/* ── O que esta tela é, e o que ela não é ──
+          Ela enxerga só quem tem conta E matrícula, e serve para operar
+          matrícula: conferir progresso por curso e desmatricular. Quem só
+          preenche o formulário de certificado ou só aparece na sala do Meet
+          nunca existiu aqui. Sem esta linha, os dois totais divergem em tela
+          e ninguém sabe qual dos dois acreditar. */}
+      <Link
+        href="/formacao/admin/pessoas"
+        className="flex items-center justify-between gap-3 mb-6 px-4 py-3 rounded-[12px] transition-colors hover:bg-white/[.04]"
+        style={{
+          background: "rgba(255,255,255,0.02)",
+          border: "1px solid rgba(255,255,255,0.06)",
+        }}
+      >
+        <p className="font-dm text-[11px] text-cream/35 leading-relaxed">
+          Aqui está quem tem conta e matrícula, para operar matrícula. O retrato
+          da pessoa, somando grupo, sala e plataforma, fica em Pessoas.
+        </p>
+        <span className="font-dm text-xs whitespace-nowrap" style={{ color: "#C84B31" }}>
+          Abrir
+        </span>
+      </Link>
+
       {/* Student count summary */}
       {students.length > 0 && (
         <motion.div
