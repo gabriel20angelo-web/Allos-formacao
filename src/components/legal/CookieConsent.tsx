@@ -171,6 +171,35 @@ export default function CookieConsent() {
     bannerRef.current?.focus({ preventScroll: true });
   }, [mode]);
 
+  // O aviso é fixo no rodapé, e no celular ele ocupa quase metade da altura da
+  // tela. Sem reservar esse espaço, ele fica POR CIMA do fim da página — e o
+  // que costuma estar ali é justamente o botão que a pessoa veio apertar.
+  // Medido em produção: no iPhone 13 (390×664) e no Pixel 5, o "Entrar" da tela
+  // de login nasce debaixo do aviso, e o toque vai parar no banner. Rolar não
+  // resolve, porque o aviso rola junto. Quem não fecha o aviso não consegue
+  // entrar, e do outro lado isso chega como "o site não abre pra mim" — não
+  // como "tem um banner na frente do botão", que ninguém reporta.
+  useEffect(() => {
+    if (mode !== "banner") return;
+    const node = bannerRef.current;
+    if (!node) return;
+
+    const anterior = document.body.style.paddingBottom;
+    const reservar = () => {
+      document.body.style.paddingBottom = `${node.offsetHeight}px`;
+    };
+    reservar();
+
+    // A altura muda ao girar o aparelho e quando os três botões quebram linha.
+    const observador = new ResizeObserver(reservar);
+    observador.observe(node);
+
+    return () => {
+      observador.disconnect();
+      document.body.style.paddingBottom = anterior;
+    };
+  }, [mode]);
+
   // Painel: foco inicial, Esc fecha, Tab circula dentro do diálogo.
   useEffect(() => {
     if (mode !== "panel") return;
