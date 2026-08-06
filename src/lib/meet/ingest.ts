@@ -16,6 +16,13 @@ import {
   listarSessoes,
   listarTranscricoes,
 } from "./client";
+import {
+  HORAS_ESPERANDO_ARTEFATO,
+  TETO_POR_RODADA,
+  aindaTemTrabalho,
+  ordenarPorUrgencia,
+} from "./fila";
+import type { EncontroConhecido } from "./fila";
 import { dataLocal, diaSemanaLocal, ehContaDaCasa, normalizarNome, sugerirAluno } from "./nomes";
 import type { CandidatoAluno } from "./nomes";
 import type { MeetParticipant, MeetParticipantSession } from "./types";
@@ -289,19 +296,50 @@ export async function ingerir(opts?: {
       // É o modo de falha mais silencioso possível: o encontro fica marcado
       // como não concluído para sempre, sem erro, sem log, e a transcrição que
       // chegaria dez minutos depois nunca é buscada.
-      const { data: pendentes } = await sb
+      //
+      // Duas coisas foram acrescentadas depois, por causa do encontro de
+      // 05/08/2026, cuja gravação existia no Google e nunca chegou ao painel:
+      //
+      // 1. Faltar a GRAVAÇÃO é pendência tanto quanto faltar a transcrição. O
+      //    vídeo fica pronto bem depois do fim, e o encontro que já tinha a
+      //    transcrição ingerida não entrava nesta lista: a janela voltava a
+      //    começar no último encontro e ele saía do alcance. A mesma falha
+      //    silenciosa de antes, entrando por outra porta.
+      // 2. Encontro DESCARTADO não é pendência. Teste de link de dez segundos
+      //    fica com `transcricao_ingerida = false` por 48 horas só porque o
+      //    Google nunca gera transcrição para ele, e nesse intervalo o lixo
+      //    contava como trabalho a fazer.
+      const { data: possiveisPendentes } = await sb
         .from("formacao_meet_encontros")
-        .select("conference_record_id, inicio")
+        .select(
+          "conference_record_id, inicio, fim, descartado, transcricao_ingerida, gravacao_uri"
+        )
         .eq("space_name", space.space_name)
-        .eq("transcricao_ingerida", false)
-        .order("inicio", { ascending: true });
+        .or("transcricao_ingerida.eq.false,gravacao_uri.is.null")
+        .order("inicio", { ascending: true })
+        .limit(200);
 
-      const listaPendente = (pendentes || []) as {
-        conference_record_id: string;
-        inicio: string;
-      }[];
+      const listaPendente = ((possiveisPendentes || []) as EncontroConhecido[]).filter(
+        (p) => aindaTemTrabalho(p)
+      );
       const idsPendentes = new Set(listaPendente.map((p) => p.conference_record_id));
       const maisAntigoPendente = listaPendente[0]?.inicio;
+
+      // O lixo já conhecido vai para o fim da fila, nunca à frente de um
+      // encontro de verdade. Sem isto, oito testes de link numa tarde consomem
+      // o teto inteiro da rodada e o encontro real fica esperando por uma vaga
+      // que nunca abre — foi exatamente o que aconteceu em 05/08/2026.
+      const { data: descartadosRows } = await sb
+        .from("formacao_meet_encontros")
+        .select("conference_record_id")
+        .eq("space_name", space.space_name)
+        .eq("descartado", true)
+        .limit(500);
+      const descartadosConhecidos = new Set(
+        (descartadosRows || []).map(
+          (d: { conference_record_id: string }) => d.conference_record_id
+        )
+      );
 
       const referencia =
         maisAntigoPendente && (!ultimo?.inicio || maisAntigoPendente < ultimo.inicio)
@@ -324,14 +362,11 @@ export async function ingerir(opts?: {
       // voltam sozinhos na próxima rodada, o pendente é o que está esperando
       // ser terminado. Por isso ele vai na frente da fila.
       const todas = await listarConferencias(space.space_name, desde);
-      const conferencias = [...todas]
-        .sort((a, b) => {
-          const pa = idsPendentes.has(a.name) ? 0 : 1;
-          const pb = idsPendentes.has(b.name) ? 0 : 1;
-          if (pa !== pb) return pa - pb;
-          return new Date(b.startTime).getTime() - new Date(a.startTime).getTime();
-        })
-        .slice(0, 8);
+      const conferencias = ordenarPorUrgencia(
+        todas,
+        idsPendentes,
+        descartadosConhecidos
+      ).slice(0, TETO_POR_RODADA);
 
       for (const conf of conferencias) {
         if (!conf.endTime) continue; // ainda em curso
@@ -365,7 +400,13 @@ export async function ingerir(opts?: {
         const fim = new Date(conf.endTime);
 
         const horasDesdeOFim = (Date.now() - fim.getTime()) / 3_600_000;
-        const gravacaoAindaPodeChegar = !existente?.gravacao_uri && horasDesdeOFim < 48;
+        // Encontro já descartado fica de fora: não há vídeo de teste de link
+        // para esperar, e sem esta condição o lixo era reprocessado inteiro a
+        // cada quinze minutos durante dois dias só porque não tinha gravação.
+        const gravacaoAindaPodeChegar =
+          !existente?.gravacao_uri &&
+          !existente?.descartado &&
+          horasDesdeOFim < HORAS_ESPERANDO_ARTEFATO;
 
         if (existente?.transcricao_ingerida && !faltaIdentificador && !gravacaoAindaPodeChegar) {
           continue;
@@ -443,13 +484,13 @@ export async function ingerir(opts?: {
             // ainda não gerou. Tratar como "não vem" fecha o encontro cedo
             // demais e o tempo de fala nunca é capturado, que é exatamente o
             // que aconteceu. Só desiste depois de dois dias.
-            transcricaoPronta = horasDesdeOFim >= 48;
+            transcricaoPronta = horasDesdeOFim >= HORAS_ESPERANDO_ARTEFATO;
           } else {
             // Existe transcrição, mas ainda sem arquivo: está sendo processada.
             // Também desiste em dois dias, senão um export que falhou do lado do
             // Google faz este encontro ser reprocessado inteiro a cada rodada,
             // para sempre, sem nunca fechar nem dar erro.
-            transcricaoPronta = horasDesdeOFim >= 48;
+            transcricaoPronta = horasDesdeOFim >= HORAS_ESPERANDO_ARTEFATO;
           }
         } catch (e) {
           res.erros.push(
@@ -767,7 +808,17 @@ export async function ingerir(opts?: {
           // minutos, para sempre: participantes, sessões e transcrição pedidos
           // de novo ao Google a cada rodada, para no fim ser jogado fora outra
           // vez. Hoje são doze dos catorze encontros do banco.
-          if (transcricaoPronta) {
+          //
+          // O descarte AUTOMÁTICO fecha na hora, sem esperar transcrição. O que
+          // decide o descarte (quanta gente entrou, por quanto tempo) já está
+          // congelado quando a conferência termina, e o Google nunca vai gerar
+          // transcrição de um teste de dez segundos: esperar as 48 horas só
+          // mantinha lixo ocupando a fila de trabalho da sala.
+          //
+          // O descarte manual continua esperando, porque ali o encontro pode
+          // ser real: se o administrador voltar atrás, as falas ainda têm de
+          // estar lá para serem colhidas.
+          if (transcricaoPronta || !decidiuNaMao) {
             await sb
               .from("formacao_meet_encontros")
               .update({ transcricao_ingerida: true })
