@@ -103,7 +103,12 @@ export const AREAS: Area[] = [
     rotulo: "Pessoas",
     href: "/formacao/admin/pessoas",
     resumo: "Quem volta, quem sumiu e com quem vale conversar.",
-    cargos: ["instructor"],
+    // Só administrador, e a lista vazia é o que diz isso. Não é zelo excessivo:
+    // a tela cruza e-mail, telefone e presença de gente que nunca pediu conta
+    // na plataforma, e as tabelas por trás dela têm policy `is_admin()`. Com
+    // `instructor` aqui, o instrutor entraria numa tela que carrega para sempre
+    // e nunca saberia que o problema é permissão.
+    cargos: [],
     onde: ["painel"],
     grupo: "formacao",
   },
