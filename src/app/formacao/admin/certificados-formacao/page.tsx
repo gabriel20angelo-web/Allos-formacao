@@ -209,12 +209,24 @@ export default function AdminCertificadosFormacaoPage() {
       }
     }
 
+    // Marca exatamente as linhas que a tela buscou, somou e mostrou, e nenhuma
+    // outra. Antes daqui rodava um `ilike('%nome%')` de novo, e a busca por
+    // nome parcial não distingue pessoas: resgatar "Ana Silva" tirava da fila
+    // também "Ana Silva Santos", que nunca apareceu nesta tela e nunca recebeu
+    // certificado nenhum. Como `certificado_resgatado` não tem desfazer, o
+    // estrago era silencioso e permanente. Pelos ids isso não é possível.
+    const idsResgatados = submissions.map((s) => s.id);
+    if (idsResgatados.length === 0) {
+      toast.error("Nenhuma submissão para resgatar.");
+      setClaiming(false);
+      return;
+    }
+
     const supabase = createClient();
     const { error } = await supabase
       .from("certificado_submissions")
       .update({ certificado_resgatado: true })
-      .ilike("nome_completo", `%${personName}%`)
-      .or("certificado_resgatado.is.null,certificado_resgatado.eq.false");
+      .in("id", idsResgatados);
 
     if (error) {
       toast.error("Erro ao resgatar certificados.");
