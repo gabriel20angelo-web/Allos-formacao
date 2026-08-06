@@ -167,7 +167,10 @@ export default function Destaque({
         onClick={alternar}
         title={destaque ? `Destacada. Clique para editar.` : `Destacar ${nome.split(" ")[0]}`}
         aria-label={destaque ? "Editar destaque" : "Destacar pessoa"}
-        className="p-1.5 rounded-full transition-colors hover:bg-white/[.06]"
+        // Alvo grande no celular. Ela fica a oito pixels de um botão que ocupa
+        // a linha inteira e abre o dossiê: com 28px de alvo, o dedo erra e
+        // abre a ficha de alguém em vez de marcar.
+        className="p-3 -m-1 sm:p-1.5 sm:m-0 rounded-full transition-colors hover:bg-white/[.06]"
       >
         <Star
           className="h-4 w-4 transition-colors"
@@ -179,7 +182,22 @@ export default function Destaque({
       {aberto && destaque && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className="absolute right-0 top-9 z-30 w-64 p-3 rounded-[12px] shadow-xl"
+          // No celular vira uma folha ancorada na base da tela; do tablet para
+          // cima volta a ser o balão ao lado da estrela. Três problemas caem
+          // com essa única mudança:
+          //
+          //   1. `Card` usa `backdrop-blur-md`, e filtro cria contexto de
+          //      empilhamento: o `z-30` ficava preso dentro do card de origem,
+          //      então o balão da última linha de um bloco era coberto e
+          //      borrado pelo card seguinte. `fixed` escapa disso.
+          //   2. `top-9` abria sempre para baixo, sem virar quando não havia
+          //      espaço. Na metade de baixo de uma lista de 25 linhas, o painel
+          //      abria fora da dobra e o teclado do celular tapava o resto.
+          //   3. Ancorado à direita de uma estrela que já está na borda, um
+          //      painel de 16rem encostava na margem oposta com zero de folga,
+          //      e num aparelho de 320px passava direto para fora.
+          className="fixed inset-x-3 bottom-3 z-50 p-4 rounded-[12px] shadow-xl
+                     sm:absolute sm:inset-auto sm:right-0 sm:top-9 sm:bottom-auto sm:w-64 sm:p-3"
           style={{ background: "rgba(26,26,26,0.98)", border: "1px solid rgba(255,255,255,0.1)" }}
         >
           <div className="flex items-center justify-between mb-2.5">
@@ -188,10 +206,10 @@ export default function Destaque({
             </span>
             <button
               onClick={() => setAberto(false)}
-              className="p-1 rounded-full hover:bg-white/[.06]"
+              className="p-2.5 -m-1.5 sm:p-1 sm:m-0 rounded-full hover:bg-white/[.06]"
               aria-label="Fechar"
             >
-              <X className="h-3 w-3 text-cream/35" />
+              <X className="h-3.5 w-3.5 sm:h-3 sm:w-3 text-cream/35" />
             </button>
           </div>
 
@@ -201,7 +219,7 @@ export default function Destaque({
                 key={c}
                 onClick={(e) => trocarCor(c, e)}
                 aria-label={`Cor ${c}`}
-                className="h-6 w-6 rounded-full transition-transform hover:scale-110"
+                className="h-9 w-9 sm:h-6 sm:w-6 rounded-full transition-transform hover:scale-110"
                 style={{
                   background: CORES_DESTAQUE[c],
                   outline: destaque.cor === c ? "2px solid rgba(253,251,247,0.6)" : "none",
@@ -220,20 +238,24 @@ export default function Destaque({
             placeholder="Por que essa pessoa? Ex: convidar para monitoria."
             rows={2}
             maxLength={500}
-            className="dark-input w-full rounded-[8px] px-2.5 py-2 font-dm text-xs resize-none"
+            // `text-base` no celular por causa do Safari do iPhone, que dá zoom
+            // automático em campo com fonte abaixo de 16px. Com o painel colado
+            // na borda, esse zoom joga metade dele para fora e não há como
+            // voltar sem fechar. O campo de busca da tela já resolve assim.
+            className="dark-input w-full rounded-[8px] px-2.5 py-2 font-dm text-base sm:text-xs resize-none"
           />
 
           <div className="flex items-center justify-between mt-2.5">
             <button
               onClick={tirar}
-              className="font-dm text-[11px] text-cream/35 hover:text-cream/60 transition-colors"
+              className="font-dm text-[11px] text-cream/35 hover:text-cream/60 transition-colors inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
             >
               Tirar destaque
             </button>
             <button
               onClick={salvarNota}
               disabled={salvando || nota === (destaque.nota ?? "")}
-              className="font-dm text-[11px] px-3 py-1.5 rounded-full transition-all disabled:opacity-40"
+              className="font-dm text-[11px] px-4 py-2.5 sm:px-3 sm:py-1.5 rounded-full transition-all disabled:opacity-40 min-h-[44px] sm:min-h-0"
               style={{ background: "linear-gradient(135deg, #C84B31, #A33D27)", color: "#FDFBF7" }}
             >
               {salvando ? "Salvando..." : "Salvar"}

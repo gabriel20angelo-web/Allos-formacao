@@ -5,10 +5,19 @@ interface CardProps {
   padding?: "sm" | "md" | "lg";
 }
 
+/**
+ * O padding cede no celular.
+ *
+ * Fixo em `p-6`, o card gastava 48px dos 360px de um celular comum, treze por
+ * cento da tela, só em espaço vazio dos dois lados. E como quase todo conteúdo
+ * dele é lista ou série de números, esses 48px eram a diferença entre uma
+ * linha caber e quebrar. Do tablet para cima o respiro volta ao que era, então
+ * nenhuma tela de desktop muda de aparência.
+ */
 const paddingStyles = {
-  sm: "p-4",
-  md: "p-6",
-  lg: "p-8",
+  sm: "p-3 sm:p-4",
+  md: "p-4 sm:p-6",
+  lg: "p-5 sm:p-8",
 };
 
 export default function Card({

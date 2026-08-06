@@ -342,14 +342,17 @@ export default function AdminPessoasPage() {
     ["todas", "Todas", totais.pessoas],
     ...ORDEM_ESTADOS.map((e) => [e, ROTULOS[e], estados[e]] as [Recorte, string, number]),
   ];
+  // Rótulos curtos porque eles quebram em linha: "Estiveram na sala e não
+  // falaram" ocupava sozinho a largura de um celular inteiro. A frase por
+  // extenso continua existindo, logo abaixo, quando o recorte está escolhido.
   const chipsAtributo: [Recorte, string, number][] = [
     ["destacadas", "Destacadas", totais.destacadas],
-    ["relato", "Escrevem relato", totais.escrevemRelato],
-    ["mudos", "Estiveram na sala e não falaram", totais.mudos],
-    ["seletivo", "Vieram do seletivo", totais.doSeletivo],
+    ["relato", "Escrevem", totais.escrevemRelato],
+    ["mudos", "Caladas na sala", totais.mudos],
+    ["seletivo", "Do seletivo", totais.doSeletivo],
     [
       "aprovado-ausente",
-      "Aprovadas e nunca vieram",
+      "Aprovadas e ausentes",
       retrato.pessoas.filter((p) => p.seletivo?.aprovado && p.encontros === 0).length,
     ],
   ];
@@ -417,7 +420,10 @@ export default function AdminPessoasPage() {
               Movimento {periodoAberto ? "em toda a história" : `nos últimos ${rotuloPeriodo}`}
             </h2>
           </div>
-          <div className="flex flex-wrap gap-x-10 gap-y-4">
+          {/* Grade de duas colunas no celular e faixa livre a partir do tablet:
+              com gap-x-10 e quebra livre, os quatro números caíam em 2, depois
+              1, depois 1, e o último ficava órfão no meio do card. */}
+          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-8 sm:gap-x-10 gap-y-5">
             {[
               { r: "encontros de grupo", v: fluxo.encontros, c: undefined as string | undefined },
               { r: "pessoas participaram", v: fluxo.pessoas, c: TERRACOTA },
@@ -466,7 +472,12 @@ export default function AdminPessoasPage() {
             {definicao("nucleo", regras)}
           </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[210px_1fr] gap-6">
+          {/* Pular de uma coluna direto para o lg desperdiça o tablet: em 768px o card tem
+              672px úteis, espaço de sobra para a coluna do número e a série lado a lado, e
+              mesmo assim o número grande ficava sozinho numa faixa com a série empilhada
+              embaixo. O sm entra com 170px, que é o que o número de três casas mais a frase
+              curta pedem sem apertar. */}
+          <div className="grid grid-cols-1 sm:grid-cols-[170px_1fr] lg:grid-cols-[210px_1fr] gap-4 sm:gap-6">
             <div>
               <p className="font-fraunces font-bold text-5xl tabular-nums leading-none" style={{ color: TERRACOTA }}>
                 {nucleo.total}
@@ -478,7 +489,7 @@ export default function AdminPessoasPage() {
               {nucleo.aproximacao > 0 && (
                 <button
                   onClick={() => setRecorte("chegando")}
-                  className="font-dm text-[11px] mt-3 text-left leading-relaxed transition-colors hover:text-cream/60"
+                  className="font-dm text-[11px] mt-3 text-left leading-relaxed transition-colors hover:text-cream/60 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
                   style={{ color: TEAL }}
                 >
                   {nucleo.aproximacao} {nucleo.aproximacao === 1 ? "pessoa está" : "pessoas estão"} chegando perto.
@@ -509,7 +520,15 @@ export default function AdminPessoasPage() {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
+              {/* Os sete pontos somam uns 302px com gap-x-5, e um celular de 360px deixa
+                  280px úteis dentro do card. O flex-wrap então joga justo o sétimo para a
+                  linha de baixo, que é o mais recente e o único destacado. Série de sete
+                  que quebra 6 mais 1 deixa de ser série: vira seis números e um número
+                  solto, e a comparação entre quinzenas, que é a única leitura que a série
+                  oferece, morre. Grid de sete colunas cabe sempre porque divide o que
+                  existe em vez de exigir o que falta. Do sm para cima sobra largura e o
+                  flex volta, que respira melhor. */}
+              <div className="grid grid-cols-7 gap-x-1 items-end sm:flex sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
                 {nucleo.serie.map((q, i) => (
                   <div key={q.rotulo} className="text-center">
                     <p
@@ -540,7 +559,11 @@ export default function AdminPessoasPage() {
               <p className="font-dm text-xs text-cream/70">
                 {nucleo.frios} {nucleo.frios === 1 ? "dessa pessoa não aparece" : `dessas ${nucleo.total} não aparecem`} há {regras.diasSumiu} dias ou mais.
               </p>
-              <a href="#sumiram" className="font-dm text-xs whitespace-nowrap" style={{ color: DOURADO }}>
+              <a
+                href="#sumiram"
+                className="font-dm text-xs whitespace-nowrap inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
+                style={{ color: DOURADO }}
+              >
                 Ver os nomes
               </a>
             </div>
@@ -575,12 +598,20 @@ export default function AdminPessoasPage() {
                 >
                   <button onClick={() => abrirPessoa(p)} className="flex-1 min-w-0 text-left">
                     <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+                    {/* A anotação é texto livre de até 500 caracteres. Sem break-words, um
+                        link colado sem espaço não tem onde quebrar, estoura a largura da
+                        linha e faz a PÁGINA inteira rolar de lado, porque o main do painel
+                        é overflow-y-auto e overflow-y automático implica overflow-x
+                        automático. E sem limite de linhas os 500 caracteres viram umas
+                        catorze linhas: uma pessoa só ocuparia três quartos da tela do
+                        celular. No desktop a nota cabe inteira, então o corte só vale
+                        enquanto a largura é pouca. */}
                     {p.destaque!.nota && (
-                      <p className="font-dm text-xs text-cream/50 mt-0.5 leading-relaxed">
+                      <p className="font-dm text-xs text-cream/50 mt-0.5 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
                         {p.destaque!.nota}
                       </p>
                     )}
-                    <div className="flex flex-wrap gap-x-3 mt-1">
+                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
                       <Selo cor={CORES[p.estado]}>{ROTULOS[p.estado]}</Selo>
                       <Selo>{p.encontros} {p.encontros === 1 ? "encontro" : "encontros"}</Selo>
                       {p.diasSemAparecer != null && (
@@ -646,7 +677,7 @@ export default function AdminPessoasPage() {
                   {sumidos.semSinal.length > 4 && (
                     <button
                       onClick={() => setVerTodosSumidos((v) => !v)}
-                      className="font-dm text-xs mt-2"
+                      className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
                       style={{ color: DOURADO }}
                     >
                       {verTodosSumidos ? "Mostrar menos" : `Ver ${sumidos.semSinal.length - 4} restantes`}
@@ -758,7 +789,7 @@ export default function AdminPessoasPage() {
             </p>
           ) : (
             <>
-              <div className="flex flex-wrap gap-x-8 gap-y-4 mb-5">
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 sm:gap-x-8 gap-y-5 mb-5">
                 {[
                   { r: "candidatos", v: seletivo.candidatos, c: undefined as string | undefined },
                   { r: "aprovados", v: seletivo.aprovados, c: TEAL },
@@ -794,12 +825,12 @@ export default function AdminPessoasPage() {
                   {seletivo.aprovadosQueVieram.length === 1 ? " apareceu" : " apareceram"} em algum grupo.
                 </p>
                 {seletivo.aprovadosQueVieram.length > 0 && (
-                  <div className="flex flex-wrap gap-x-3 gap-y-1 mt-2">
+                  <div className="flex flex-wrap gap-1.5 mt-2">
                     {seletivo.aprovadosQueVieram.map((p) => (
                       <button
                         key={p.id}
                         onClick={() => abrirPessoa(p)}
-                        className="font-dm text-[11px] transition-colors hover:text-cream"
+                        className="font-dm text-[11px] transition-colors hover:text-cream inline-flex items-center min-h-[44px] sm:min-h-0 px-2 py-1.5 rounded-full"
                         style={{ color: TEAL }}
                       >
                         {p.nome} <span className="text-cream/25">({p.encontros}x)</span>
@@ -845,7 +876,7 @@ export default function AdminPessoasPage() {
                   {seletivo.aprovadosQueNaoVieram.length > 6 && (
                     <button
                       onClick={() => setVerTodosAprovados((v) => !v)}
-                      className="font-dm text-xs mt-2"
+                      className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
                       style={{ color: ROXO }}
                     >
                       {verTodosAprovados
@@ -901,7 +932,7 @@ export default function AdminPessoasPage() {
             {previa && csv && (
               <div className="mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
                 <p className="font-dm text-[11px] text-cream/30 mb-3">{csv.nome}</p>
-                <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4 sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
                   {[
                     { r: "candidatos no arquivo", v: previa.linhas, c: undefined as string | undefined },
                     { r: "já são pessoas conhecidas", v: previa.casamPorEmail + previa.casamPorTelefone, c: TEAL },
@@ -950,10 +981,10 @@ export default function AdminPessoasPage() {
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card>
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 min-w-0">
               {periodoAberto ? "Todas as pessoas" : `Quem deu sinal nos últimos ${rotuloPeriodo}`}
             </h2>
-            <span className="font-dm text-xs text-cream/30 tabular-nums">
+            <span className="font-dm text-xs text-cream/30 tabular-nums flex-shrink-0 whitespace-nowrap">
               {filtradas.length === totais.pessoas ? totais.pessoas : `${filtradas.length} de ${totais.pessoas}`}
             </span>
           </div>
@@ -983,7 +1014,7 @@ export default function AdminPessoasPage() {
                 <button
                   key={o.chave}
                   onClick={() => setOrdem(o.chave)}
-                  className="font-dm text-[11px] px-2.5 py-1.5 rounded-full transition-all"
+                  className="font-dm text-[11px] px-2.5 py-1.5 rounded-full transition-all min-h-[40px] sm:min-h-0"
                   style={{
                     backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
                     color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.35)",
@@ -996,8 +1027,11 @@ export default function AdminPessoasPage() {
             })}
           </div>
 
-          {/* Estados: um por pessoa, e a cor é a mesma que pinta a linha. */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-2">
+          {/* Estados: um por pessoa, e a cor é a mesma que pinta a linha.
+              Quebram em linha em vez de rolar: são nove, e com rolagem
+              escondida num celular de 390px apareciam dois. Um recorte que
+              ninguém enxerga é um recorte que não existe. */}
+          <div className="flex flex-wrap gap-2 mb-2">
             {chipsEstado
               .filter(([k, , n]) => n > 0 || recorte === k || k === "todas")
               .map(([k, label, n]) => {
@@ -1026,7 +1060,7 @@ export default function AdminPessoasPage() {
           </div>
 
           {/* Atributos: cruzam com qualquer estado, então vêm numa linha própria. */}
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-3">
+          <div className="flex flex-wrap gap-2 mb-3">
             {chipsAtributo
               .filter(([k, , n]) => n > 0 || recorte === k)
               .map(([k, label, n]) => {
@@ -1035,7 +1069,7 @@ export default function AdminPessoasPage() {
                   <button
                     key={k}
                     onClick={() => setRecorte(k)}
-                    className="font-dm text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-all flex items-center gap-1.5"
+                    className="font-dm text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-all flex items-center gap-1.5 min-h-[40px] sm:min-h-0"
                     style={{
                       backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
                       color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.33)",
@@ -1138,7 +1172,7 @@ export default function AdminPessoasPage() {
                       </p>
                     )}
                     {c.relatos[0] && (
-                      <p className="font-dm text-xs text-cream/50 italic mt-2 leading-relaxed">
+                      <p className="font-dm text-xs text-cream/50 italic mt-2 leading-relaxed break-words">
                         &ldquo;{c.relatos[0].texto.slice(0, 180)}
                         {c.relatos[0].texto.length > 180 ? "..." : ""}&rdquo;
                       </p>
@@ -1168,7 +1202,7 @@ export default function AdminPessoasPage() {
       {/* ── Glossário ── */}
       <button
         onClick={() => setGlossarioAberto((v) => !v)}
-        className="flex items-center gap-1.5 font-dm text-[11px] text-cream/30 hover:text-cream/50 transition-colors"
+        className="flex items-center gap-1.5 font-dm text-[11px] text-cream/30 hover:text-cream/50 transition-colors min-h-[44px] sm:min-h-0"
       >
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${glossarioAberto ? "rotate-180" : ""}`} />
         O que cada palavra desta tela quer dizer
@@ -1250,23 +1284,29 @@ function LinhaPessoa({
         borderLeft: `3px solid ${corDestaque ?? corEstado}`,
       }}
     >
-      <button onClick={onClick} className="flex-1 min-w-0 text-left">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 flex-1">
-            <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
-            <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
-          </div>
-          <div className="flex-shrink-0 text-right">
-            <p className="font-fraunces font-bold text-sm tabular-nums" style={{ color: corEstado }}>
-              {p.encontros}
-            </p>
-            <p className="font-dm text-[9px] text-cream/25">
-              {p.encontros === 1 ? "encontro" : "encontros"}
-            </p>
-          </div>
+      {/* O número vem ANTES do nome, numa coluna estreita e alinhada.
+          Encostado na borda direita ele obrigava o olho a atravessar meia tela
+          vazia num monitor largo, e a coluna deixava de servir para comparar
+          uma linha com a outra, que é a única razão de o número ser coluna. */}
+      <button onClick={onClick} className="flex items-start gap-3 flex-1 min-w-0 text-left">
+        <div className="flex-shrink-0 w-11 text-right pt-0.5">
+          <p className="font-fraunces font-bold text-base tabular-nums leading-none" style={{ color: corEstado }}>
+            {p.encontros}
+          </p>
+          <p className="font-dm text-[9px] text-cream/25 leading-tight mt-0.5">
+            {p.encontros === 1 ? "encontro" : "encontros"}
+          </p>
         </div>
+        <div className="min-w-0 flex-1">
+          <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+        {/* Mesma razão da nota em "Você destacou": texto livre de 500 caracteres quebra
+            dentro da palavra para não empurrar a página de lado, e para de crescer em três
+            linhas enquanto a tela é estreita. */}
         {p.destaque?.nota && (
-          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed">{p.destaque.nota}</p>
+          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
+            {p.destaque.nota}
+          </p>
         )}
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
           <Selo cor={corEstado}>{ROTULOS[p.estado]}</Selo>
@@ -1296,6 +1336,7 @@ function LinhaPessoa({
           )}
           {!p.temConta && <Selo>sem conta na plataforma</Selo>}
         </div>
+        </div>
       </button>
       <Destaque pessoaId={p.id} nome={p.nome} destaque={p.destaque} onMudou={onDestaque} />
     </div>
@@ -1320,28 +1361,33 @@ function LinhaSumido({
         border: `1px solid ${corDestaque ? `${corDestaque}40` : "rgba(255,255,255,0.05)"}`,
       }}
     >
-      <button onClick={onClick} className="flex-1 min-w-0 text-left">
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0">
-            <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
-            <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
-          </div>
-          <div className="flex-shrink-0 text-right">
-            <p className="font-fraunces font-bold text-sm tabular-nums text-cream/70">{p.encontros}</p>
-            <p className="font-dm text-[9px] text-cream/25">encontros</p>
-          </div>
+      <button onClick={onClick} className="flex items-start gap-3 flex-1 min-w-0 text-left">
+        <div className="flex-shrink-0 w-11 text-right pt-0.5">
+          <p className="font-fraunces font-bold text-base tabular-nums leading-none text-cream/70">
+            {p.encontros}
+          </p>
+          <p className="font-dm text-[9px] text-cream/25 leading-tight mt-0.5">encontros</p>
         </div>
-        {p.destaque?.nota && (
-          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed">{p.destaque.nota}</p>
-        )}
-        <div className="flex flex-wrap gap-x-3 mt-1.5">
-          <Selo cor={DOURADO}>{textoRecencia(p.diasSemAparecer ?? 0)}</Selo>
-          {p.ultimoMeet && (
-            <Selo cor={ROXO}>
-              visto na sala em{" "}
-              {new Date(p.ultimoMeet).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-            </Selo>
+        <div className="min-w-0 flex-1">
+          <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+          {/* Mesma razão da nota em "Você destacou": texto livre de 500 caracteres quebra
+              dentro da palavra para não empurrar a página de lado, e para de crescer em três
+              linhas enquanto a tela é estreita. */}
+          {p.destaque?.nota && (
+            <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
+              {p.destaque.nota}
+            </p>
           )}
+          <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+            <Selo cor={DOURADO}>{textoRecencia(p.diasSemAparecer ?? 0)}</Selo>
+            {p.ultimoMeet && (
+              <Selo cor={ROXO}>
+                visto na sala em{" "}
+                {new Date(p.ultimoMeet).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+              </Selo>
+            )}
+          </div>
         </div>
       </button>
       <Destaque pessoaId={p.id} nome={p.nome} destaque={p.destaque} onMudou={onDestaque} />

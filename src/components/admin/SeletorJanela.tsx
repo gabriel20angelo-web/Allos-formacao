@@ -27,8 +27,11 @@ export function SeletorJanela({
   onChange: (j: ActivityRange) => void;
   desabilitado?: boolean;
 }) {
+  // Quebra de linha, e não rolagem horizontal: com rolagem escondida, num
+  // celular de 390px aparecem duas opções e meia e as outras não existem para
+  // quem olha. Seis botões curtos cabem em duas linhas sem incomodar ninguém.
   return (
-    <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-1">
+    <div className="flex flex-wrap gap-1.5">
       {JANELAS_PAINEL.map((j) => {
         const ativo = valor === j;
         return (
