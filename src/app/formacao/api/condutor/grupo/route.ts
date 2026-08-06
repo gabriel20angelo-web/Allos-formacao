@@ -31,6 +31,7 @@ import {
   MeetApiError,
 } from "@/lib/meet/client";
 import type { AccessType } from "@/lib/meet/types";
+import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
 
 export const dynamic = "force-dynamic";
 
@@ -113,16 +114,23 @@ export async function GET() {
 
   const jobIds = (jobs || []).map((j: { id: string }) => j.id);
 
-  const { data: clipes } = jobIds.length
+  const { data: clipesCrus } = jobIds.length
     ? await sb
         .from("formacao_clips")
         .select(
-          "id, job_id, titulo, descricao, hashtags, url, preview_url, thumbnail_url, duracao_seg, pontuacao, avaliacao, anotacao, oculto"
+          "id, job_id, external_id, titulo, descricao, hashtags, url, preview_url, thumbnail_url, duracao_seg, pontuacao, avaliacao, anotacao, oculto"
         )
         .in("job_id", jobIds)
         .eq("oculto", false)
         .order("pontuacao", { ascending: false })
     : { data: [] };
+
+  // Endereço assinado vale 24 horas; sem renovar na leitura, a curadoria abre
+  // cega no dia seguinte ao corte.
+  const { clipes } = await renovarEnderecos(
+    sb,
+    (clipesCrus || []) as ClipeComEndereco[]
+  );
 
   const clipesPorEncontro = new Map<string, unknown[]>();
   const encontroDoJob = new Map(

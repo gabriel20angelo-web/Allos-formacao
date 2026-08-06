@@ -222,6 +222,66 @@ export async function consultarProjeto(projetoId: string): Promise<EstadoProjeto
 }
 
 /**
+ * Quando o endereço assinado de um clipe deixa de valer.
+ *
+ * Os arquivos ficam num CDN atrás de assinatura, e o endereço carrega a própria
+ * validade: `hdnts=URLPrefix=...~Expires=1786064598~Signature=...`. São **24
+ * horas**. Depois disso o mesmo endereço responde 403, e o que aparece na tela é
+ * miniatura preta, player mudo e download que não baixa.
+ *
+ * Ler a validade do próprio endereço é o que permite saber se ele morreu sem
+ * gastar uma requisição por clipe. Devolve null quando o formato não é
+ * reconhecido, e nesse caso quem chama deve tratar como desconhecido, não como
+ * válido.
+ */
+export function validadeDoEndereco(url: string | null | undefined): Date | null {
+  if (!url) return null;
+  try {
+    const hdnts = new URL(url).searchParams.get("hdnts");
+    if (!hdnts) return null;
+    for (const parte of hdnts.split("~")) {
+      const [chaveParte, valor] = parte.split("=");
+      if (chaveParte === "Expires" || chaveParte === "exp") {
+        const segundos = Number(valor);
+        if (!Number.isFinite(segundos) || segundos < 1_000_000_000) return null;
+        return new Date(segundos * 1000);
+      }
+    }
+  } catch {
+    return null;
+  }
+  return null;
+}
+
+/**
+ * Os clipes de um projeto, com endereços recém-assinados.
+ *
+ * A mesma consulta de `consultarProjeto`, sem a chamada ao projeto em si. Existe
+ * separada porque renovar endereço não precisa saber em que estágio o projeto
+ * está, e a chamada ao projeto é justamente a que dá 404 depois que ele é
+ * apagado do histórico, embora os clipes continuem lá.
+ */
+export async function listarClipesDoProjeto(
+  projetoId: string
+): Promise<ClipeRetornado[]> {
+  const resp = await fetch(
+    `${API}/exportable-clips?q=findByProjectId&projectId=${encodeURIComponent(projetoId)}&pageSize=100`,
+    { headers: { Authorization: `Bearer ${chave()}` }, cache: "no-store" }
+  );
+  if (!resp.ok) {
+    throw new OpusError(
+      traduzir(resp.status, await resp.text()),
+      resp.status
+    );
+  }
+  const corpo = JSON.parse(await resp.text()) as {
+    list?: ClipeRetornado[];
+    data?: ClipeRetornado[];
+  };
+  return corpo.list || corpo.data || [];
+}
+
+/**
  * Baixa a transcrição que o OpusClip fez do vídeo.
  *
  * Vale para vídeo que nunca passou pelo Meet: os encontros antigos, que só

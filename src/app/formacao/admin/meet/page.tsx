@@ -19,6 +19,7 @@ import {
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
   UserSearch, Video, FileText, X, Youtube,
   Trash2, Download, Play, ThumbsUp, ThumbsDown, EyeOff, Copy, ChevronDown, ChevronRight,
+  ImageOff,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -2723,7 +2724,12 @@ export default function MeetAdminPage() {
                               formato não é motivo para reprovar.
                             </p>
 
-                            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-4">
+                            {/* Seis colunas nas telas largas, e não quatro: o
+                                corte é vertical, então cada coluna a menos
+                                estica o card para mais de seiscentos pixels de
+                                altura e a grade vira uma coluna de painéis
+                                gigantes que não deixa comparar nada. */}
+                            <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 xl:grid-cols-6">
                               {j.clipes
                                 .filter((c) => {
                                   if (filtroClipes === "todos") return true;
@@ -3172,6 +3178,11 @@ function ClipeCard({
   const aprovado = c.avaliacao === "gostei";
   const rejeitado = c.avaliacao === "rejeitado";
 
+  // Miniatura que não carrega desenha nada, e "nada" é indistinguível de um
+  // corte que é mesmo escuro. Sem este estado, a tela inteira de endereços
+  // vencidos parecia um problema de conteúdo, não de acesso.
+  const [imagemFalhou, setImagemFalhou] = useState(false);
+
   return (
     <div
       className="rounded-xl overflow-hidden flex flex-col"
@@ -3187,17 +3198,21 @@ function ClipeCard({
         style={{ aspectRatio: "9/16", background: "rgba(0,0,0,0.3)" }}
         title="Assistir"
       >
-        {c.thumbnail_url ? (
+        {c.thumbnail_url && !imagemFalhou ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
             src={c.thumbnail_url}
             alt=""
             className="w-full h-full object-cover"
             loading="lazy"
+            onError={() => setImagemFalhou(true)}
           />
         ) : (
-          <span className="absolute inset-0 flex items-center justify-center text-cream/20 text-xs">
-            sem prévia
+          <span className="absolute inset-0 flex flex-col items-center justify-center gap-1 px-2 text-center">
+            <ImageOff className="h-4 w-4 text-cream/20" />
+            <span className="text-[10px] text-cream/25 leading-tight">
+              {imagemFalhou ? "prévia expirada, recarregue a página" : "sem prévia"}
+            </span>
           </span>
         )}
         <span

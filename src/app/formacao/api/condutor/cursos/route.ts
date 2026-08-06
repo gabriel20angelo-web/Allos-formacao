@@ -23,6 +23,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { identificarCondutor } from "@/lib/condutor";
+import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
 
 export const dynamic = "force-dynamic";
 
@@ -104,14 +105,21 @@ export async function GET(req: NextRequest) {
   const { data: clipes } = await sb
     .from("formacao_clips")
     .select(
-      "id, job_id, titulo, descricao, hashtags, url, preview_url, thumbnail_url, duracao_seg, pontuacao, avaliacao, anotacao"
+      "id, job_id, external_id, titulo, descricao, hashtags, url, preview_url, thumbnail_url, duracao_seg, pontuacao, avaliacao, anotacao"
     )
     .in("job_id", jobIds)
     .eq("oculto", false)
     .order("pontuacao", { ascending: false });
 
+  // O endereço assinado dos arquivos vale 24 horas. Renovar na leitura é o que
+  // impede que o condutor abra a curadoria e encontre só retângulos pretos.
+  const { clipes: frescos } = await renovarEnderecos(
+    sb,
+    (clipes || []) as ClipeComEndereco[]
+  );
+
   const porJob = new Map<string, unknown[]>();
-  for (const c of (clipes || []) as { job_id: string }[]) {
+  for (const c of frescos as { job_id: string }[]) {
     porJob.set(c.job_id, [...(porJob.get(c.job_id) || []), c]);
   }
 

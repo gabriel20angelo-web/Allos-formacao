@@ -12,6 +12,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { enfileirarEncontro, idDoDrive, rotaDoVideo } from "@/lib/meet/clipes";
+import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
 
 export const dynamic = "force-dynamic";
 
@@ -110,13 +111,22 @@ export async function GET(req: NextRequest) {
         .order("pontuacao", { ascending: false })
     : { data: [] };
 
+  // O endereço dos arquivos vale 24 horas e é guardado no dia em que o corte
+  // fica pronto. Sem renovar aqui, a aba abre com uma parede de retângulos
+  // pretos no dia seguinte, sem erro nenhum na tela.
+  const { clipes: frescos, falhas } = await renovarEnderecos(
+    sb,
+    (clips || []) as ClipeComEndereco[]
+  );
+
   const porJob = new Map<string, unknown[]>();
-  for (const c of (clips || []) as { job_id: string }[]) {
+  for (const c of frescos as { job_id: string }[]) {
     porJob.set(c.job_id, [...(porJob.get(c.job_id) || []), c]);
   }
 
   return NextResponse.json({
     configurado: !!process.env.OPUSCLIP_API_KEY,
+    enderecos_falharam: falhas.length > 0,
     jobs: (jobs || []).map((j: { id: string }) => ({
       ...j,
       clipes: porJob.get(j.id) || [],
