@@ -246,6 +246,10 @@ export default function CookieConsent() {
   if (mode === "hidden") return null;
 
   if (mode === "banner") {
+    // O teto de metade da tela é para o aparelho pequeno: num 320x568 o aviso
+    // chegava a 318px, 56% da altura, e o que sobrava para a página era uma
+    // fresta onde nada cabia. Passando disso, o próprio aviso rola por dentro,
+    // e os três botões continuam alcançáveis.
     return (
       <div
         ref={bannerRef}
@@ -253,7 +257,7 @@ export default function CookieConsent() {
         aria-label="Aviso de cookies"
         aria-describedby="allos-cookie-banner-text"
         tabIndex={-1}
-        className="fixed inset-x-0 bottom-0 z-[70] border-t border-[rgba(255,255,255,0.08)] bg-[#111111]/97 backdrop-blur-md focus:outline-none"
+        className="fixed inset-x-0 bottom-0 z-[70] max-h-[50vh] overflow-y-auto border-t border-[rgba(255,255,255,0.08)] bg-[#111111]/97 backdrop-blur-md focus:outline-none"
       >
         <div className="mx-auto flex max-w-5xl flex-col gap-4 px-5 py-5 md:flex-row md:items-center md:justify-between md:gap-8">
           <div className="min-w-0">
