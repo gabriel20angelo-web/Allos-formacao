@@ -1,4 +1,4 @@
-// Dashboard admin — landing page do /admin. Dois modos lado a lado:
+// Dashboard admin: a porta do /admin. Dois modos lado a lado:
 //   - mode="async" (cursos): foca em cursos publicados, matrículas, certificados,
 //     receita (se cobrar), reviews, retenção e atividade recente
 //   - mode="sync" (formação síncrona): foca em sessões conduzidas, quórum
@@ -272,7 +272,7 @@ export default function AdminDashboard() {
       }
       const supabase = createClient();
 
-      // Published courses — single query that gives us both the count and the ids
+      // Cursos publicados: uma consulta só devolve a contagem e os ids
       let coursesQuery = supabase
         .from("courses")
         .select("id", { count: "exact" })
@@ -358,7 +358,7 @@ export default function AdminDashboard() {
   //
   // Uma passada só, sem filtro de data: o histórico inteiro da Allos cabe
   // folgado em memória e assim trocar de janela não custa ida ao banco. O teto
-  // por fonte existe só para o dia em que isso deixar de ser verdade — quando
+  // por fonte existe só para o dia em que isso deixar de ser verdade, quando
   // bater, a timeline avisa em vez de mostrar um recorte silencioso.
   // A RLS já limita o instrutor aos alunos dos cursos dele.
 
@@ -1384,24 +1384,24 @@ export default function AdminDashboard() {
                       },
                       {
                         label: "Quórum médio",
-                        value: quorumAuto.quorum_medio?.toFixed(1) ?? "—",
+                        value: quorumAuto.quorum_medio?.toFixed(1) ?? "sem dado",
                         hint: "Média de participantes por encontro, sem contar o condutor.",
                       },
                       {
                         label: "Duração média",
                         value: quorumAuto.duracao_media_min
                           ? `${Math.round(quorumAuto.duracao_media_min)} min`
-                          : "—",
+                          : "sem dado",
                         hint: "Quanto o encontro durou de fato, do primeiro ao último minuto da sala. Bem diferente do previsto é sinal de algo.",
                       },
                       {
                         label: "Minutos por pessoa",
-                        value: quorumAuto.minutos_medios_por_pessoa?.toFixed(0) ?? "—",
+                        value: quorumAuto.minutos_medios_por_pessoa?.toFixed(0) ?? "sem dado",
                         hint: "Tempo médio que cada pessoa realmente ficou na sala.",
                       },
                       {
                         label: "Permanência",
-                        value: (quorumAuto.permanencia_media_pct?.toFixed(0) ?? "—") + "%",
+                        value: quorumAuto.permanencia_media_pct != null ? quorumAuto.permanencia_media_pct.toFixed(0) + "%" : "sem dado",
                         hint: "Quanto do encontro a pessoa média acompanhou. Baixo indica gente que entra e sai.",
                         color:
                           (quorumAuto.permanencia_media_pct ?? 0) > 80
@@ -1414,7 +1414,7 @@ export default function AdminDashboard() {
                         ? [
                             {
                               label: "Vozes ativas",
-                              value: (quorumAuto.vozes_ativas_pct?.toFixed(0) ?? "—") + "%",
+                              value: quorumAuto.vozes_ativas_pct != null ? quorumAuto.vozes_ativas_pct.toFixed(0) + "%" : "sem dado",
                               hint: "Percentual de presentes que falou ao menos uma vez. Indicador de grupo vivo, mais honesto que quórum.",
                               sub: `${quorumAuto.encontros_com_transcricao} com transcrição`,
                               color:
@@ -1426,14 +1426,14 @@ export default function AdminDashboard() {
                             },
                             {
                               label: "Fala do condutor",
-                              value: (quorumAuto.fala_condutor_pct?.toFixed(0) ?? "—") + "%",
+                              value: quorumAuto.fala_condutor_pct != null ? quorumAuto.fala_condutor_pct.toFixed(0) + "%" : "sem dado",
                               hint: "Fatia do tempo falado que é do condutor. Muito alto sugere aula expositiva onde deveria haver grupo.",
                             },
                           ]
                         : []),
                       {
                         label: "Identificados",
-                        value: (quorumAuto.identificacao_pct?.toFixed(0) ?? "—") + "%",
+                        value: quorumAuto.identificacao_pct != null ? quorumAuto.identificacao_pct.toFixed(0) + "%" : "sem dado",
                         hint: "Participações já ligadas a uma pessoa do cadastro. O resto espera conciliação na aba Meet.",
                         color:
                           (quorumAuto.identificacao_pct ?? 0) > 85

@@ -90,7 +90,7 @@ export default function AtividadesPage() {
   const filtered = naVista.filter(matchBusca);
   const totalAtivas = atividades.filter((a) => !a.arquivado).length;
   const totalArquivadas = atividades.length - totalAtivas;
-  // quantas da outra aba a busca alcançaria — evita "não encontrada" enganoso
+  // quantas da outra aba a busca alcançaria, o que evita um "não encontrada" enganoso
   const matchesNaOutraVista = atividades.filter(
     (a) => (vista === "arquivadas" ? !a.arquivado : !!a.arquivado) && matchBusca(a)
   ).length;
@@ -104,7 +104,7 @@ export default function AtividadesPage() {
     if (existente) {
       toast.error(
         existente.arquivado
-          ? "Essa atividade já existe — está arquivada."
+          ? "Essa atividade já existe, e está arquivada."
           : "Essa atividade já existe."
       );
       return;
@@ -232,7 +232,7 @@ export default function AtividadesPage() {
     toast.success(
       arquivando
         ? `"${item.nome}" arquivada.`
-        : `"${item.nome}" restaurada — ative para publicá-la de novo.`
+        : `"${item.nome}" restaurada. Ative para publicá-la de novo.`
     );
   }
 
@@ -447,7 +447,7 @@ export default function AtividadesPage() {
               className="mt-3 text-[11px] font-dm text-[#C84B31] hover:underline"
             >
               {matchesNaOutraVista} em{" "}
-              {vista === "arquivadas" ? "“Em uso”" : "“Arquivadas”"} — ver lá
+              {vista === "arquivadas" ? "“Em uso”" : "“Arquivadas”"}, ver lá
             </button>
           )}
         </div>

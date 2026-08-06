@@ -211,7 +211,7 @@ export default function CondutorDetailPage() {
             <span className="text-xs text-[#FDFBF7]/40 font-dm">Nota Média</span>
           </div>
           <p className="text-3xl font-fraunces font-bold text-[#FDFBF7]">
-            {stats.notaMedia > 0 ? stats.notaMedia.toFixed(1) : "—"}
+            {stats.notaMedia > 0 ? stats.notaMedia.toFixed(1) : "sem dado"}
           </p>
         </div>
 

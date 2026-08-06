@@ -218,7 +218,7 @@ export default function AtividadeDetailPage() {
             <span className="text-xs text-[#FDFBF7]/40 font-dm">Nota Média (Grupo)</span>
           </div>
           <p className="text-3xl font-fraunces font-bold text-[#FDFBF7]">
-            {stats.notaGrupoMedia > 0 ? stats.notaGrupoMedia.toFixed(1) : "—"}
+            {stats.notaGrupoMedia > 0 ? stats.notaGrupoMedia.toFixed(1) : "sem dado"}
           </p>
         </div>
 
@@ -233,7 +233,7 @@ export default function AtividadeDetailPage() {
             </span>
           </div>
           <p className="text-3xl font-fraunces font-bold text-[#FDFBF7]">
-            {stats.notaCondutorMedia != null ? stats.notaCondutorMedia.toFixed(1) : "—"}
+            {stats.notaCondutorMedia != null ? stats.notaCondutorMedia.toFixed(1) : "sem dado"}
           </p>
           <p className="text-[11px] text-[#FDFBF7]/30 font-dm mt-1">
             {stats.notasDeCondutor === 0
