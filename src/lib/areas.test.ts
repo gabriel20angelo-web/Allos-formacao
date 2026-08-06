@@ -86,6 +86,8 @@ describe("o painel é de quem administra", () => {
       "dashboard",
       "formacao-base",
       "pessoas",
+      "grupos",
+      "condutores",
       "certificados",
       "moderacao",
       "configuracoes",
@@ -180,7 +182,20 @@ describe("área com dono não abre para quem circula livre", () => {
     const prof = cargosDe(quem("instructor"));
     expect(areaProibida("/formacao/admin/alunos", prof)).toBe(false);
     expect(areaProibida("/formacao/admin/cursos", prof)).toBe(false);
-    expect(areaProibida("/formacao/admin/condutores", prof)).toBe(false);
+  });
+
+  it("grupos e condutores passaram a ter dono, e o dono é o administrador", () => {
+    // Até 06/08/2026 `/formacao/admin/condutores` não estava no catálogo, o que
+    // significa que não aparecia na barra lateral E não era barrada para
+    // ninguém. Virou área quando ganhou o que ganhou: as duas telas listam nome
+    // de participante e leem tabelas com policy `is_admin()`.
+    const prof = cargosDe(quem("instructor"));
+    expect(areaProibida("/formacao/admin/grupos", prof)).toBe(true);
+    expect(areaProibida("/formacao/admin/condutores", prof)).toBe(true);
+
+    const adm = cargosDe(quem("admin"));
+    expect(areaProibida("/formacao/admin/grupos", adm)).toBe(false);
+    expect(areaProibida("/formacao/admin/condutores", adm)).toBe(false);
   });
 
   it("o administrador não é barrado em lugar nenhum", () => {

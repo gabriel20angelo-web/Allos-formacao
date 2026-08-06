@@ -31,7 +31,6 @@ import {
   JANELAS_PAINEL,
   RANGE_LABELS,
   getRangeStart,
-  janelaEmDias,
   type ActivityRange,
   type TimelineEvent,
 } from "@/lib/utils/activity";
@@ -48,10 +47,9 @@ import Skeleton from "@/components/ui/Skeleton";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import {
-  Award,
-  Star,
+
   Users,
-  TrendingUp,
+
   BarChart3,
   Flame,
 } from "lucide-react";
@@ -122,8 +120,6 @@ type SubmissionRow = {
   condutores: string[] | null;
 };
 
-
-
 type ReviewJoinRow = {
   id: string;
   rating: number;
@@ -182,7 +178,6 @@ type ExamRow = {
   course?: { title: string | null } | null;
 };
 
-
 // ═══════════════════════════════════════════════════════════════
 // Main component
 // ═══════════════════════════════════════════════════════════════
@@ -227,23 +222,10 @@ export default function AdminDashboard() {
     topGroups: { name: string; avgNota: number; count: number }[];
     ratingDistribution: { rating: number; count: number }[];
   } | null>(null);
-  const [selectedCondutor, setSelectedCondutor] = useState<string | null>(null);
-
-  // Quórum medido pela API do Meet. Fica em state próprio e não dentro de
-  // formacaoStats porque a fonte é outra (encontros reais, não formulários de
-  // feedback) e porque pode simplesmente não existir: enquanto ninguém criar
-  // as salas, a faixa não aparece em vez de mostrar zeros.
-  const [quorumAuto, setQuorumAuto] = useState<{
-    encontros: number;
-    duracao_media_min: number | null;
-    quorum_medio: number | null;
-    minutos_medios_por_pessoa: number | null;
-    permanencia_media_pct: number | null;
-    vozes_ativas_pct: number | null;
-    fala_condutor_pct: number | null;
-    encontros_com_transcricao: number;
-    identificacao_pct: number | null;
-  } | null>(null);
+  // O quórum medido saiu daqui para /admin/grupos, junto com a faixa inteira.
+  // Ele consumia um campo de nove de uma rota que varria todas as participações
+  // do período, e os outros oito eram calculados e jogados fora a cada abertura
+  // desta tela.
 
   // ── Timelines de atividade ──
   // Os eventos são carregados uma vez e recortados no cliente: trocar de
@@ -608,12 +590,6 @@ export default function AdminDashboard() {
         }
       });
 
-      // e-mail é a chave da pessoa em todo o resto do painel
-      const emailDoUsuario = new Map<string, string>();
-      asyncEvents.forEach((e) => {
-        if (e.personEmail) emailDoUsuario.set(e.personEmail, e.personEmail);
-      });
-
       const { data: perfis } = await sb.from("profiles").select("id, email");
       const emailPorId = new Map<string, string>();
       ((perfis ?? []) as { id: string; email: string }[]).forEach((pf) =>
@@ -676,7 +652,10 @@ export default function AdminDashboard() {
     }
 
     fetchTempo().catch(() => {});
-  }, [profile, isAdmin, asyncEvents]);
+    // `asyncEvents` saiu daqui junto com o mapa `emailDoUsuario`, que era
+    // construído e nunca lido. A dependência existia só por causa dele, e
+    // fazia este efeito de seis consultas rodar duas vezes por carregamento.
+  }, [profile, isAdmin]);
 
   // ── Async engagement stats ──
   useEffect(() => {
@@ -997,7 +976,6 @@ export default function AdminDashboard() {
           .sort((a, b) => b.avgNota - a.avgNota)
           .slice(0, 5);
 
-
         // Rating distribution (nota_grupo 1-10)
         const ratingDistribution: { rating: number; count: number }[] = [];
         for (let r = 1; r <= 10; r++) {
@@ -1045,32 +1023,6 @@ export default function AdminDashboard() {
     }
 
     fetchFormacaoStats();
-  }, [profile, dashPeriod]);
-
-  // ═══════════════════════════════════════════════════════════
-  // Quórum automático (Google Meet API)
-  // ═══════════════════════════════════════════════════════════
-  // Vai por rota de API, e não por consulta no cliente, porque a agregação
-  // atravessa todas as participações do período.
-  useEffect(() => {
-    async function fetchQuorumAuto() {
-      if (!profile) return;
-      // A conversão era um ternário que entendia três janelas e mandava todas
-      // as outras para 730 dias. Escolher "hoje" fazia esta faixa mostrar dois
-      // anos enquanto o resto da tela mostrava um dia, e ninguém via, porque um
-      // quórum médio de dois anos é um número perfeitamente plausível.
-      const dias = janelaEmDias(dashPeriod);
-      try {
-        const r = await fetch(`/formacao/api/admin/meet/metricas?dias=${dias}`);
-        if (!r.ok) return setQuorumAuto(null);
-        const j = await r.json();
-        setQuorumAuto(j.vazio ? null : j.geral);
-      } catch {
-        // Módulo ainda não configurado: a faixa simplesmente não aparece.
-        setQuorumAuto(null);
-      }
-    }
-    fetchQuorumAuto();
   }, [profile, dashPeriod]);
 
   // ═══════════════════════════════════════════════════════════
@@ -1144,10 +1096,6 @@ export default function AdminDashboard() {
   // ═══════════════════════════════════════════════════════════
   // Derived values
   // ═══════════════════════════════════════════════════════════
-
-  const selectedCondutorData = selectedCondutor
-    ? formacaoStats?.topCondutores.find((c) => c.name === selectedCondutor)
-    : null;
 
   // ═══════════════════════════════════════════════════════════
   // Loading state
@@ -1243,10 +1191,7 @@ export default function AdminDashboard() {
               {JANELAS_PAINEL.map((p) => (
                 <button
                   key={p}
-                  onClick={() => {
-                    setDashPeriod(p);
-                    setSelectedCondutor(null);
-                  }}
+                  onClick={() => setDashPeriod(p)}
                   className="font-dm text-xs px-3 py-1.5 rounded-full transition-all"
                   style={{
                     backgroundColor:
@@ -1293,19 +1238,11 @@ export default function AdminDashboard() {
                     value: String(formacaoStats.totalFeedbacks),
                     hint: "Formulários de certificação enviados na janela escolhida.",
                   },
-                  {
-                    label: "Nota do grupo",
-                    value: formacaoStats.avgNotaGrupo.toFixed(1),
-                    suffix: "/10",
-                  },
-                  {
-                    label: "Nota dos condutores",
-                    value: formacaoStats.avgNotaCondutor.toFixed(1),
-                    suffix: "/10",
-                    color: "#2E9E8F",
-                    sub: `${formacaoStats.notasDeCondutor} de ${formacaoStats.totalFeedbacks} avaliaram alguém`,
-                    hint: "Só entram as submissões que tinham condutor a avaliar. Quando a atividade é evento sem condutor, o formulário grava 5 fixo, e essas linhas puxavam a média para baixo por causa de uma pergunta que nunca foi feita.",
-                  },
+                  // "Nota do grupo" foi para /admin/grupos e "Nota dos condutores"
+                  // para /admin/condutores. As duas eram médias sobre o
+                  // formulário, que pega cerca de metade de quem esteve na sala e
+                  // não por sorteio, então elas precisam aparecer ao lado da
+                  // cobertura para poderem ser lidas. Aqui não havia esse lado.
                   {
                     label: "Com relato escrito",
                     value:
@@ -1365,87 +1302,55 @@ export default function AdminDashboard() {
                 </Link>
               </motion.div>
 
-              {/* ── Quórum medido no Meet ──
-                  Só aparece quando existe encontro capturado. Presença aqui é
-                  medida, não declarada: sai de quem esteve na sala e por quanto
-                  tempo, não de quem preencheu formulário. */}
-              {quorumAuto && quorumAuto.encontros > 0 && (
-                <>
-                  <div className="h-5" />
-                  <StatStrip
-                    title="Quórum medido no Meet"
-                    accent="#6c5ce7"
-                    delay={0.15}
-                    items={[
-                      {
-                        label: "Encontros capturados",
-                        value: String(quorumAuto.encontros),
-                        hint: "Encontros que de fato aconteceram e foram lidos pela API do Google Meet no período.",
-                      },
-                      {
-                        label: "Quórum médio",
-                        value: quorumAuto.quorum_medio?.toFixed(1) ?? "sem dado",
-                        hint: "Média de participantes por encontro, sem contar o condutor.",
-                      },
-                      {
-                        label: "Duração média",
-                        value: quorumAuto.duracao_media_min
-                          ? `${Math.round(quorumAuto.duracao_media_min)} min`
-                          : "sem dado",
-                        hint: "Quanto o encontro durou de fato, do primeiro ao último minuto da sala. Bem diferente do previsto é sinal de algo.",
-                      },
-                      {
-                        label: "Minutos por pessoa",
-                        value: quorumAuto.minutos_medios_por_pessoa?.toFixed(0) ?? "sem dado",
-                        hint: "Tempo médio que cada pessoa realmente ficou na sala.",
-                      },
-                      {
-                        label: "Permanência",
-                        value: quorumAuto.permanencia_media_pct != null ? quorumAuto.permanencia_media_pct.toFixed(0) + "%" : "sem dado",
-                        hint: "Quanto do encontro a pessoa média acompanhou. Baixo indica gente que entra e sai.",
-                        color:
-                          (quorumAuto.permanencia_media_pct ?? 0) > 80
-                            ? "#22C55E"
-                            : (quorumAuto.permanencia_media_pct ?? 0) > 55
-                              ? "#F59E0B"
-                              : "#EF4444",
-                      },
-                      ...(quorumAuto.encontros_com_transcricao > 0
-                        ? [
-                            {
-                              label: "Vozes ativas",
-                              value: quorumAuto.vozes_ativas_pct != null ? quorumAuto.vozes_ativas_pct.toFixed(0) + "%" : "sem dado",
-                              hint: "Percentual de presentes que falou ao menos uma vez. Indicador de grupo vivo, mais honesto que quórum.",
-                              sub: `${quorumAuto.encontros_com_transcricao} com transcrição`,
-                              color:
-                                (quorumAuto.vozes_ativas_pct ?? 0) > 60
-                                  ? "#22C55E"
-                                  : (quorumAuto.vozes_ativas_pct ?? 0) > 30
-                                    ? "#F59E0B"
-                                    : "#EF4444",
-                            },
-                            {
-                              label: "Fala do condutor",
-                              value: quorumAuto.fala_condutor_pct != null ? quorumAuto.fala_condutor_pct.toFixed(0) + "%" : "sem dado",
-                              hint: "Fatia do tempo falado que é do condutor. Muito alto sugere aula expositiva onde deveria haver grupo.",
-                            },
-                          ]
-                        : []),
-                      {
-                        label: "Identificados",
-                        value: quorumAuto.identificacao_pct != null ? quorumAuto.identificacao_pct.toFixed(0) + "%" : "sem dado",
-                        hint: "Participações já ligadas a uma pessoa do cadastro. O resto espera conciliação na aba Meet.",
-                        color:
-                          (quorumAuto.identificacao_pct ?? 0) > 85
-                            ? "#22C55E"
-                            : (quorumAuto.identificacao_pct ?? 0) > 60
-                              ? "#F59E0B"
-                              : "#EF4444",
-                      },
-                    ]}
-                  />
-                </>
-              )}
+              {/* ── As portas ──
+                  Os oito números de quórum que ficavam aqui foram para
+                  /admin/grupos, e o de fala do condutor para /admin/condutores.
+                  Sete deles eram sobre grupo e um sobre condutor, e nenhum era
+                  "informação geral": para serem lidos precisavam da tendência e
+                  da cobertura ao lado, que esta tela não tinha onde pôr.
+
+                  No lugar entram caminhos, sem número. Número repetido em duas
+                  telas é pior que número em uma só, porque as duas divergem e
+                  ninguém sabe qual está certa. */}
+              <div className="h-5" />
+              <motion.div
+                initial={{ opacity: 0, y: 12 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ delay: 0.16 }}
+                className="grid gap-3 sm:grid-cols-2"
+              >
+                {[
+                  {
+                    href: "/formacao/admin/grupos",
+                    titulo: "Grupos",
+                    texto:
+                      "Quórum por grupo, tendência, quem sumiu, quem não fala e se o problema é o horário.",
+                  },
+                  {
+                    href: "/formacao/admin/condutores",
+                    titulo: "Condutores",
+                    texto:
+                      "Os feedbacks de cada um, o quórum dos grupos dele e quanto ele fala na sala.",
+                  },
+                ].map((p) => (
+                  <Link
+                    key={p.href}
+                    href={p.href}
+                    className="block p-5 rounded-[16px] transition-colors hover:bg-white/[0.05]"
+                    style={{
+                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid rgba(255,255,255,0.06)",
+                    }}
+                  >
+                    <p className="font-fraunces font-semibold text-cream text-base">
+                      {p.titulo}
+                    </p>
+                    <p className="font-dm text-xs text-cream/40 mt-1 leading-relaxed">
+                      {p.texto}
+                    </p>
+                  </Link>
+                ))}
+              </motion.div>
 
               <div className="h-5" />
 
@@ -1473,417 +1378,6 @@ export default function AdminDashboard() {
                 />
               </motion.div>
 
-              {/* ── Rankings: Condutores + Participantes + Activity Dist ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                {/* Left: Conductor ranking */}
-                <div className="space-y-4">
-                  {!selectedCondutor ? (
-                    <motion.div
-                      initial={{ opacity: 0, y: 12 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      transition={{ delay: 0.8, duration: 0.4 }}
-                    >
-                      <Card>
-                        <div className="flex items-center gap-2 mb-3">
-                          <TrendingUp
-                            className="h-4 w-4"
-                            style={{ color: "#C84B31" }}
-                          />
-                          <h3 className="font-dm text-sm font-semibold text-cream/70">
-                            Ranking Condutores
-                          </h3>
-                        </div>
-                        {formacaoStats.topCondutores.length > 0 ? (
-                          <div className="space-y-0.5">
-                            {formacaoStats.topCondutores.map((c, i) => (
-                              <button
-                                key={c.name}
-                                onClick={() =>
-                                  setSelectedCondutor(c.name)
-                                }
-                                className="flex items-center gap-3 py-2 px-2 w-full text-left rounded-[8px] hover:bg-white/[.03] transition-colors duration-150"
-                              >
-                                <span
-                                  className="font-dm text-sm font-bold w-5 text-center"
-                                  style={{
-                                    color:
-                                      i < 3
-                                        ? "#C84B31"
-                                        : "rgba(253,251,247,0.3)",
-                                  }}
-                                >
-                                  {i + 1}
-                                </span>
-                                <span className="font-dm text-sm flex-1 text-cream/70 truncate">
-                                  {c.name}
-                                </span>
-                                <div className="flex items-center gap-1">
-                                  <Star
-                                    className="h-3 w-3"
-                                    fill="#C84B31"
-                                    stroke="#C84B31"
-                                  />
-                                  <span
-                                    className="font-dm text-sm font-bold"
-                                    style={{ color: "#C84B31" }}
-                                  >
-                                    {c.avg.toFixed(1)}
-                                  </span>
-                                </div>
-                                <span
-                                  className="font-dm text-xs px-1.5 py-0.5 rounded-full"
-                                  style={{
-                                    backgroundColor:
-                                      "rgba(255,255,255,0.04)",
-                                    color: "rgba(253,251,247,0.4)",
-                                  }}
-                                >
-                                  {c.count}x
-                                </span>
-                              </button>
-                            ))}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-cream/30 text-center py-4">
-                            Nenhum condutor no período.
-                          </p>
-                        )}
-                        <p className="text-[10px] text-cream/20 mt-3 font-dm text-center">
-                          Ranking pondera nota e volume
-                        </p>
-                      </Card>
-                    </motion.div>
-                  ) : (
-                    /* Conductor detail view */
-                    <motion.div
-                      initial={{ opacity: 0, x: -12 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ duration: 0.3 }}
-                    >
-                      <Card>
-                        <div className="flex items-center justify-between mb-4">
-                          <div>
-                            <h3 className="font-fraunces font-bold text-base text-cream">
-                              {selectedCondutor}
-                            </h3>
-                            {selectedCondutorData && (
-                              <div className="flex items-center gap-3 mt-1">
-                                <div className="flex items-center gap-1">
-                                  <Star
-                                    className="h-3 w-3"
-                                    fill="#C84B31"
-                                    stroke="#C84B31"
-                                  />
-                                  <span
-                                    className="font-dm text-sm font-bold"
-                                    style={{ color: "#C84B31" }}
-                                  >
-                                    {selectedCondutorData.avg.toFixed(1)}
-                                  </span>
-                                  <span className="text-xs text-cream/30">
-                                    /10
-                                  </span>
-                                </div>
-                                <span className="text-xs text-cream/40 font-dm">
-                                  {selectedCondutorData.count} feedback
-                                  {selectedCondutorData.count !== 1
-                                    ? "s"
-                                    : ""}
-                                </span>
-                              </div>
-                            )}
-                          </div>
-                          <button
-                            onClick={() => setSelectedCondutor(null)}
-                            className="font-dm text-xs px-3 py-1.5 rounded-full transition-all hover:bg-white/[.05]"
-                            style={{
-                              color: "rgba(253,251,247,0.5)",
-                              border:
-                                "1px solid rgba(255,255,255,0.08)",
-                            }}
-                          >
-                            Voltar
-                          </button>
-                        </div>
-
-                        {selectedCondutorData &&
-                        selectedCondutorData.relatos.length > 0 ? (
-                          <div className="space-y-3 max-h-[340px] overflow-y-auto pr-1">
-                            {selectedCondutorData.relatos.map(
-                              (r, i) => (
-                                <div
-                                  key={i}
-                                  className="px-3 py-2.5 rounded-[10px]"
-                                  style={{
-                                    background:
-                                      "rgba(255,255,255,0.02)",
-                                    border:
-                                      "1px solid rgba(255,255,255,0.04)",
-                                  }}
-                                >
-                                  <p className="font-dm text-xs text-cream/60 leading-relaxed italic">
-                                    &ldquo;{r.text}&rdquo;
-                                  </p>
-                                  <p className="font-dm text-[10px] text-cream/20 mt-1.5">
-                                    {new Date(
-                                      r.date
-                                    ).toLocaleDateString("pt-BR")}
-                                  </p>
-                                </div>
-                              )
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-xs text-cream/30 text-center py-6">
-                            Nenhum relato para este condutor.
-                          </p>
-                        )}
-                      </Card>
-                    </motion.div>
-                  )}
-                </div>
-
-                {/* Right: Activity distribution.
-                    O ranking de participantes que ficava aqui virou a tabela
-                    ordenável de /formacao/admin/pessoas, onde a pessoa aparece
-                    uma vez só e com todos os sinais na mesma linha. */}
-                <div className="space-y-4">
-                  <motion.div
-                    initial={{ opacity: 0, y: 12 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: 0.9, duration: 0.4 }}
-                  >
-                    <Card>
-                      <div className="flex items-center gap-2 mb-3">
-                        <Award
-                          className="h-4 w-4"
-                          style={{ color: "#2E9E8F" }}
-                        />
-                        <h3 className="font-dm text-sm font-semibold text-cream/70">
-                          Distribuição por Atividade
-                        </h3>
-                      </div>
-                      {formacaoStats.activityDist.length > 0 ? (
-                        <div className="space-y-2.5">
-                          {/* O total sai do laço: ele era recalculado uma vez
-                              por linha renderizada, varrendo a lista inteira
-                              a cada barra. */}
-                          {(() => {
-                            const totalAct = formacaoStats.activityDist.reduce(
-                              (s, a) => s + a.count,
-                              0
-                            );
-                            return formacaoStats.activityDist.map((act) => {
-                            const pct =
-                              totalAct > 0
-                                ? (act.count / totalAct) * 100
-                                : 0;
-                            return (
-                              <div key={act.name}>
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="font-dm text-xs text-cream/60 truncate flex-1 mr-2">
-                                    {act.name}
-                                  </span>
-                                  <div className="flex items-center gap-2 flex-shrink-0">
-                                    <span className="font-dm text-xs font-bold text-cream/50 tabular-nums">
-                                      {act.count}
-                                    </span>
-                                    <span className="font-dm text-[10px] text-cream/25 tabular-nums w-10 text-right">
-                                      {pct.toFixed(0)}%
-                                    </span>
-                                  </div>
-                                </div>
-                                <div
-                                  className="h-1.5 rounded-full overflow-hidden"
-                                  style={{
-                                    background:
-                                      "rgba(255,255,255,0.04)",
-                                  }}
-                                >
-                                  <div
-                                    className="h-full rounded-full transition-all duration-500"
-                                    style={{
-                                      width: `${pct}%`,
-                                      background:
-                                        "rgba(46,158,143,0.5)",
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            );
-                            });
-                          })()}
-                          {formacaoStats.atividadesOcultas > 0 && (
-                            <p className="font-dm text-[11px] text-cream/25 pt-1">
-                              mais {formacaoStats.atividadesOcultas}{" "}
-                              {formacaoStats.atividadesOcultas === 1
-                                ? "atividade com menos feedbacks"
-                                : "atividades com menos feedbacks"}
-                              , no CSV
-                            </p>
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-cream/30 text-center py-4">
-                          Nenhuma atividade no período.
-                        </p>
-                      )}
-                    </Card>
-                  </motion.div>
-                </div>
-              </div>
-
-              {/* ── Groups: Top by rating + Top by participation ── */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 mb-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 0.95, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <Star
-                        className="h-4 w-4"
-                        style={{ color: "#C84B31" }}
-                      />
-                      <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                        Grupos mais bem avaliados
-                      </h3>
-                    </div>
-                    {formacaoStats.topGroups.length > 0 ? (
-                      <div className="space-y-2">
-                        {formacaoStats.topGroups.map((g, i) => (
-                          <div
-                            key={g.name}
-                            className="flex items-center gap-3 py-1.5 px-2 rounded-[8px] hover:bg-white/[.02] transition-colors"
-                          >
-                            <span
-                              className="font-dm text-sm font-bold w-5 text-center"
-                              style={{
-                                color:
-                                  i < 3
-                                    ? "#C84B31"
-                                    : "rgba(253,251,247,0.3)",
-                              }}
-                            >
-                              {i + 1}
-                            </span>
-                            <span className="font-dm text-sm flex-1 text-cream/70 truncate">
-                              {g.name}
-                            </span>
-                            <div className="flex items-center gap-1">
-                              <Star
-                                className="h-3 w-3"
-                                fill="#C84B31"
-                                stroke="#C84B31"
-                              />
-                              <span
-                                className="font-fraunces font-bold text-sm"
-                                style={{ color: "#C84B31" }}
-                              >
-                                {g.avgNota.toFixed(1)}
-                              </span>
-                            </div>
-                            <span className="font-dm text-xs text-cream/30">
-                              {g.count}x
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <p className="text-xs text-cream/30 text-center py-4">
-                        Sem dados
-                      </p>
-                    )}
-                  </Card>
-                </motion.div>
-
-              </div>
-
-              {/* ── Distribuição das notas de grupo ──
-                  Sozinha agora. A distribuição da nota de condutor, que ficava
-                  ao lado, saiu: 67 dos casos dela estavam na barra do 5 e
-                  nenhum era avaliação ruim, eram eventos sem condutor onde o
-                  formulário grava 5 fixo. E a retenção mensal, que vinha logo
-                  abaixo, saiu para /formacao/admin/pessoas como retorno por
-                  coorte de estreia. */}
-              <div className="mb-6">
-                <motion.div
-                  initial={{ opacity: 0, y: 12 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: 1.05, duration: 0.4 }}
-                >
-                  <Card>
-                    <div className="flex items-center gap-2 mb-3">
-                      <BarChart3
-                        className="h-4 w-4"
-                        style={{ color: "#C84B31" }}
-                      />
-                      <h3 className="font-fraunces text-sm font-bold text-cream/70">
-                        Distribuição Nota Grupo
-                      </h3>
-                    </div>
-                    {(() => {
-                      const maxRatingCount = Math.max(
-                        ...formacaoStats.ratingDistribution.map(
-                          (r) => r.count
-                        ),
-                        1
-                      );
-                      return formacaoStats.ratingDistribution.some(
-                        (r) => r.count > 0
-                      ) ? (
-                        <div className="space-y-1.5">
-                          {formacaoStats.ratingDistribution.map(
-                            (r) => {
-                              const barWidth =
-                                maxRatingCount > 0
-                                  ? (r.count / maxRatingCount) * 100
-                                  : 0;
-                              const hue =
-                                ((r.rating - 1) / 9) * 120;
-                              const barColor = `hsl(${hue}, 70%, 50%)`;
-                              return (
-                                <div
-                                  key={r.rating}
-                                  className="flex items-center gap-2"
-                                >
-                                  <span className="font-fraunces font-bold text-xs text-cream/50 w-5 text-right tabular-nums">
-                                    {r.rating}
-                                  </span>
-                                  <div
-                                    className="flex-1 h-4 rounded overflow-hidden"
-                                    style={{
-                                      background:
-                                        "rgba(255,255,255,0.04)",
-                                    }}
-                                  >
-                                    <div
-                                      className="h-full rounded transition-all duration-500"
-                                      style={{
-                                        width: `${barWidth}%`,
-                                        background: barColor,
-                                        opacity: 0.7,
-                                      }}
-                                    />
-                                  </div>
-                                  <span className="font-dm text-[10px] text-cream/30 w-6 text-right tabular-nums">
-                                    {r.count}
-                                  </span>
-                                </div>
-                              );
-                            }
-                          )}
-                        </div>
-                      ) : (
-                        <p className="text-xs text-cream/30 text-center py-4">
-                          Sem dados
-                        </p>
-                      );
-                    })()}
-                  </Card>
-                </motion.div>
-              </div>
             </>
           ) : (
             <div className="text-center py-12">

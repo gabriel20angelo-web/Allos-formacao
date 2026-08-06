@@ -14,8 +14,9 @@
 
 "use client";
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
+import { useSala } from "@/hooks/useSala";
 import Button from "@/components/ui/Button";
 import ConfirmDialog from "@/components/ui/ConfirmDialog";
 import Skeleton from "@/components/ui/Skeleton";
@@ -231,8 +232,36 @@ export default function CalendarioPage() {
   const [addingHorario, setAddingHorario] = useState(false);
 
   // Quórum rápido por slot
-  type LatestPresenca = { id: string; slot_id: string; total_participantes: number; data_reuniao: string };
+  type LatestPresenca = { id: string; slot_id: string; total_participantes: number; data_reuniao: string; medido?: boolean };
   const [latestPresencas, setLatestPresencas] = useState<Record<string, LatestPresenca>>({});
+
+  // A presença medida na sala do Meet tem prioridade sobre o número digitado à
+  // mão. `formacao_meet_presencas` só guarda o que alguém digitou: a derivação
+  // da ingestão nunca gravou uma linha lá, então o card do slot passava em
+  // branco mesmo com encontro capturado dias antes.
+  const { sala } = useSala();
+  const presencaDoSlot = useMemo(() => {
+    const merged: Record<string, LatestPresenca> = { ...latestPresencas };
+    const maisRecentePorSlot: Record<string, { data: string; quorum: number; id: string }> = {};
+    for (const e of sala?.encontros ?? []) {
+      if (!e.slotId) continue;
+      const atual = maisRecentePorSlot[e.slotId];
+      if (!atual || e.data > atual.data) {
+        maisRecentePorSlot[e.slotId] = { data: e.data, quorum: e.quorum, id: e.id };
+      }
+    }
+    for (const [slotId, e] of Object.entries(maisRecentePorSlot)) {
+      merged[slotId] = {
+        id: e.id,
+        slot_id: slotId,
+        total_participantes: e.quorum,
+        data_reuniao: e.data,
+        medido: true,
+      };
+    }
+    return merged;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [latestPresencas, sala]);
   const [quorumDraftSlot, setQuorumDraftSlot] = useState<string | null>(null);
   const [quorumDraftValue, setQuorumDraftValue] = useState("");
   const [quorumEditId, setQuorumEditId] = useState<string | null>(null);
@@ -1554,7 +1583,7 @@ export default function CalendarioPage() {
 
                           {/* Quórum: chip clicável (edita o último) + botão pra novo registro */}
                           {(() => {
-                            const lastPres = latestPresencas[slot.id];
+                            const lastPres = presencaDoSlot[slot.id];
                             const isOpen = quorumDraftSlot === slot.id;
                             const isEditing = isOpen && quorumEditId !== null;
                             return (
@@ -1789,7 +1818,7 @@ export default function CalendarioPage() {
                       }
 
                       // Slot ativo: card completo, reusando os mesmos handlers da grade.
-                      const lastPres = latestPresencas[slot.id];
+                      const lastPres = presencaDoSlot[slot.id];
                       const isQuorumOpen = quorumDraftSlot === slot.id;
                       const isQuorumEditing = isQuorumOpen && quorumEditId !== null;
 

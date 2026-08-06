@@ -113,6 +113,33 @@ export const AREAS: Area[] = [
     grupo: "formacao",
   },
   {
+    // Os encontros síncronos vistos como grupo: quórum, tendência, quem sumiu.
+    // Ganhou porta própria porque respondia a uma pergunta que estava espalhada
+    // entre o dashboard, o calendário e as estatísticas, com três réguas de
+    // tempo diferentes e nenhuma tela avisando das outras.
+    id: "grupos",
+    rotulo: "Grupos",
+    href: "/formacao/admin/grupos",
+    resumo: "Qual grupo está crescendo, qual está encolhendo, e se é o horário.",
+    // Mesmo motivo de Pessoas: a tela lista nome de participante e as tabelas
+    // do Meet têm policy `is_admin()`.
+    cargos: [],
+    onde: ["painel"],
+    grupo: "formacao",
+  },
+  {
+    // Quem conduz, visto por si. Antes era só um cadastro escondido numa aba
+    // dentro de Formação, sem nenhuma porta na barra lateral, e o que se dizia
+    // sobre condutor estava repartido entre quatro telas com quatro definições.
+    id: "condutores",
+    rotulo: "Condutores",
+    href: "/formacao/admin/condutores",
+    resumo: "Os feedbacks de cada condutor e o quórum dos grupos dele.",
+    cargos: [],
+    onde: ["painel"],
+    grupo: "formacao",
+  },
+  {
     id: "certificados",
     rotulo: "Certificados",
     href: "/formacao/admin/certificados",

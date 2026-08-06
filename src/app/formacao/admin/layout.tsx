@@ -22,6 +22,7 @@ import {
   Calendar,
   Users,
   UserSearch,
+  UserCog,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
 import { NOME_DO_CARGO } from "@/lib/cargos";
@@ -44,6 +45,8 @@ const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
   dashboard: LayoutDashboard,
   "formacao-base": Calendar,
   pessoas: UserSearch,
+  grupos: Users,
+  condutores: UserCog,
   certificados: Award,
   moderacao: MessageSquare,
   configuracoes: Settings,
@@ -53,10 +56,10 @@ const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
 const AREA_COM_PENDENCIAS = "associados-admin";
 
 // Telas que não são áreas do catálogo, mas têm nome próprio na barra de cima.
+// `condutores` saiu daqui: virou área de verdade, com porta na barra lateral.
 const TITULOS_EXTRAS: Record<string, string> = {
   "/formacao/admin/associados/aprimoramento": "Aprimoramento de Dinâmicas",
   "/formacao/admin/associados/sugestoes": "Sugestões",
-  "/formacao/admin/condutores": "Condutores",
 };
 
 export default function AdminLayout({

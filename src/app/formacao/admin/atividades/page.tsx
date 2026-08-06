@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
+import { useSala, indexarGrupos, chaveTexto } from "@/hooks/useSala";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
@@ -45,40 +46,25 @@ export default function AtividadesPage() {
   const [editDescricao, setEditDescricao] = useState("");
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoAtividade | null>(null);
-  const [quorumByAtividade, setQuorumByAtividade] = useState<Record<string, { count: number; media: number }>>({});
   const router = useRouter();
 
+  // O quórum vem da sala medida, não de `formacao_meet_presencas`. Aquela
+  // tabela nunca recebeu uma linha derivada da ingestão, então o badge daqui
+  // mostrava abril como se fosse hoje: dizia 20 pessoas onde a verdade era 76.
+  const { sala } = useSala();
+  const gruposMedidos = useMemo(() => indexarGrupos(sala), [sala]);
+
   useEffect(() => {
-    async function fetch() {
+    async function carregar() {
       const client = createClient();
-      const [{ data }, { data: presencas }] = await Promise.all([
-        client.from("certificado_atividades").select("*").order("nome"),
-        client.from("formacao_meet_presencas").select("atividade_nome, media_participantes, total_participantes"),
-      ]);
+      const { data } = await client
+        .from("certificado_atividades")
+        .select("*")
+        .order("nome");
       if (data) setAtividades(data);
-
-      // Aggregate quorum by atividade
-      type PresencaQuorumRow = {
-        atividade_nome: string | null;
-        total_participantes: number | null;
-      };
-      const qMap: Record<string, { count: number; total: number }> = {};
-      ((presencas || []) as PresencaQuorumRow[]).forEach((p) => {
-        const nome = p.atividade_nome;
-        if (!nome) return;
-        if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };
-        qMap[nome].count++;
-        qMap[nome].total += p.total_participantes || 0;
-      });
-      const result: Record<string, { count: number; media: number }> = {};
-      Object.entries(qMap).forEach(([nome, d]) => {
-        result[nome] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
-      });
-      setQuorumByAtividade(result);
-
       setLoading(false);
     }
-    fetch().catch(() => setLoading(false));
+    carregar().catch(() => setLoading(false));
   }, []);
 
   const matchBusca = (a: CertificadoAtividade) =>
@@ -509,19 +495,32 @@ export default function AtividadesPage() {
                     </span>
                   )}
                 </div>
-                {quorumByAtividade[item.nome] && (
-                  <span
-                    className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm inline-flex items-center gap-1"
-                    style={{
-                      background: "rgba(108,92,231,0.08)",
-                      color: "rgba(108,92,231,0.7)",
-                      border: "1px solid rgba(108,92,231,0.15)",
-                    }}
-                  >
-                    <Users className="h-3 w-3" />
-                    {quorumByAtividade[item.nome].count}x · média {quorumByAtividade[item.nome].media.toFixed(1)} pessoas
-                  </span>
-                )}
+                {(() => {
+                  const g = gruposMedidos.get(chaveTexto(item.nome));
+                  if (!g || g.quorumMedio === null) return null;
+                  return (
+                    <span
+                      className="text-[10px] px-2 py-0.5 rounded-full font-medium font-dm inline-flex items-center gap-1"
+                      style={{
+                        background: "rgba(108,92,231,0.08)",
+                        color: "rgba(108,92,231,0.7)",
+                        border: "1px solid rgba(108,92,231,0.15)",
+                      }}
+                      title="Presença medida na sala do Meet, sem contar quem conduz"
+                    >
+                      <Users className="h-3 w-3" />
+                      {g.encontros}
+                      {g.encontros === 1 ? " encontro" : " encontros"} · média{" "}
+                      {g.quorumMedio.toFixed(1)} na sala
+                      {g.tendencia !== null && g.tendencia !== 0 && (
+                        <span style={{ color: g.tendencia > 0 ? "#2E9E8F" : "#E07A5F" }}>
+                          {g.tendencia > 0 ? "↑" : "↓"}
+                          {Math.abs(g.tendencia).toFixed(1)}
+                        </span>
+                      )}
+                    </span>
+                  );
+                })()}
                 {item.descricao && (
                   <p className="text-[11px] text-cream/25 mt-0.5 font-dm truncate max-w-md">
                     {item.descricao}

@@ -49,6 +49,7 @@ import HintButton from "@/components/admin/dashboard/HintButton";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import { SeletorJanela, JanelaPropria } from "@/components/admin/SeletorJanela";
 import Destaque, { CORES_DESTAQUE, type MudancaDestaque } from "@/components/admin/pessoas/Destaque";
+import BlocoClinica from "@/components/admin/pessoas/BlocoClinica";
 import { CORES, ROTULOS, ORDEM_ESTADOS, definicao } from "@/components/admin/pessoas/estados";
 import { RANGE_LABELS, type ActivityRange } from "@/lib/utils/activity";
 import type { EstadoPessoa, PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
@@ -337,6 +338,14 @@ export default function AdminPessoasPage() {
   const rotuloPeriodo = RANGE_LABELS[janela].toLowerCase();
   const abrirPessoa = (p: PessoaLinha) =>
     setPessoaAberta({ nome: p.nome, email: p.email ?? undefined });
+
+  // A avaliação clínica casa por telefone e devolve o `pessoa_id`, não a linha
+  // inteira. Quem não estiver no recorte do período em vigor simplesmente não
+  // abre: é melhor o clique não fazer nada do que abrir a ficha de outra pessoa.
+  const abrirPessoaPorId = (pessoaId: string) => {
+    const p = retrato.pessoas.find((x) => x.id === pessoaId);
+    if (p) abrirPessoa(p);
+  };
 
   const chipsEstado: [Recorte, string, number][] = [
     ["todas", "Todas", totais.pessoas],
@@ -977,6 +986,11 @@ export default function AdminPessoasPage() {
         </Card>
       </motion.div>
 
+      {/* ── A avaliação clínica ── */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
+        <BlocoClinica aoAbrirPessoa={abrirPessoaPorId} />
+      </motion.div>
+
       {/* ── A lista ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card>
@@ -1227,6 +1241,21 @@ export default function AdminPessoasPage() {
             <strong className="text-cream/70">Estrela</strong>: marca que você põe à mão. Não é
             calculada e não expira. A cor é sua para significar o que quiser.
           </p>
+          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
+            <strong className="text-cream/70">De onde vem o que a tela diz</strong>: os selos de
+            cada pessoa são a procedência dela, e cada um aponta uma fonte diferente. Relato escrito
+            e nota vêm do formulário de certificado. Falou na sala e nunca preencheu o formulário
+            vêm da captura do Meet, que começou em 3 de agosto. Aulas e horas estudando vêm da
+            plataforma de cursos. Seletivo vem do CSV importado ali em cima. E a nota clínica vem do
+            AvaliAllos, que é outro sistema e casa por telefone. Quanto mais selos, mais fontes
+            conhecem aquela pessoa; onde ela participa mais é onde o número do selo é maior.
+          </p>
+          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
+            <strong className="text-cream/70">Nunca preencheu o formulário</strong>: a sala do Meet
+            viu essa pessoa e o formulário nunca. Ela existe, vem, e não entra em nenhuma média
+            tirada do formulário. O formulário pega cerca de metade de quem esteve na sala, e não
+            por sorteio: preencher é hábito de pessoa.
+          </p>
           <p className="font-dm text-[11px] text-cream/25 leading-relaxed pt-1">
             Retrato montado em {new Date(retrato.geradoEm).toLocaleString("pt-BR")}.
           </p>
@@ -1327,6 +1356,14 @@ function LinhaPessoa({
             <Selo cor={ROXO}>
               {p.turnosFala > 0 ? `falou ${p.turnosFala}x na sala` : "esteve na sala e não falou"}
             </Selo>
+          )}
+          {/* Procedência, e só quando ela muda alguma coisa. A sala viu a pessoa
+              e o formulário nunca: é gente que aparece toda semana e não conta
+              para nenhum número tirado do formulário. O contrário, declarar sem
+              a sala ver, não vira selo porque a captura só começou em agosto e
+              quase toda a base antiga cairia nele sem significar nada. */}
+          {p.encontrosNaSala > 0 && p.ultimoFormulario == null && (
+            <Selo cor={ROXO}>nunca preencheu o formulário</Selo>
           )}
           {p.seletivo && (
             <Selo cor={p.seletivo.aprovado ? TEAL : "rgba(253,251,247,0.3)"}>

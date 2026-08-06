@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { useAuth } from "@/hooks/useAuth";
 import { useCondutores } from "@/hooks/useCondutores";
+import { useSala, indexarCondutores, chaveTexto } from "@/hooks/useSala";
+import PainelCondutores from "@/components/admin/condutores/PainelCondutores";
 import Button from "@/components/ui/Button";
 import Modal from "@/components/ui/Modal";
 import Skeleton from "@/components/ui/Skeleton";
@@ -53,38 +55,23 @@ export default function CondutoresPage() {
 
   const [deleteTarget, setDeleteTarget] = useState<CertificadoCondutor | null>(null);
   const [submissions, setSubmissions] = useState<CertificadoSubmission[]>([]);
-  const [quorumByCondutor, setQuorumByCondutor] = useState<Record<string, { count: number; media: number }>>({});
   const router = useRouter();
+
+  // O quórum vem da sala medida. Antes vinha de `formacao_meet_presencas`, que
+  // nunca recebeu uma linha derivada da ingestão: a Laura aparecia com média 20
+  // num grupo que reuniu 76, e Tácia e Gabbie não apareciam de jeito nenhum.
+  const { sala } = useSala();
+  const condutoresMedidos = useMemo(() => indexarCondutores(sala), [sala]);
 
   const loading = condutoresLoading || extrasLoading;
 
   useEffect(() => {
     async function fetchExtras() {
       const client = createClient();
-      const [subRes, presRes] = await Promise.all([
-        client.from("certificado_submissions").select("id,condutores,nota_condutor"),
-        client.from("formacao_meet_presencas").select("condutor_nome, total_participantes, media_participantes"),
-      ]);
+      const subRes = await client
+        .from("certificado_submissions")
+        .select("id,condutores,nota_condutor");
       if (subRes.data) setSubmissions(subRes.data as CertificadoSubmission[]);
-
-      // Aggregate quorum by conductor
-      type PresencaQuorumRow = {
-        condutor_nome: string | null;
-        total_participantes: number | null;
-      };
-      const qMap: Record<string, { count: number; total: number }> = {};
-      ((presRes.data || []) as PresencaQuorumRow[]).forEach((p) => {
-        const nome = p.condutor_nome;
-        if (!nome) return;
-        if (!qMap[nome]) qMap[nome] = { count: 0, total: 0 };
-        qMap[nome].count++;
-        qMap[nome].total += p.total_participantes || 0;
-      });
-      const result: Record<string, { count: number; media: number }> = {};
-      Object.entries(qMap).forEach(([nome, d]) => {
-        result[nome] = { count: d.count, media: d.count > 0 ? d.total / d.count : 0 };
-      });
-      setQuorumByCondutor(result);
 
       // As contas que podem ser ligadas a uma ficha. Sem o vínculo, o cargo de
       // condutor não abre nada: a área do grupo procura a ficha por user_id.
@@ -307,10 +294,17 @@ export default function CondutoresPage() {
             Condutores
           </h1>
           <p className="text-sm text-cream/35 mt-1 font-dm">
-            Gerencie os condutores disponíveis para certificados.
+            Quem conduz, o quórum dos grupos de cada um e o que escrevem sobre eles.
           </p>
         </div>
       </motion.div>
+
+      <PainelCondutores
+        sala={sala}
+        condutorStats={condutorStats}
+        fichas={condutores}
+        aoAbrir={(id) => router.push(`/formacao/admin/condutores/${id}`)}
+      />
 
       {/* Add + Search */}
       <div
@@ -465,12 +459,16 @@ export default function CondutoresPage() {
                     );
                   })()}
                   {(() => {
-                    const q = quorumByCondutor[item.nome];
-                    if (!q || q.count === 0) return null;
+                    const q = condutoresMedidos.get(chaveTexto(item.nome));
+                    if (!q || q.quorumMedio === null) return null;
                     return (
-                      <span className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium font-dm" style={{ background: "rgba(108,92,231,0.08)", color: "rgba(108,92,231,0.7)", border: "1px solid rgba(108,92,231,0.15)" }}>
+                      <span
+                        className="flex items-center gap-1 text-[10px] px-2 py-0.5 rounded-full font-medium font-dm"
+                        style={{ background: "rgba(108,92,231,0.08)", color: "rgba(108,92,231,0.7)", border: "1px solid rgba(108,92,231,0.15)" }}
+                        title="Presença medida na sala, sem contar quem conduz"
+                      >
                         <Users className="h-2.5 w-2.5" />
-                        {q.count}x · média {q.media.toFixed(1)}
+                        {q.encontros}x · média {q.quorumMedio.toFixed(1)} na sala
                       </span>
                     );
                   })()}
