@@ -1,28 +1,26 @@
 // Pessoas: quem volta, quem sumiu e com quem vale conversar.
 //
 // Esta tela existe porque a mesma pessoa vivia em quatro lugares que não se
-// conheciam (formulário de certificado, sala do Meet, plataforma e agora o
-// processo seletivo), e por isso o painel só sabia responder "quantos
-// formulários chegaram". Aqui a unidade é a pessoa, e presença vale tanto
-// declarada no formulário quanto medida na sala.
+// conheciam (formulário de certificado, sala do Meet, plataforma e processo
+// seletivo), e por isso o painel só sabia responder "quantos formulários
+// chegaram". Aqui a unidade é a pessoa.
 //
-// Três regras de desenho que não são estéticas, são de honestidade, e que
-// valem para qualquer coisa acrescentada aqui depois:
+// Quatro regras de desenho que não são estéticas, e que valem para qualquer
+// coisa acrescentada aqui depois:
 //
-//   1. Percentual só com denominador de 30 para cima. Abaixo disso a tela
-//      escreve a fração. Uma pessoa a mais no núcleo de 20 move 5 pontos, e
-//      uma seta de variação sobre isso é teatro.
-//   2. Quando o percentual aparece, a fração aparece junto e maior.
-//   3. Abaixo de 25 pessoas, nome no lugar de número. Nenhum bloco agrega
-//      pouca gente num número sem dar a lista a um clique.
+//   1. Nenhuma palavra de dentro do código aparece na tela. "Presença" virou
+//      "encontro" e a palavra "janela" não existe mais em lugar nenhum: quem
+//      lê a tela não deve precisar saber como ela foi construída.
+//   2. Todo rótulo carrega a definição por extenso, com os números que a régua
+//      está usando de fato. Rótulo cuja regra mora escondida atrás de um ícone
+//      de ajuda é rótulo que ninguém confere.
+//   3. Percentual só com denominador de 30 para cima; abaixo disso a tela
+//      escreve a fração. E abaixo de 25 pessoas, nome no lugar de número.
+//   4. Cor significa estado, e um estado só por pessoa. Cor que decora em vez
+//      de informar treina o olho a ignorar cor.
 //
 // A série do núcleo é impressa como sete números, não como curva: com sete
 // pontos, uma linha suave desenha inflexões que os dados não têm.
-//
-// Sobre o seletor de janela: ele governa o que é fluxo (quem apareceu, quem foi
-// avaliado) e não governa o que é definição. Núcleo, sumiço e coorte trazem o
-// selo da própria janela ao lado do título, porque um número que ignora o
-// filtro sem avisar é pior que um número errado.
 
 "use client";
 
@@ -42,6 +40,7 @@ import {
   Upload,
   GraduationCap,
   Activity,
+  Star,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import Card from "@/components/ui/Card";
@@ -49,8 +48,10 @@ import Skeleton from "@/components/ui/Skeleton";
 import HintButton from "@/components/admin/dashboard/HintButton";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import { SeletorJanela, JanelaPropria } from "@/components/admin/SeletorJanela";
+import Destaque, { CORES_DESTAQUE, type MudancaDestaque } from "@/components/admin/pessoas/Destaque";
+import { CORES, ROTULOS, ORDEM_ESTADOS, definicao } from "@/components/admin/pessoas/estados";
 import { RANGE_LABELS, type ActivityRange } from "@/lib/utils/activity";
-import type { PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
+import type { EstadoPessoa, PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
 
 const TERRACOTA = "#C84B31";
 const TEAL = "#2E9E8F";
@@ -70,17 +71,47 @@ interface ResumoImport {
   tentativasRepetidas?: number;
 }
 
-type Recorte =
-  | "todas"
-  | "nucleo"
-  | "so-grupo"
-  | "so-plataforma"
-  | "nos-dois"
-  | "uma-vez"
-  | "relato"
-  | "mudos"
-  | "seletivo"
-  | "aprovado-ausente";
+/** Recortes que não são estado: atributos que se cruzam com qualquer estado. */
+type Atributo = "destacadas" | "relato" | "mudos" | "seletivo" | "aprovado-ausente";
+type Recorte = "todas" | EstadoPessoa | Atributo;
+
+/**
+ * Como ordenar. São perguntas, não campos: "quem vem mais" e "quem veio agora"
+ * é o que se quer saber, e o nome da propriedade que responde é problema do
+ * código, não de quem olha.
+ */
+const ORDENS: { chave: string; rotulo: string; ordenar: (a: PessoaLinha, b: PessoaLinha) => number }[] = [
+  {
+    chave: "frequencia",
+    rotulo: "Vem mais",
+    ordenar: (a, b) => b.encontros - a.encontros || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9),
+  },
+  {
+    chave: "recencia",
+    rotulo: "Veio agora",
+    ordenar: (a, b) => (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9) || b.encontros - a.encontros,
+  },
+  {
+    chave: "escreve",
+    rotulo: "Escreve mais",
+    ordenar: (a, b) => b.relatosLongos - a.relatosLongos || b.encontros - a.encontros,
+  },
+  {
+    chave: "assiste",
+    rotulo: "Assiste mais",
+    ordenar: (a, b) => b.aulas - a.aulas || b.horasPlataforma - a.horasPlataforma,
+  },
+  {
+    chave: "fala",
+    rotulo: "Fala mais",
+    ordenar: (a, b) => b.turnosFala - a.turnosFala || b.encontrosNaSala - a.encontrosNaSala,
+  },
+  {
+    chave: "nome",
+    rotulo: "Nome",
+    ordenar: (a, b) => a.nome.localeCompare(b.nome, "pt-BR"),
+  },
+];
 
 const PAGINA = 25;
 
@@ -93,22 +124,21 @@ export default function AdminPessoasPage() {
   const [janela, setJanela] = useState<ActivityRange>("all");
   const [busca, setBusca] = useState("");
   const [recorte, setRecorte] = useState<Recorte>("todas");
-  const [ordem, setOrdem] = useState<keyof PessoaLinha>("presencas");
+  const [ordem, setOrdem] = useState("frequencia");
   const [mostrando, setMostrando] = useState(PAGINA);
   const [pessoaAberta, setPessoaAberta] = useState<PessoaRef | null>(null);
   const [verTodosCondutores, setVerTodosCondutores] = useState(false);
   const [verTodosSumidos, setVerTodosSumidos] = useState(false);
   const [verTodosAprovados, setVerTodosAprovados] = useState(false);
   const [glossarioAberto, setGlossarioAberto] = useState(false);
-  // Importação do processo seletivo
   const [csv, setCsv] = useState<{ nome: string; conteudo: string } | null>(null);
   const [previa, setPrevia] = useState<ResumoImport | null>(null);
   const [importando, setImportando] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
 
-  // O recorte roda no servidor, e não no navegador, porque quem decide quem
-  // entra na janela precisa das datas de todas as fontes, inclusive as que a
-  // tela nunca recebe (sessão de uso, conclusão de aula).
+  // O recorte de período roda no servidor, e não no navegador, porque quem
+  // decide se a pessoa deu sinal precisa das datas de todas as fontes,
+  // inclusive as que a tela nunca recebe (sessão de uso, conclusão de aula).
   const carregar = useCallback(async (j: ActivityRange) => {
     try {
       const r = await fetch(`/formacao/api/admin/pessoas?janela=${j}`);
@@ -140,34 +170,58 @@ export default function AdminPessoasPage() {
     setJanela(j);
   };
 
-  // ── Recorte e busca ────────────────────────────────────────
+  /**
+   * Repinta a estrela sem refazer o retrato inteiro. Recarregar tudo a cada
+   * clique custaria cerca de um megabyte de leitura no servidor e faria um
+   * recurso de um clique parecer lento.
+   */
+  const aplicarDestaque = useCallback(({ pessoaId, destaque }: MudancaDestaque) => {
+    setRetrato((r) => {
+      if (!r) return r;
+      const trocar = (l: PessoaLinha) => (l.id === pessoaId ? { ...l, destaque } : l);
+      const pessoas = r.pessoas.map(trocar);
+      const marcadas = pessoas.filter((l) => l.destaque != null);
+      // As destacadas podem incluir gente fora do período; preserva quem já
+      // estava lá e não aparece na lista corrente.
+      const forasteiras = r.destacadas
+        .filter((l) => l.id !== pessoaId && !pessoas.some((p) => p.id === l.id))
+        .map(trocar)
+        .filter((l) => l.destaque != null);
+      return {
+        ...r,
+        pessoas,
+        nucleo: { ...r.nucleo, pessoas: r.nucleo.pessoas.map(trocar) },
+        sumidos: {
+          semSinal: r.sumidos.semSinal.map(trocar),
+          soFormulario: r.sumidos.soFormulario.map(trocar),
+        },
+        destacadas: [...marcadas, ...forasteiras],
+        totais: { ...r.totais, destacadas: marcadas.length + forasteiras.length },
+      };
+    });
+  }, []);
+
   const filtradas = useMemo(() => {
     if (!retrato) return [];
     const q = busca.trim().toLowerCase();
     let base = retrato.pessoas;
-    if (recorte === "nucleo") base = base.filter((p) => p.presencas90 >= 5);
-    else if (recorte === "so-grupo") base = base.filter((p) => p.presencas > 0 && !p.temConta);
-    else if (recorte === "so-plataforma") base = base.filter((p) => p.presencas === 0 && p.temConta);
-    else if (recorte === "nos-dois") base = base.filter((p) => p.presencas > 0 && p.temConta);
-    else if (recorte === "uma-vez") base = base.filter((p) => p.presencas === 1);
+
+    if (recorte === "destacadas") base = retrato.destacadas;
     else if (recorte === "relato") base = base.filter((p) => p.relatosLongos > 0);
     else if (recorte === "mudos")
-      base = base.filter((p) => p.encontrosMeet > 0 && p.turnosFala === 0);
+      base = base.filter((p) => p.encontrosNaSala > 0 && p.turnosFala === 0);
     else if (recorte === "seletivo") base = base.filter((p) => p.seletivo != null);
     else if (recorte === "aprovado-ausente")
-      base = base.filter((p) => p.seletivo?.aprovado && p.presencas === 0);
+      base = base.filter((p) => p.seletivo?.aprovado && p.encontros === 0);
+    else if (recorte !== "todas") base = base.filter((p) => p.estado === recorte);
+
     if (q) {
       base = base.filter(
-        (p) =>
-          p.nome.toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q),
+        (p) => p.nome.toLowerCase().includes(q) || (p.email ?? "").toLowerCase().includes(q),
       );
     }
-    return [...base].sort((a, b) => {
-      const va = a[ordem];
-      const vb = b[ordem];
-      if (typeof va === "number" && typeof vb === "number") return vb - va;
-      return String(vb ?? "").localeCompare(String(va ?? ""));
-    });
+    const ord = ORDENS.find((o) => o.chave === ordem) ?? ORDENS[0];
+    return [...base].sort(ord.ordenar);
   }, [retrato, busca, recorte, ordem]);
 
   useEffect(() => setMostrando(PAGINA), [recorte, busca, ordem, janela]);
@@ -175,16 +229,19 @@ export default function AdminPessoasPage() {
   const baixarCSV = () => {
     if (!retrato) return;
     const cab = [
-      "Nome", "E-mail", "Tem conta", "Presencas", "Presencas 90d", "Presencas na janela",
-      "Atividades", "Relatos longos", "Aulas", "Horas plataforma", "Encontros Meet",
-      "Minutos na sala", "Turnos de fala", "Dias sem aparecer", "Estreia",
-      "Seletivo status", "Seletivo nota",
+      "Nome", "E-mail", "Estado", "Destaque", "Anotacao", "Tem conta", "Encontros",
+      `Encontros em ${retrato.regras.janelaNucleoDias}d`, "Encontros no periodo",
+      "Atividades", "Relatos escritos", "Aulas", "Horas na plataforma",
+      "Encontros na sala", "Minutos na sala", "Turnos de fala",
+      "Dias sem aparecer", "Ultimo encontro", "Estreia", "Seletivo status", "Seletivo nota",
     ];
     const linhas = filtradas.map((p) => [
-      p.nome, p.email ?? "", p.temConta ? "sim" : "nao", p.presencas, p.presencas90,
-      p.presencasJanela, p.atividades, p.relatosLongos, p.aulas, p.horasPlataforma,
-      p.encontrosMeet, p.minutosMeet, p.turnosFala, p.diasSemAparecer ?? "",
-      (p.estreia ?? "").slice(0, 10), p.seletivo?.status ?? "", p.seletivo?.nota ?? "",
+      p.nome, p.email ?? "", ROTULOS[p.estado], p.destaque?.cor ?? "", p.destaque?.nota ?? "",
+      p.temConta ? "sim" : "nao", p.encontros, p.encontrosRecentes, p.encontrosNoPeriodo,
+      p.atividades, p.relatosLongos, p.aulas, p.horasPlataforma,
+      p.encontrosNaSala, p.minutosNaSala, p.turnosFala,
+      p.diasSemAparecer ?? "", (p.ultimoEncontro ?? "").slice(0, 10), (p.estreia ?? "").slice(0, 10),
+      p.seletivo?.status ?? "", p.seletivo?.nota ?? "",
     ]);
     const texto =
       "﻿" +
@@ -195,12 +252,11 @@ export default function AdminPessoasPage() {
     a.download = `pessoas_${recorte}_${janela}_${new Date().toISOString().slice(0, 10)}.csv`;
     a.click();
     URL.revokeObjectURL(url);
-    toast.success("Baixado com o recorte, a janela e a ordem que estão na tela.");
+    toast.success("Baixado com o recorte e a ordem que estão na tela.");
   };
 
-  // ── Importação do seletivo ─────────────────────────────────
-  // A prévia e a gravação chamam a mesma rota e o mesmo cálculo. Se fossem
-  // dois caminhos, a prévia prometeria um número e a gravação faria outro.
+  // A prévia e a gravação chamam a mesma rota e o mesmo cálculo. Se fossem dois
+  // caminhos, a prévia prometeria um número e a gravação faria outro.
   const enviarSeletivo = useCallback(
     async (conteudo: string, nome: string, gravar: boolean) => {
       setImportando(true);
@@ -275,12 +331,42 @@ export default function AdminPessoasPage() {
     );
   }
 
-  const { nucleo, sumidos, coortes, condutores, totais, cobertura, fluxo, seletivo } = retrato;
+  const { nucleo, sumidos, coortes, condutores, totais, cobertura, fluxo, seletivo, estados, regras } = retrato;
   const sumidosVisiveis = verTodosSumidos ? sumidos.semSinal : sumidos.semSinal.slice(0, 4);
-  const janelaAberta = janela === "all";
-  const rotuloJanela = RANGE_LABELS[janela].toLowerCase();
+  const periodoAberto = janela === "all";
+  const rotuloPeriodo = RANGE_LABELS[janela].toLowerCase();
   const abrirPessoa = (p: PessoaLinha) =>
     setPessoaAberta({ nome: p.nome, email: p.email ?? undefined });
+
+  const chipsEstado: [Recorte, string, number][] = [
+    ["todas", "Todas", totais.pessoas],
+    ...ORDEM_ESTADOS.map((e) => [e, ROTULOS[e], estados[e]] as [Recorte, string, number]),
+  ];
+  const chipsAtributo: [Recorte, string, number][] = [
+    ["destacadas", "Destacadas", totais.destacadas],
+    ["relato", "Escrevem relato", totais.escrevemRelato],
+    ["mudos", "Estiveram na sala e não falaram", totais.mudos],
+    ["seletivo", "Vieram do seletivo", totais.doSeletivo],
+    [
+      "aprovado-ausente",
+      "Aprovadas e nunca vieram",
+      retrato.pessoas.filter((p) => p.seletivo?.aprovado && p.encontros === 0).length,
+    ],
+  ];
+  const explicacaoDoRecorte =
+    recorte === "todas"
+      ? null
+      : (ORDEM_ESTADOS as string[]).includes(recorte)
+        ? definicao(recorte as EstadoPessoa, regras)
+        : recorte === "destacadas"
+          ? "Pessoas que você marcou com estrela. Elas aparecem aqui mesmo fora do período escolhido acima."
+          : recorte === "relato"
+            ? "Escreveram pelo menos um texto de mais de 200 caracteres no formulário. Abaixo disso costuma ser um elogio de uma palavra."
+            : recorte === "mudos"
+              ? "A captura do Meet viu essas pessoas na sala e elas não abriram o microfone nenhuma vez."
+              : recorte === "seletivo"
+                ? "Fizeram o processo seletivo. O casamento é por e-mail ou WhatsApp, nunca por nome."
+                : "Passaram no seletivo e nunca apareceram em um grupo. É a fila de convite mais óbvia que existe.";
 
   return (
     <div className={`space-y-6 transition-opacity ${recarregando ? "opacity-50" : ""}`}>
@@ -312,30 +398,30 @@ export default function AdminPessoasPage() {
         </div>
       </motion.div>
 
-      {/* ── Janela ── */}
+      {/* ── Período ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.03 }}>
         <SeletorJanela valor={janela} onChange={trocarJanela} desabilitado={recarregando} />
         <p className="font-dm text-[11px] text-cream/25 mt-2 leading-relaxed">
-          A janela decide quem entra na lista. O que cada pessoa é, quantas vezes veio na vida
+          Este seletor decide quem entra na lista. O que cada pessoa é, quantas vezes veio na vida
           e se escreve relato, continua vindo da história inteira dela. Núcleo, sumiço e coorte
-          têm janela própria e não obedecem a este seletor.
+          têm prazo próprio e não obedecem a este seletor.
         </p>
       </motion.div>
 
-      {/* ── Movimento da janela ── */}
+      {/* ── Movimento ── */}
       <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
         <Card>
           <div className="flex items-center gap-2 mb-4">
             <Activity className="h-4 w-4" style={{ color: TEAL }} />
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-              Movimento {janelaAberta ? "em toda a história" : `nos últimos ${rotuloJanela}`}
+              Movimento {periodoAberto ? "em toda a história" : `nos últimos ${rotuloPeriodo}`}
             </h2>
           </div>
           <div className="flex flex-wrap gap-x-10 gap-y-4">
             {[
-              { r: "presenças em grupo", v: fluxo.presencas, c: undefined as string | undefined },
-              { r: "pessoas presentes", v: fluxo.pessoas, c: TERRACOTA },
-              { r: "estrearam", v: fluxo.estreantes, c: TEAL },
+              { r: "encontros de grupo", v: fluxo.encontros, c: undefined as string | undefined },
+              { r: "pessoas participaram", v: fluxo.pessoas, c: TERRACOTA },
+              { r: "vieram pela primeira vez", v: fluxo.estreantes, c: TEAL },
             ].map((x) => (
               <div key={x.r}>
                 <p
@@ -371,30 +457,58 @@ export default function AdminPessoasPage() {
       {/* ── Núcleo ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card>
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <Users className="h-4 w-4" style={{ color: TERRACOTA }} />
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">Núcleo</h2>
-            <JanelaPropria motivo="90 dias, por definição" />
-            <HintButton text="Cinco presenças em noventa dias é a linha em que alguém deixa de ser visita e vira parte. Vale presença declarada no formulário e presença capturada na sala: se as duas caem no mesmo dia e no mesmo grupo, contam uma. A janela do topo da tela não mexe neste bloco: se mexesse, escolher hoje devolveria zero e a tela diria que a formação acabou." />
+            <JanelaPropria motivo={`${regras.janelaNucleoDias} dias, por definição`} />
           </div>
+          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+            {definicao("nucleo", regras)}
+          </p>
 
-          <div className="grid grid-cols-1 lg:grid-cols-[200px_1fr] gap-6">
+          <div className="grid grid-cols-1 lg:grid-cols-[210px_1fr] gap-6">
             <div>
               <p className="font-fraunces font-bold text-5xl tabular-nums leading-none" style={{ color: TERRACOTA }}>
                 {nucleo.total}
               </p>
               <p className="font-dm text-xs text-cream/40 mt-2 leading-snug">
-                pessoas com 5 ou mais presenças em 90 dias
+                {nucleo.total === 1 ? "pessoa" : "pessoas"} com {regras.barraNucleo} encontros ou
+                mais em {regras.janelaNucleoDias} dias
               </p>
               {nucleo.aproximacao > 0 && (
-                <p className="font-dm text-[11px] text-cream/30 mt-3">
-                  {nucleo.aproximacao} {nucleo.aproximacao === 1 ? "pessoa está" : "pessoas estão"} em 3 ou 4 presenças.
+                <button
+                  onClick={() => setRecorte("chegando")}
+                  className="font-dm text-[11px] mt-3 text-left leading-relaxed transition-colors hover:text-cream/60"
+                  style={{ color: TEAL }}
+                >
+                  {nucleo.aproximacao} {nucleo.aproximacao === 1 ? "pessoa está" : "pessoas estão"} chegando perto.
                   É daí que o núcleo cresce.
-                </p>
+                </button>
               )}
             </div>
 
             <div>
+              {/* Quatro pessoas não viram um número: viram quatro nomes. */}
+              {nucleo.pessoas.length > 0 && nucleo.pessoas.length <= 25 && (
+                <div className="flex flex-wrap gap-1.5 mb-5">
+                  {nucleo.pessoas.map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => abrirPessoa(p)}
+                      className="font-dm text-xs px-2.5 py-1.5 rounded-full transition-colors hover:bg-white/[.05]"
+                      style={{
+                        color: "rgba(253,251,247,0.75)",
+                        border: "1px solid rgba(200,75,49,0.25)",
+                        background: "rgba(200,75,49,0.06)",
+                      }}
+                    >
+                      {p.nome.split(" ").slice(0, 2).join(" ")}
+                      <span className="text-cream/30 tabular-nums"> · {p.encontrosRecentes}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+
               <div className="flex flex-wrap items-end gap-x-5 gap-y-2">
                 {nucleo.serie.map((q, i) => (
                   <div key={q.rotulo} className="text-center">
@@ -411,26 +525,10 @@ export default function AdminPessoasPage() {
               <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mt-3">
                 as últimas sete quinzenas
               </p>
-              {nucleo.serie.length >= 2 &&
-                nucleo.serie.at(-1)!.valor === nucleo.serie.at(-2)!.valor && (
-                  <p className="font-dm text-xs text-cream/50 mt-3 leading-relaxed">
-                    Parado no mesmo número há duas quinzenas.
-                  </p>
-                )}
-              <div className="flex flex-wrap gap-4 mt-4">
-                {[
-                  { r: "aparecendo", v: nucleo.quentes, c: TEAL },
-                  { r: "esfriando", v: nucleo.esfriando, c: DOURADO },
-                  { r: "sumidas", v: nucleo.frios, c: "#EF4444" },
-                ].map((e) => (
-                  <div key={e.r} className="flex items-baseline gap-1.5">
-                    <span className="font-fraunces font-bold text-lg tabular-nums" style={{ color: e.c }}>
-                      {e.v}
-                    </span>
-                    <span className="font-dm text-[11px] text-cream/35">{e.r}</span>
-                  </div>
-                ))}
-              </div>
+              <p className="font-dm text-[11px] text-cream/30 mt-2 leading-relaxed">
+                A série conta só o formulário: a captura da sala começou em agosto, e somá-la agora
+                faria o último ponto subir por mudança de lente, não por mudança de vínculo.
+              </p>
             </div>
           </div>
 
@@ -440,7 +538,7 @@ export default function AdminPessoasPage() {
               style={{ background: "rgba(212,133,74,0.07)", border: "1px solid rgba(212,133,74,0.2)" }}
             >
               <p className="font-dm text-xs text-cream/70">
-                {nucleo.frios} {nucleo.frios === 1 ? "dessa pessoa não aparece" : `dessas ${nucleo.total} não aparecem`} há 45 dias ou mais.
+                {nucleo.frios} {nucleo.frios === 1 ? "dessa pessoa não aparece" : `dessas ${nucleo.total} não aparecem`} há {regras.diasSumiu} dias ou mais.
               </p>
               <a href="#sumiram" className="font-dm text-xs whitespace-nowrap" style={{ color: DOURADO }}>
                 Ver os nomes
@@ -450,25 +548,82 @@ export default function AdminPessoasPage() {
         </Card>
       </motion.div>
 
+      {/* ── Destacadas ── */}
+      {retrato.destacadas.length > 0 && (
+        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}>
+          <Card>
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <Star className="h-4 w-4" style={{ color: CORES_DESTAQUE.dourado }} fill={CORES_DESTAQUE.dourado} />
+              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
+                Você destacou
+              </h2>
+              <JanelaPropria motivo="sem prazo" />
+            </div>
+            <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+              As pessoas que você marcou com estrela, com a anotação que escreveu. Elas ficam aqui
+              mesmo quando não aparecem no período escolhido acima.
+            </p>
+            <div className="space-y-1.5">
+              {retrato.destacadas.map((p) => (
+                <div
+                  key={p.id}
+                  className="flex items-start gap-2 px-3 py-2.5 rounded-[10px]"
+                  style={{
+                    background: `${CORES_DESTAQUE[p.destaque!.cor]}0F`,
+                    border: `1px solid ${CORES_DESTAQUE[p.destaque!.cor]}40`,
+                  }}
+                >
+                  <button onClick={() => abrirPessoa(p)} className="flex-1 min-w-0 text-left">
+                    <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+                    {p.destaque!.nota && (
+                      <p className="font-dm text-xs text-cream/50 mt-0.5 leading-relaxed">
+                        {p.destaque!.nota}
+                      </p>
+                    )}
+                    <div className="flex flex-wrap gap-x-3 mt-1">
+                      <Selo cor={CORES[p.estado]}>{ROTULOS[p.estado]}</Selo>
+                      <Selo>{p.encontros} {p.encontros === 1 ? "encontro" : "encontros"}</Selo>
+                      {p.diasSemAparecer != null && (
+                        <Selo>{textoRecencia(p.diasSemAparecer)}</Selo>
+                      )}
+                    </div>
+                  </button>
+                  <Destaque
+                    pessoaId={p.id}
+                    nome={p.nome}
+                    destaque={p.destaque}
+                    onMudou={aplicarDestaque}
+                  />
+                </div>
+              ))}
+            </div>
+          </Card>
+        </motion.div>
+      )}
+
       {/* ── Quem sumiu ── */}
       <motion.div id="sumiram" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
         <Card>
-          <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
             <div className="flex items-center gap-2 flex-wrap">
               <UserMinus className="h-4 w-4" style={{ color: DOURADO }} />
               <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-                Quem sumiu do núcleo
+                Eram do núcleo e pararam de vir
               </h2>
-              <JanelaPropria motivo="45 dias, por definição" />
+              <JanelaPropria motivo={`${regras.diasSumiu} dias, por definição`} />
             </div>
             <span className="font-dm text-xs text-cream/30">
               {sumidos.semSinal.length + sumidos.soFormulario.length} pessoas
             </span>
           </div>
+          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+            Chegaram a {regras.barraNucleo} encontros ou mais em toda a história e estão há{" "}
+            {regras.diasSumiu} dias sem dar sinal.
+          </p>
 
           {sumidos.semSinal.length === 0 && sumidos.soFormulario.length === 0 ? (
             <p className="font-dm text-xs text-cream/30 py-6 text-center">
-              Ninguém do núcleo está sumido. Todas apareceram nos últimos 45 dias.
+              Ninguém nessa situação. Todas apareceram nos últimos {regras.diasSumiu} dias.
             </p>
           ) : (
             <div className="space-y-5">
@@ -480,7 +635,12 @@ export default function AdminPessoasPage() {
                   </p>
                   <div className="space-y-1">
                     {sumidosVisiveis.map((p) => (
-                      <LinhaSumido key={p.id} p={p} onClick={() => abrirPessoa(p)} />
+                      <LinhaSumido
+                        key={p.id}
+                        p={p}
+                        onClick={() => abrirPessoa(p)}
+                        onDestaque={aplicarDestaque}
+                      />
                     ))}
                   </div>
                   {sumidos.semSinal.length > 4 && (
@@ -503,7 +663,12 @@ export default function AdminPessoasPage() {
                   </p>
                   <div className="space-y-1">
                     {sumidos.soFormulario.map((p) => (
-                      <LinhaSumido key={p.id} p={p} onClick={() => abrirPessoa(p)} />
+                      <LinhaSumido
+                        key={p.id}
+                        p={p}
+                        onClick={() => abrirPessoa(p)}
+                        onDestaque={aplicarDestaque}
+                      />
                     ))}
                   </div>
                   <p className="font-dm text-[11px] text-cream/30 mt-2 leading-relaxed">
@@ -519,14 +684,17 @@ export default function AdminPessoasPage() {
       {/* ── Coorte ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
         <Card>
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <Repeat className="h-4 w-4" style={{ color: TEAL }} />
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
               Quem veio pela primeira vez e voltou
             </h2>
             <JanelaPropria motivo="por mês de estreia" />
-            <HintButton text="De cada grupo que estreou num mês, quantas pessoas apareceram de novo em qualquer momento depois. O mês corrente fica de fora: quem estreou anteontem ainda não teve tempo de voltar. Este bloco substituiu a retenção do dashboard, que dividia os ativos por todo mundo que já passou e por isso só podia cair." />
           </div>
+          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+            De cada grupo que estreou num mês, quantas pessoas apareceram de novo depois. O mês
+            corrente fica de fora: quem estreou anteontem ainda não teve tempo de voltar.
+          </p>
 
           {coortes.length === 0 ? (
             <p className="font-dm text-xs text-cream/30 py-6 text-center">
@@ -572,14 +740,16 @@ export default function AdminPessoasPage() {
       {/* ── Processo seletivo ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
         <Card>
-          <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
             <GraduationCap className="h-4 w-4" style={{ color: ROXO }} />
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
               Processo seletivo
             </h2>
             <JanelaPropria motivo="tem data própria" />
-            <HintButton text="Cada candidato é ligado a uma pessoa pelo e-mail ou pelo WhatsApp, nunca pelo nome. A pergunta que este bloco responde e que não existia em lugar nenhum: quem foi aprovado e nunca apareceu num grupo. O resultado do seletivo morria no AvaliAllos e a presença morria no formulário." />
           </div>
+          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+            Cada candidato é ligado a uma pessoa pelo e-mail ou pelo WhatsApp, nunca pelo nome.
+          </p>
 
           {seletivo.candidatos === 0 ? (
             <p className="font-dm text-xs text-cream/30 py-4 leading-relaxed">
@@ -615,7 +785,6 @@ export default function AdminPessoasPage() {
                 )}
               </div>
 
-              {/* O cruzamento. Abaixo de 25 pessoas, nome no lugar de número. */}
               <div
                 className="px-4 py-3 rounded-[10px] mb-4"
                 style={{ background: "rgba(108,92,231,0.06)", border: "1px solid rgba(108,92,231,0.2)" }}
@@ -633,7 +802,7 @@ export default function AdminPessoasPage() {
                         className="font-dm text-[11px] transition-colors hover:text-cream"
                         style={{ color: TEAL }}
                       >
-                        {p.nome} <span className="text-cream/25">({p.presencas}x)</span>
+                        {p.nome} <span className="text-cream/25">({p.encontros}x)</span>
                       </button>
                     ))}
                   </div>
@@ -700,7 +869,6 @@ export default function AdminPessoasPage() {
             </>
           )}
 
-          {/* Importar */}
           <div className="mt-5 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
               <p className="font-dm text-[11px] text-cream/35 leading-relaxed">
@@ -778,24 +946,24 @@ export default function AdminPessoasPage() {
         </Card>
       </motion.div>
 
-      {/* ── Tabela ── */}
+      {/* ── A lista ── */}
       <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card>
           <div className="flex items-center justify-between gap-2 mb-1">
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-              {janelaAberta ? "Todas as pessoas" : `Quem deu sinal nos últimos ${rotuloJanela}`}
+              {periodoAberto ? "Todas as pessoas" : `Quem deu sinal nos últimos ${rotuloPeriodo}`}
             </h2>
             <span className="font-dm text-xs text-cream/30 tabular-nums">
               {filtradas.length === totais.pessoas ? totais.pessoas : `${filtradas.length} de ${totais.pessoas}`}
             </span>
           </div>
-          {!janelaAberta && (
+          {!periodoAberto && (
             <p className="font-dm text-[11px] text-cream/25 mb-3">
               {totais.pessoas} de {totais.pessoasNaBase} pessoas que a base conhece.
             </p>
           )}
 
-          <div className="relative mb-3 mt-3">
+          <div className="relative mb-4 mt-3">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
             <input
               value={busca}
@@ -805,35 +973,51 @@ export default function AdminPessoasPage() {
             />
           </div>
 
-          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-4">
-            {([
-              ["todas", "Todas", totais.pessoas],
-              ["nucleo", "Núcleo", retrato.pessoas.filter((p) => p.presencas90 >= 5).length],
-              ["so-grupo", "Só no grupo", totais.soGrupo],
-              ["so-plataforma", "Só na plataforma", totais.soPlataforma],
-              ["nos-dois", "Nos dois", totais.nosDois],
-              ["uma-vez", "Vieram uma vez só", totais.umaVezSo],
-              ["relato", "Escrevem relato", totais.escrevemRelato],
-              ["mudos", "Presentes e mudos", retrato.pessoas.filter((p) => p.encontrosMeet > 0 && p.turnosFala === 0).length],
-              ["seletivo", "Veio do seletivo", totais.doSeletivo],
-              ["aprovado-ausente", "Aprovadas e ausentes", retrato.pessoas.filter((p) => p.seletivo?.aprovado && p.presencas === 0).length],
-            ] as [Recorte, string, number][])
-              // Um recorte que não pega ninguém vira ruído no meio dos que pegam.
-              // Fica visível o que estiver selecionado, para o zero se explicar.
+          {/* Ordenação: botões, e não um seletor escondido. É a pergunta que muda,
+              e perguntar "quem vem mais" precisa custar um clique. */}
+          <div className="flex items-center gap-2 mb-3 flex-wrap">
+            <span className="font-dm text-[11px] text-cream/25">Ordenar por</span>
+            {ORDENS.map((o) => {
+              const ativo = ordem === o.chave;
+              return (
+                <button
+                  key={o.chave}
+                  onClick={() => setOrdem(o.chave)}
+                  className="font-dm text-[11px] px-2.5 py-1.5 rounded-full transition-all"
+                  style={{
+                    backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
+                    color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.35)",
+                    border: `1px solid ${ativo ? "rgba(253,251,247,0.15)" : "rgba(255,255,255,0.05)"}`,
+                  }}
+                >
+                  {o.rotulo}
+                </button>
+              );
+            })}
+          </div>
+
+          {/* Estados: um por pessoa, e a cor é a mesma que pinta a linha. */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-2">
+            {chipsEstado
               .filter(([k, , n]) => n > 0 || recorte === k || k === "todas")
               .map(([k, label, n]) => {
                 const ativo = recorte === k;
+                const cor = k === "todas" ? TERRACOTA : CORES[k as EstadoPessoa];
                 return (
                   <button
                     key={k}
                     onClick={() => setRecorte(k)}
                     className="font-dm text-xs px-3 py-2 rounded-full whitespace-nowrap transition-all min-h-[36px] flex items-center gap-1.5"
                     style={{
-                      backgroundColor: ativo ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
-                      color: ativo ? TERRACOTA : "rgba(253,251,247,0.4)",
-                      border: `1px solid ${ativo ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+                      backgroundColor: ativo ? `${cor}22` : "rgba(255,255,255,0.03)",
+                      color: ativo ? cor : "rgba(253,251,247,0.4)",
+                      border: `1px solid ${ativo ? `${cor}55` : "rgba(255,255,255,0.06)"}`,
                     }}
                   >
+                    <span
+                      className="h-1.5 w-1.5 rounded-full flex-shrink-0"
+                      style={{ background: cor, opacity: ativo ? 1 : 0.5 }}
+                    />
                     {label}
                     <span className="opacity-60 tabular-nums">{n}</span>
                   </button>
@@ -841,24 +1025,38 @@ export default function AdminPessoasPage() {
               })}
           </div>
 
-          <div className="flex items-center gap-2 mb-3">
-            <span className="font-dm text-[11px] text-cream/25">Ordenar por</span>
-            <select
-              value={ordem}
-              onChange={(e) => setOrdem(e.target.value as keyof PessoaLinha)}
-              className="dark-input rounded-[8px] px-2 py-1.5 font-dm text-xs"
-              style={{ colorScheme: "dark" }}
-            >
-              <option value="presencas">Presenças</option>
-              <option value="presencas90">Presenças em 90 dias</option>
-              {!janelaAberta && <option value="presencasJanela">Presenças na janela</option>}
-              <option value="relatosLongos">Relatos escritos</option>
-              <option value="turnosFala">Turnos de fala</option>
-              <option value="aulas">Aulas concluídas</option>
-              <option value="horasPlataforma">Horas na plataforma</option>
-              <option value="diasSemAparecer">Dias sem aparecer</option>
-            </select>
+          {/* Atributos: cruzam com qualquer estado, então vêm numa linha própria. */}
+          <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1 mb-3">
+            {chipsAtributo
+              .filter(([k, , n]) => n > 0 || recorte === k)
+              .map(([k, label, n]) => {
+                const ativo = recorte === k;
+                return (
+                  <button
+                    key={k}
+                    onClick={() => setRecorte(k)}
+                    className="font-dm text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-all flex items-center gap-1.5"
+                    style={{
+                      backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
+                      color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.33)",
+                      border: `1px solid ${ativo ? "rgba(253,251,247,0.18)" : "rgba(255,255,255,0.05)"}`,
+                    }}
+                  >
+                    {k === "destacadas" && (
+                      <Star className="h-3 w-3" style={{ color: CORES_DESTAQUE.dourado }} fill={CORES_DESTAQUE.dourado} />
+                    )}
+                    {label}
+                    <span className="opacity-60 tabular-nums">{n}</span>
+                  </button>
+                );
+              })}
           </div>
+
+          {explicacaoDoRecorte && (
+            <p className="font-dm text-[11px] text-cream/35 mb-4 leading-relaxed">
+              {explicacaoDoRecorte}
+            </p>
+          )}
 
           {filtradas.length === 0 ? (
             <p className="font-dm text-xs text-cream/30 py-8 text-center">
@@ -868,51 +1066,12 @@ export default function AdminPessoasPage() {
             <>
               <div className="space-y-1">
                 {filtradas.slice(0, mostrando).map((p) => (
-                  <button
+                  <LinhaPessoa
                     key={p.id}
+                    p={p}
                     onClick={() => abrirPessoa(p)}
-                    className="w-full text-left px-3 py-2.5 rounded-[10px] transition-colors hover:bg-white/[.03]"
-                    style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
-                  >
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0 flex-1">
-                        <p className="font-dm text-sm text-cream/80 truncate">{p.nome}</p>
-                        <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
-                      </div>
-                      <div className="flex-shrink-0 text-right">
-                        <p className="font-fraunces font-bold text-sm tabular-nums" style={{ color: TERRACOTA }}>
-                          {p.presencas}
-                        </p>
-                        <p className="font-dm text-[9px] text-cream/25">presenças</p>
-                      </div>
-                    </div>
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-                      <Selo cor={p.temConta ? TEAL : undefined}>{p.temConta ? "tem conta" : "sem conta"}</Selo>
-                      {!janelaAberta && p.presencasJanela > 0 && (
-                        <Selo>{p.presencasJanela} na janela</Selo>
-                      )}
-                      {p.atividades > 1 && <Selo>{p.atividades} atividades</Selo>}
-                      {p.relatosLongos > 0 && <Selo cor={DOURADO}>{p.relatosLongos} relato{p.relatosLongos > 1 ? "s" : ""}</Selo>}
-                      {p.aulas > 0 && <Selo>{p.aulas} aulas</Selo>}
-                      {p.horasPlataforma > 0 && <Selo>{p.horasPlataforma}h na plataforma</Selo>}
-                      {p.encontrosMeet > 0 && (
-                        <Selo cor={ROXO}>
-                          {p.encontrosMeet} no Meet{p.turnosFala > 0 ? ` · falou ${p.turnosFala}x` : " · calada"}
-                        </Selo>
-                      )}
-                      {p.seletivo && (
-                        <Selo cor={p.seletivo.aprovado ? TEAL : "rgba(253,251,247,0.3)"}>
-                          seletivo{p.seletivo.nota != null ? ` ${p.seletivo.nota}` : ""}
-                          {p.seletivo.aprovado ? ", aprovada" : p.seletivo.status ? `, ${p.seletivo.status.toLowerCase()}` : ""}
-                        </Selo>
-                      )}
-                      {p.diasSemAparecer != null && (
-                        <Selo cor={p.diasSemAparecer >= 45 ? "#EF4444" : undefined}>
-                          {p.diasSemAparecer === 0 ? "apareceu hoje" : `há ${p.diasSemAparecer} dias`}
-                        </Selo>
-                      )}
-                    </div>
-                  </button>
+                    onDestaque={aplicarDestaque}
+                  />
                 ))}
               </div>
               {mostrando < filtradas.length && (
@@ -943,7 +1102,7 @@ export default function AdminPessoasPage() {
 
           {condutores.length === 0 ? (
             <p className="font-dm text-xs text-cream/30 py-6 text-center">
-              Nenhum condutor recebeu avaliação {janelaAberta ? "ainda" : `nos últimos ${rotuloJanela}`}.
+              Nenhum condutor recebeu avaliação {periodoAberto ? "ainda" : `nos últimos ${rotuloPeriodo}`}.
             </p>
           ) : (
             <>
@@ -1012,22 +1171,28 @@ export default function AdminPessoasPage() {
         className="flex items-center gap-1.5 font-dm text-[11px] text-cream/30 hover:text-cream/50 transition-colors"
       >
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${glossarioAberto ? "rotate-180" : ""}`} />
-        Como esses números são contados
+        O que cada palavra desta tela quer dizer
       </button>
       {glossarioAberto && (
-        <div className="space-y-1.5 pl-5 pb-4">
-          {[
-            "Presença: formulário enviado ou nome capturado na sala do Meet. Se os dois acontecem no mesmo dia e no mesmo grupo, conta uma.",
-            "Núcleo: cinco ou mais presenças nos últimos noventa dias. A janela do topo não mexe nisso.",
-            "Sumida: quarenta e cinco dias sem nenhum dos dois sinais.",
-            "Voltou: apareceu em qualquer data depois da estreia.",
-            "Relato escrito: texto com mais de 200 caracteres no formulário. Abaixo disso costuma ser um elogio de uma palavra.",
-            "Nos dois mundos: tem presença em grupo e também conta na plataforma.",
-            "Sinal: qualquer rastro na janela, inclusive aula assistida e tempo na plataforma. É o que decide quem entra na lista.",
-            "Veio do seletivo: existe candidatura ligada a esta pessoa por e-mail ou WhatsApp. Nunca por nome.",
-          ].map((t) => (
-            <p key={t} className="font-dm text-[11px] text-cream/35 leading-relaxed">{t}</p>
+        <div className="space-y-2 pl-5 pb-4">
+          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
+            <strong className="text-cream/70">Encontro</strong>: uma vez que a pessoa participou de
+            um grupo. Vale tanto o formulário que ela preencheu quanto o nome dela capturado na
+            sala do Meet. Se os dois acontecem no mesmo dia e no mesmo grupo, contam um.
+          </p>
+          {ORDEM_ESTADOS.map((e) => (
+            <p key={e} className="font-dm text-[11px] text-cream/45 leading-relaxed">
+              <strong style={{ color: CORES[e] }}>{ROTULOS[e]}</strong>: {definicao(e, regras)}
+            </p>
           ))}
+          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
+            <strong className="text-cream/70">Relato escrito</strong>: texto com mais de 200
+            caracteres no formulário. Abaixo disso costuma ser um elogio de uma palavra.
+          </p>
+          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
+            <strong className="text-cream/70">Estrela</strong>: marca que você põe à mão. Não é
+            calculada e não expira. A cor é sua para significar o que quiser.
+          </p>
           <p className="font-dm text-[11px] text-cream/25 leading-relaxed pt-1">
             Retrato montado em {new Date(retrato.geradoEm).toLocaleString("pt-BR")}.
           </p>
@@ -1041,6 +1206,15 @@ export default function AdminPessoasPage() {
 
 // ═══════════════════════════════════════════════════════════════
 
+function textoRecencia(dias: number): string {
+  if (dias === 0) return "veio hoje";
+  if (dias === 1) return "veio ontem";
+  if (dias < 30) return `veio há ${dias} dias`;
+  if (dias < 60) return "veio há mais de um mês";
+  if (dias < 365) return `veio há ${Math.floor(dias / 30)} meses`;
+  return "veio há mais de um ano";
+}
+
 function Selo({ children, cor }: { children: React.ReactNode; cor?: string }) {
   return (
     <span className="font-dm text-[10px] tabular-nums" style={{ color: cor ?? "rgba(253,251,247,0.3)" }}>
@@ -1049,31 +1223,128 @@ function Selo({ children, cor }: { children: React.ReactNode; cor?: string }) {
   );
 }
 
-function LinhaSumido({ p, onClick }: { p: PessoaLinha; onClick: () => void }) {
+/**
+ * A linha da lista.
+ *
+ * A cor da borda esquerda é o estado, e ela some por baixo do destaque quando a
+ * pessoa está marcada: entre o que o sistema calculou e o que você decidiu, o
+ * que você decidiu ganha a tela.
+ */
+function LinhaPessoa({
+  p,
+  onClick,
+  onDestaque,
+}: {
+  p: PessoaLinha;
+  onClick: () => void;
+  onDestaque: (m: MudancaDestaque) => void;
+}) {
+  const corEstado = CORES[p.estado];
+  const corDestaque = p.destaque ? CORES_DESTAQUE[p.destaque.cor] : null;
   return (
-    <button
-      onClick={onClick}
-      className="w-full text-left px-3 py-2.5 rounded-[10px] transition-colors hover:bg-white/[.03]"
-      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
+    <div
+      className="flex items-start gap-2 px-3 py-2.5 rounded-[10px] transition-colors hover:bg-white/[.03]"
+      style={{
+        background: corDestaque ? `${corDestaque}0F` : "rgba(255,255,255,0.02)",
+        border: `1px solid ${corDestaque ? `${corDestaque}40` : "rgba(255,255,255,0.05)"}`,
+        borderLeft: `3px solid ${corDestaque ?? corEstado}`,
+      }}
     >
-      <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <p className="font-dm text-sm text-cream/80 truncate">{p.nome}</p>
-          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+      <button onClick={onClick} className="flex-1 min-w-0 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0 flex-1">
+            <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+            <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <p className="font-fraunces font-bold text-sm tabular-nums" style={{ color: corEstado }}>
+              {p.encontros}
+            </p>
+            <p className="font-dm text-[9px] text-cream/25">
+              {p.encontros === 1 ? "encontro" : "encontros"}
+            </p>
+          </div>
         </div>
-        <div className="flex-shrink-0 text-right">
-          <p className="font-fraunces font-bold text-sm tabular-nums text-cream/70">{p.presencas}</p>
-          <p className="font-dm text-[9px] text-cream/25">presenças</p>
-        </div>
-      </div>
-      <div className="flex flex-wrap gap-x-3 mt-1.5">
-        <Selo cor={DOURADO}>há {p.diasSemAparecer} dias sem aparecer</Selo>
-        {p.ultimoMeet && (
-          <Selo cor={ROXO}>
-            visto na sala em {new Date(p.ultimoMeet).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-          </Selo>
+        {p.destaque?.nota && (
+          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed">{p.destaque.nota}</p>
         )}
-      </div>
-    </button>
+        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
+          <Selo cor={corEstado}>{ROTULOS[p.estado]}</Selo>
+          {p.diasSemAparecer != null && <Selo>{textoRecencia(p.diasSemAparecer)}</Selo>}
+          {p.atividades > 1 && <Selo>{p.atividades} grupos diferentes</Selo>}
+          {p.relatosLongos > 0 && (
+            <Selo cor={DOURADO}>
+              {p.relatosLongos} {p.relatosLongos > 1 ? "relatos escritos" : "relato escrito"}
+            </Selo>
+          )}
+          {p.aulas > 0 && (
+            <Selo>
+              {p.aulas} {p.aulas === 1 ? "aula" : "aulas"}
+              {p.horasPlataforma > 0 && ` · ${p.horasPlataforma}h estudando`}
+            </Selo>
+          )}
+          {p.encontrosNaSala > 0 && (
+            <Selo cor={ROXO}>
+              {p.turnosFala > 0 ? `falou ${p.turnosFala}x na sala` : "esteve na sala e não falou"}
+            </Selo>
+          )}
+          {p.seletivo && (
+            <Selo cor={p.seletivo.aprovado ? TEAL : "rgba(253,251,247,0.3)"}>
+              seletivo {p.seletivo.nota ?? ""}
+              {p.seletivo.aprovado ? ", aprovada" : p.seletivo.status ? `, ${p.seletivo.status.toLowerCase()}` : ""}
+            </Selo>
+          )}
+          {!p.temConta && <Selo>sem conta na plataforma</Selo>}
+        </div>
+      </button>
+      <Destaque pessoaId={p.id} nome={p.nome} destaque={p.destaque} onMudou={onDestaque} />
+    </div>
+  );
+}
+
+function LinhaSumido({
+  p,
+  onClick,
+  onDestaque,
+}: {
+  p: PessoaLinha;
+  onClick: () => void;
+  onDestaque: (m: MudancaDestaque) => void;
+}) {
+  const corDestaque = p.destaque ? CORES_DESTAQUE[p.destaque.cor] : null;
+  return (
+    <div
+      className="flex items-start gap-2 px-3 py-2.5 rounded-[10px] transition-colors hover:bg-white/[.03]"
+      style={{
+        background: corDestaque ? `${corDestaque}0F` : "rgba(255,255,255,0.02)",
+        border: `1px solid ${corDestaque ? `${corDestaque}40` : "rgba(255,255,255,0.05)"}`,
+      }}
+    >
+      <button onClick={onClick} className="flex-1 min-w-0 text-left">
+        <div className="flex items-start justify-between gap-3">
+          <div className="min-w-0">
+            <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+            <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+          </div>
+          <div className="flex-shrink-0 text-right">
+            <p className="font-fraunces font-bold text-sm tabular-nums text-cream/70">{p.encontros}</p>
+            <p className="font-dm text-[9px] text-cream/25">encontros</p>
+          </div>
+        </div>
+        {p.destaque?.nota && (
+          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed">{p.destaque.nota}</p>
+        )}
+        <div className="flex flex-wrap gap-x-3 mt-1.5">
+          <Selo cor={DOURADO}>{textoRecencia(p.diasSemAparecer ?? 0)}</Selo>
+          {p.ultimoMeet && (
+            <Selo cor={ROXO}>
+              visto na sala em{" "}
+              {new Date(p.ultimoMeet).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+            </Selo>
+          )}
+        </div>
+      </button>
+      <Destaque pessoaId={p.id} nome={p.nome} destaque={p.destaque} onMudou={onDestaque} />
+    </div>
   );
 }

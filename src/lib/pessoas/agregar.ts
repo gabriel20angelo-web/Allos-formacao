@@ -13,21 +13,110 @@
 // leitura precisa paginar de propósito; fazer isso no cliente é convidar a
 // tela a mentir para menos sem avisar ninguém.
 //
-// A palavra "presença" aqui vale para os dois lados: formulário enviado E nome
-// capturado na sala. Se acontecem no mesmo dia, contam uma. Isso importa porque
-// o formulário registra só metade de quem esteve na sala, e essa metade não é
-// sorteada: das 14 pessoas que estiveram nos dois encontros capturados, cinco
-// preencheram os dois formulários e cinco não preencheram nenhum, quando o
-// acaso previa sete preenchendo exatamente um. Preencher é hábito de pessoa,
-// não sorte do dia. Contar só formulário, portanto, não é ver metade de todo
-// mundo: é ver todo mundo de metade das pessoas, e nunca enxergar a outra.
+// A unidade contada aqui é o ENCONTRO, e ele vale pelos dois lados: formulário
+// enviado E nome capturado na sala. Se acontecem no mesmo dia e no mesmo grupo,
+// contam um. Isso importa porque o formulário registra só metade de quem esteve
+// na sala, e essa metade não é sorteada: das 14 pessoas que estiveram nos dois
+// encontros capturados, cinco preencheram os dois formulários e cinco não
+// preencheram nenhum, quando o acaso previa sete preenchendo exatamente um.
+// Preencher é hábito de pessoa, não sorte do dia. Contar só formulário,
+// portanto, não é ver metade de todo mundo: é ver todo mundo de metade das
+// pessoas, e nunca enxergar a outra.
+//
+// A palavra "encontro" substituiu "presença" em todo o arquivo, e não foi
+// cosmética: a tela e o CSV mostram este número, e ter um nome no código e
+// outro na interface é como um erro de tradução entra sem ninguém notar.
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRangeStart, type ActivityRange } from "@/lib/utils/activity";
 
 // ═══════════════════════════════════════════════════════════════
+// As réguas
+// ═══════════════════════════════════════════════════════════════
+// Ficam juntas e nomeadas porque são decisões, não detalhes: cada uma tem um
+// número que alguém escolheu e pode reescolher, e espalhá-las pelo código faz
+// com que mudar a definição vire caça ao literal.
+
+/** A janela do núcleo. Dois meses, escolhido pelo Gabriel em 06/08/2026. */
+const JANELA_NUCLEO_DIAS = 60;
+
+/**
+ * Encontros dentro da janela que fazem alguém ser do núcleo.
+ *
+ * Cinco em sessenta dias é exigente para o ritmo da casa: os grupos acontecem
+ * uma vez por semana, então cabem umas oito semanas na janela, e quem entra
+ * aqui vem em mais da metade delas. Medido em 06/08/2026, isso dá quatro
+ * pessoas, contra vinte na janela de noventa dias. Com número tão pequeno a
+ * tela mostra os nomes, nunca só a contagem.
+ */
+const BARRA_NUCLEO = 5;
+
+/** Quem está a um ou dois encontros de entrar. É daí que o núcleo cresce. */
+const BARRA_CHEGANDO = 3;
+
+/** Dias sem nenhum sinal para a pessoa contar como sumida. */
+const DIAS_SUMIU = 45;
+
+/** Dias sem sinal para ela contar como esfriando, ainda em tempo de resgate. */
+const DIAS_ESFRIANDO = 21;
+
+/** Quem estreou dentro deste prazo ainda é gente nova, e não gente que sumiu. */
+const DIAS_ESTREANTE = 30;
+
+/**
+ * Histórico mínimo para alguém poder "sumir" ou "esfriar".
+ *
+ * Sem este piso, quem veio uma única vez em abril apareceria como pessoa que a
+ * formação perdeu, quando na verdade ela nunca chegou a ficar. São coisas
+ * diferentes e pedem conversas diferentes.
+ */
+const MINIMO_PARA_SUMIR = 3;
+
+// ═══════════════════════════════════════════════════════════════
 // Tipos
 // ═══════════════════════════════════════════════════════════════
+
+/**
+ * O estado da pessoa hoje. Um só por pessoa, e a ordem de precedência está no
+ * cálculo: quem é do núcleo não é "estreante" mesmo tendo estreado ontem.
+ *
+ * Cada estado existe porque pede uma ação diferente, e é isso que separa um
+ * rótulo útil de uma etiqueta bonita:
+ *
+ *   nucleo      convidar para monitoria, condução, ouvir de dentro
+ *   chegando    o empurrão mais barato que existe: falta pouco
+ *   esporadico  vem, some, volta. Não é perda, é ritmo espaçado
+ *   esfriando   ainda dá para resgatar, e o custo de esperar é virar sumida
+ *   sumiu       resgate, com a ressalva de conferir a sala antes de cobrar
+ *   estreante   a maior alavanca da formação, e a que ninguém trabalhou
+ *   uma-vez     o balde furado: 62% da base vive aqui
+ *   so-assiste  existe na plataforma e nunca veio a um grupo
+ *   sem-sinal   tem conta e nunca fez nada
+ *
+ * "esporadico" nasceu de um caso concreto que o primeiro desenho errava: uma
+ * pessoa com cinco encontros na vida, que apareceu HOJE mas só uma vez nos
+ * últimos sessenta dias, caía em "veio pouco e parou". Ela não parou, ela
+ * acabou de vir. Sem esse estado, a tela chamava de perdida quem estava na
+ * sala naquela manhã, que é o erro mais caro que um painel de vínculo pode
+ * cometer.
+ */
+export type EstadoPessoa =
+  | "nucleo"
+  | "chegando"
+  | "esporadico"
+  | "esfriando"
+  | "sumiu"
+  | "estreante"
+  | "uma-vez"
+  | "so-assiste"
+  | "sem-sinal";
+
+/** O destaque que o administrador põe à mão. Vem da migration 092. */
+export interface DestaqueDaPessoa {
+  cor: "dourado" | "terracota" | "teal" | "roxo";
+  nota: string | null;
+  criadaEm: string | null;
+}
 
 /** O que o processo seletivo sabe sobre esta pessoa. */
 export interface SeletivoDaPessoa {
@@ -46,30 +135,34 @@ export interface PessoaLinha {
   nome: string;
   email: string | null;
   temConta: boolean;
-  /** Presenças em toda a história, formulário e sala somados sem contar duas vezes. */
-  presencas: number;
-  /** Presenças nos últimos 90 dias. É o que define o núcleo. */
-  presencas90: number;
-  /**
-   * Presenças dentro da janela escolhida no seletor. Igual a `presencas`
-   * quando a janela é "tudo".
-   */
-  presencasJanela: number;
+  /** O estado de hoje. É o que dá a cor da linha e o recorte da tela. */
+  estado: EstadoPessoa;
+  /** Encontros em toda a história, formulário e sala somados sem contar duas vezes. */
+  encontros: number;
+  /** Encontros dentro da janela do núcleo, hoje sessenta dias. */
+  encontrosRecentes: number;
+  /** Encontros dentro do período escolhido no seletor da tela. */
+  encontrosNoPeriodo: number;
   atividades: number;
   /** Relatos com mais de 200 caracteres: o sinal barato de quem topa conversar. */
   relatosLongos: number;
   aulas: number;
   horasPlataforma: number;
-  encontrosMeet: number;
-  minutosMeet: number;
+  /** Encontros em que a captura do Meet reconheceu esta pessoa na sala. */
+  encontrosNaSala: number;
+  minutosNaSala: number;
   turnosFala: number;
   /** Dias desde o último sinal de qualquer tipo. `null` = nunca deu sinal. */
   diasSemAparecer: number | null;
+  /** O mais recente entre formulário e sala, que é o que a tela mostra. */
+  ultimoEncontro: string | null;
   ultimoFormulario: string | null;
   ultimoMeet: string | null;
   estreia: string | null;
   /** `null` quando a pessoa nunca fez o processo seletivo. */
   seletivo: SeletivoDaPessoa | null;
+  /** `null` quando o administrador não destacou esta pessoa. */
+  destaque: DestaqueDaPessoa | null;
 }
 
 export interface CondutorLinha {
@@ -106,25 +199,37 @@ export interface RetratoSeletivo {
 }
 
 /**
- * O movimento dentro da janela. É o que o dashboard mostrava numa faixa de seis
- * números, três dos quais ignoravam o próprio seletor ao lado deles.
+ * O movimento dentro do período escolhido. É o que o dashboard mostrava numa
+ * faixa de seis números, três dos quais ignoravam o próprio seletor ao lado.
  */
-export interface FluxoNaJanela {
-  presencas: number;
+export interface FluxoNoPeriodo {
+  encontros: number;
   pessoas: number;
-  /** Presenças divididas por pessoas. Média, com a mediana ao lado na tela. */
+  /** Encontros divididos por pessoas. Média, com a mediana ao lado na tela. */
   vezesPorPessoa: number | null;
-  /** Mediana de presenças por pessoa: com 62% vindo uma vez, ela costuma ser 1. */
+  /** Mediana de encontros por pessoa: com 62% vindo uma vez, ela costuma ser 1. */
   medianaVezes: number;
-  /** Pessoas cuja primeira presença de todas caiu dentro da janela. */
+  /** Pessoas cujo primeiro encontro de todos caiu dentro do período. */
   estreantes: number;
 }
 
+/** Quantas pessoas em cada estado, para os contadores dos recortes da tela. */
+export type ContagemPorEstado = Record<EstadoPessoa, number>;
+
 export interface RetratoPessoas {
   geradoEm: string;
-  /** A janela que o servidor de fato aplicou, ecoada para a tela conferir. */
+  /** O período que o servidor de fato aplicou, ecoado para a tela conferir. */
   janela: ActivityRange;
-  fluxo: FluxoNaJanela;
+  /** As réguas em vigor, para a tela escrever a definição em vez de escondê-la. */
+  regras: {
+    janelaNucleoDias: number;
+    barraNucleo: number;
+    barraChegando: number;
+    diasSumiu: number;
+    diasEsfriando: number;
+    diasEstreante: number;
+  };
+  fluxo: FluxoNoPeriodo;
   cobertura: {
     encontrosCapturados: number;
     presencasMedidas: number;
@@ -133,12 +238,16 @@ export interface RetratoPessoas {
   };
   nucleo: {
     total: number;
+    /** Os nomes, porque quatro pessoas não viram uma contagem. */
+    pessoas: PessoaLinha[];
     serie: { rotulo: string; valor: number }[];
     quentes: number;
     esfriando: number;
     frios: number;
     aproximacao: number;
   };
+  estados: ContagemPorEstado;
+  destacadas: PessoaLinha[];
   sumidos: { semSinal: PessoaLinha[]; soFormulario: PessoaLinha[] };
   coortes: { mes: string; rotulo: string; estreantes: number; voltaram: number }[];
   pessoas: PessoaLinha[];
@@ -153,7 +262,9 @@ export interface RetratoPessoas {
     umaVezSo: number;
     escrevemRelato: number;
     doSeletivo: number;
-    /** Quantas pessoas a base conhece, ignorando a janela. Denominador honesto. */
+    destacadas: number;
+    mudos: number;
+    /** Quantas pessoas a base conhece, ignorando o período. Denominador honesto. */
     pessoasNaBase: number;
   };
 }
@@ -175,6 +286,7 @@ async function lerTudo<T>(
   tabela: string,
   colunas: string,
   ordenarPor: string,
+  opcional = false,
 ): Promise<T[]> {
   const PAGINA = 1000;
   const TETO = 50;
@@ -185,7 +297,14 @@ async function lerTudo<T>(
       .select(colunas)
       .order(ordenarPor, { ascending: true })
       .range(p * PAGINA, p * PAGINA + PAGINA - 1);
-    if (error) throw new Error(`${tabela}: ${error.message}`);
+    if (error) {
+      // Tabela opcional é a que só passa a existir depois de uma migration
+      // aplicada. Devolver lista vazia deixa a tela abrir sem o recurso, em vez
+      // de derrubar o retrato inteiro por causa de um recurso que ainda não foi
+      // ligado.
+      if (opcional) return [];
+      throw new Error(`${tabela}: ${error.message}`);
+    }
     const lote = (data ?? []) as T[];
     out.push(...lote);
     if (lote.length < PAGINA) break;
@@ -239,7 +358,7 @@ export async function montarRetrato(
 
   const [
     pessoas, idents, subs, profs, participacoes, encontros, aulas, sessoes,
-    candidaturas, tentativas,
+    candidaturas, tentativas, destaques,
   ] = await Promise.all([
       lerTudo<{ id: string; nome_canonico: string }>(
         sb, "pessoas", "id,nome_canonico", "id"),
@@ -275,7 +394,19 @@ export async function montarRetrato(
         candidatura_id: string; nota: number | null; status: string | null;
         realizada_em: string | null;
       }>(sb, "seletivo_tentativas", "candidatura_id,nota,status,realizada_em", "id"),
+      // A 092 pode não estar aplicada ainda: sem ela a tela abre sem destaques
+      // em vez de não abrir.
+      lerTudo<{
+        pessoa_id: string; cor: DestaqueDaPessoa["cor"]; nota: string | null; criada_em: string;
+      }>(sb, "pessoa_destaques", "pessoa_id,cor,nota,criada_em", "pessoa_id", true),
     ]);
+
+  const destaquePorPessoa = new Map(
+    destaques.map((d) => [
+      d.pessoa_id,
+      { cor: d.cor, nota: d.nota, criadaEm: d.criada_em } as DestaqueDaPessoa,
+    ]),
+  );
 
   // ── Índices de identidade ────────────────────────────────────
   // Tudo converge para `pessoa_id`. Quem não estiver ligado a uma pessoa não
@@ -298,15 +429,15 @@ export async function montarRetrato(
 
   // ── Acumulador ───────────────────────────────────────────────
   interface Acc {
-    presencaDias: Set<string>;
-    presencaDias90: Set<string>;
-    presencaDiasJanela: Set<string>;
+    encontrosSet: Set<string>;
+    encontrosRecentesSet: Set<string>;
+    encontrosPeriodoSet: Set<string>;
     atividades: Set<string>;
     relatosLongos: number;
     aulas: number;
     segundos: number;
-    encontrosMeet: number;
-    minutosMeet: number;
+    encontrosNaSala: number;
+    minutosNaSala: number;
     turnosFala: number;
     ultimoFormulario: number | null;
     ultimoMeet: number | null;
@@ -317,15 +448,15 @@ export async function montarRetrato(
      * fosse "tudo", e o recorte "só na plataforma" ficaria permanentemente
      * vazio justamente onde ele deveria aparecer.
      */
-    sinalNaJanela: boolean;
+    sinalNoPeriodo: boolean;
   }
   const acc = new Map<string, Acc>();
   const vazio = (): Acc => ({
-    presencaDias: new Set(), presencaDias90: new Set(), presencaDiasJanela: new Set(),
+    encontrosSet: new Set(), encontrosRecentesSet: new Set(), encontrosPeriodoSet: new Set(),
     atividades: new Set(),
-    relatosLongos: 0, aulas: 0, segundos: 0, encontrosMeet: 0, minutosMeet: 0,
+    relatosLongos: 0, aulas: 0, segundos: 0, encontrosNaSala: 0, minutosNaSala: 0,
     turnosFala: 0, ultimoFormulario: null, ultimoMeet: null, estreia: null,
-    sinalNaJanela: false,
+    sinalNoPeriodo: false,
   });
   const de = (id: string) => {
     let a = acc.get(id);
@@ -344,11 +475,11 @@ export async function montarRetrato(
     // A chave inclui a atividade: a mesma pessoa em dois grupos no mesmo dia são
     // duas presenças, e duas linhas do mesmo grupo no mesmo dia são uma só
     // (existem 20 dessas na base, de reenvio do formulário).
-    a.presencaDias.add(`${d}|${norm(s.atividade_nome)}`);
-    if (agora - t <= 90 * DIA) a.presencaDias90.add(`${d}|${norm(s.atividade_nome)}`);
+    a.encontrosSet.add(`${d}|${norm(s.atividade_nome)}`);
+    if (agora - t <= JANELA_NUCLEO_DIAS * DIA) a.encontrosRecentesSet.add(`${d}|${norm(s.atividade_nome)}`);
     if (naJanela(t)) {
-      a.presencaDiasJanela.add(`${d}|${norm(s.atividade_nome)}`);
-      a.sinalNaJanela = true;
+      a.encontrosPeriodoSet.add(`${d}|${norm(s.atividade_nome)}`);
+      a.sinalNoPeriodo = true;
     }
     if (s.atividade_nome) a.atividades.add(s.atividade_nome);
     if ((s.relato ?? "").trim().length > 200) a.relatosLongos++;
@@ -375,19 +506,19 @@ export async function montarRetrato(
     const d = enc.data_reuniao ? dia(enc.data_reuniao) : null;
     if (d) {
       const t = new Date(d).getTime();
-      a.presencaDias.add(`${d}|${norm(enc.atividade_nome)}`);
-      if (agora - t <= 90 * DIA) a.presencaDias90.add(`${d}|${norm(enc.atividade_nome)}`);
+      a.encontrosSet.add(`${d}|${norm(enc.atividade_nome)}`);
+      if (agora - t <= JANELA_NUCLEO_DIAS * DIA) a.encontrosRecentesSet.add(`${d}|${norm(enc.atividade_nome)}`);
       if (naJanela(t)) {
-        a.presencaDiasJanela.add(`${d}|${norm(enc.atividade_nome)}`);
-        a.sinalNaJanela = true;
+        a.encontrosPeriodoSet.add(`${d}|${norm(enc.atividade_nome)}`);
+        a.sinalNoPeriodo = true;
       }
       if (!a.ultimoMeet || t > a.ultimoMeet) a.ultimoMeet = t;
       if (!a.estreia || t < a.estreia) a.estreia = t;
       if (emailPresencaDia.has(`${pid}|${d}`)) formulariosNoMesmoDia++;
     }
     if (enc.atividade_nome) a.atividades.add(enc.atividade_nome);
-    a.encontrosMeet++;
-    a.minutosMeet += p.minutos_presentes ?? 0;
+    a.encontrosNaSala++;
+    a.minutosNaSala += p.minutos_presentes ?? 0;
     a.turnosFala += p.n_turnos_fala ?? 0;
   }
 
@@ -401,14 +532,14 @@ export async function montarRetrato(
     // Aula concluída conta como sinal, mas nunca como presença: presença é
     // encontro com outras pessoas, e assistir vídeo sozinho não é isso. A
     // diferença importa porque o núcleo se define por presença.
-    if (l.completed_at && naJanela(new Date(l.completed_at).getTime())) a.sinalNaJanela = true;
+    if (l.completed_at && naJanela(new Date(l.completed_at).getTime())) a.sinalNoPeriodo = true;
   }
   for (const u of sessoes) {
     const pid = pessoaPorPerfil.get(u.user_id);
     if (!pid) continue;
     const a = de(pid);
     a.segundos += u.seconds ?? 0;
-    if (u.created_at && naJanela(new Date(u.created_at).getTime())) a.sinalNaJanela = true;
+    if (u.created_at && naJanela(new Date(u.created_at).getTime())) a.sinalNoPeriodo = true;
   }
   // Sobra de segurança: perfil sem identificador (não deveria existir depois da
   // 089, mas se existir a pessoa some da tela em vez de dar erro).
@@ -479,27 +610,60 @@ export async function montarRetrato(
       nome: p.nome_canonico,
       email: null as string | null,
       temConta: temConta.has(p.id),
-      presencas: a.presencaDias.size,
-      presencas90: a.presencaDias90.size,
-      presencasJanela: a.presencaDiasJanela.size,
+      estado: "sem-sinal" as EstadoPessoa, // calculado logo abaixo
+      encontros: a.encontrosSet.size,
+      encontrosRecentes: a.encontrosRecentesSet.size,
+      encontrosNoPeriodo: a.encontrosPeriodoSet.size,
       atividades: a.atividades.size,
       relatosLongos: a.relatosLongos,
       aulas: a.aulas,
       horasPlataforma: Math.round((a.segundos / 3600) * 10) / 10,
-      encontrosMeet: a.encontrosMeet,
-      minutosMeet: Math.round(a.minutosMeet),
+      encontrosNaSala: a.encontrosNaSala,
+      minutosNaSala: Math.round(a.minutosNaSala),
       turnosFala: a.turnosFala,
       diasSemAparecer: ultimoSinal ? Math.floor((agora - ultimoSinal) / DIA) : null,
+      ultimoEncontro: ultimoSinal ? new Date(ultimoSinal).toISOString() : null,
       ultimoFormulario: a.ultimoFormulario ? new Date(a.ultimoFormulario).toISOString() : null,
       ultimoMeet: a.ultimoMeet ? new Date(a.ultimoMeet).toISOString() : null,
       estreia: a.estreia ? new Date(a.estreia).toISOString() : null,
       seletivo: seletivoPorPessoa.get(p.id) ?? null,
+      destaque: destaquePorPessoa.get(p.id) ?? null,
     };
   });
 
+  // ── O estado de cada pessoa ──────────────────────────────────
+  // A ordem dos testes É a regra de precedência, e ela não é arbitrária: quem
+  // está vindo agora nunca deve aparecer como perdida, e quem nunca chegou não
+  // deve aparecer como perdida também. Por isso "sumiu" e "esfriando" exigem um
+  // histórico mínimo, e "estreante" só vale para quem ainda não firmou.
+  for (const l of linhas) {
+    const dias = l.diasSemAparecer;
+    const estreouHa = l.estreia
+      ? Math.floor((agora - new Date(l.estreia).getTime()) / DIA)
+      : null;
+
+    if (l.encontrosRecentes >= BARRA_NUCLEO) l.estado = "nucleo";
+    else if (l.encontrosRecentes >= BARRA_CHEGANDO) l.estado = "chegando";
+    else if (l.encontros >= MINIMO_PARA_SUMIR && dias != null && dias >= DIAS_SUMIU)
+      l.estado = "sumiu";
+    else if (l.encontros >= MINIMO_PARA_SUMIR && dias != null && dias >= DIAS_ESFRIANDO)
+      l.estado = "esfriando";
+    // Antes de "estreante", porque quem já veio duas vezes e apareceu esta
+    // semana não é gente nova, é gente que volta de vez em quando.
+    else if (l.encontros >= 2 && dias != null && dias < DIAS_ESFRIANDO)
+      l.estado = "esporadico";
+    else if (estreouHa != null && estreouHa <= DIAS_ESTREANTE) l.estado = "estreante";
+    else if (l.encontros === 0 && (l.aulas > 0 || l.horasPlataforma > 0)) l.estado = "so-assiste";
+    else if (l.encontros === 0) l.estado = "sem-sinal";
+    // Sobra quem veio uma ou duas vezes e não voltou. Na tela isso se chama
+    // "veio pouco e parou": o rótulo cobre os dois casos sem inventar uma
+    // categoria a mais para separar um encontro de dois.
+    else l.estado = "uma-vez";
+  }
+
   /** Deu algum sinal dentro da janela escolhida. Com "tudo", todo mundo dá. */
   const dentroDaJanela = (l: PessoaLinha) =>
-    inicioJanela === null || (acc.get(l.id)?.sinalNaJanela ?? false);
+    inicioJanela === null || (acc.get(l.id)?.sinalNoPeriodo ?? false);
 
   // O e-mail entra por mapa invertido, não por varredura dentro do map acima:
   // com 511 pessoas a busca linear seria irrelevante, mas ela é O(n²) e vira
@@ -511,29 +675,36 @@ export async function montarRetrato(
   for (const l of linhas) l.email = emailPorPessoa.get(l.id) ?? null;
 
   // ── Núcleo ───────────────────────────────────────────────────
-  const nucleo = linhas.filter((l) => l.presencas90 >= 5);
-  const frios = nucleo.filter((l) => (l.diasSemAparecer ?? 0) >= 45);
+  const nucleo = linhas
+    .filter((l) => l.estado === "nucleo")
+    .sort((a, b) => b.encontrosRecentes - a.encontrosRecentes || b.encontros - a.encontros);
+  const frios = nucleo.filter((l) => (l.diasSemAparecer ?? 0) >= DIAS_SUMIU);
   const esfriando = nucleo.filter(
-    (l) => (l.diasSemAparecer ?? 0) >= 21 && (l.diasSemAparecer ?? 0) < 45);
+    (l) => (l.diasSemAparecer ?? 0) >= DIAS_ESFRIANDO && (l.diasSemAparecer ?? 0) < DIAS_SUMIU);
 
-  // A série é recalculada para trás: em cada quinzena, quem tinha 5 presenças
-  // nos 90 dias anteriores àquela data. Sem isso a linha do tempo seria o mesmo
-  // número repetido sete vezes.
-  const presencasPorPessoa = new Map<string, number[]>();
+  // A série é recalculada para trás: em cada quinzena, quem teria entrado no
+  // núcleo se a régua de hoje valesse naquela data. Sem isso a linha do tempo
+  // seria o mesmo número repetido sete vezes.
+  //
+  // Ela usa só o formulário, e é um limite conhecido: a captura do Meet começou
+  // em 03/08/2026, então incluí-la faria o último ponto subir por mudança de
+  // lente e não por mudança de vínculo. Quando houver uns dois meses de sala
+  // capturada, as duas contas devem rodar em paralelo e a troca ser anotada.
+  const encontrosPorPessoa = new Map<string, number[]>();
   for (const s of subs) {
     const pid = pessoaPorEmail.get(norm(s.email));
     if (!pid) continue;
-    const arr = presencasPorPessoa.get(pid) ?? [];
+    const arr = encontrosPorPessoa.get(pid) ?? [];
     arr.push(new Date(s.created_at).getTime());
-    presencasPorPessoa.set(pid, arr);
+    encontrosPorPessoa.set(pid, arr);
   }
   const serie: { rotulo: string; valor: number }[] = [];
   for (let q = 6; q >= 0; q--) {
     const ref = agora - q * 15 * DIA;
-    const ini = ref - 90 * DIA;
+    const ini = ref - JANELA_NUCLEO_DIAS * DIA;
     let n = 0;
-    presencasPorPessoa.forEach((ts) => {
-      if (ts.filter((t) => t > ini && t <= ref).length >= 5) n++;
+    encontrosPorPessoa.forEach((ts) => {
+      if (ts.filter((t) => t > ini && t <= ref).length >= BARRA_NUCLEO) n++;
     });
     const d = new Date(ref);
     serie.push({ rotulo: `${d.getDate()}/${MESES_PT[d.getMonth()]}`, valor: n });
@@ -543,16 +714,21 @@ export async function montarRetrato(
   // A separação entre os dois grupos é a peça mais importante da tela: quem
   // parou de preencher mas continua aparecendo na sala não sumiu, e cobrar
   // ausência de quem estava lá é o jeito mais rápido de queimar o vínculo.
+  //
+  // O piso é a barra do núcleo, e não um número solto: quem sai desta lista é
+  // quem um dia esteve dentro. Baixá-lo encheria a lista de quem nunca chegou a
+  // ficar, que é outra conversa.
   const sumidos = linhas
-    .filter((l) => l.presencas >= 5 && (l.diasSemAparecer ?? 0) >= 45)
-    .sort((a, b) => b.presencas - a.presencas);
-  const recente = (iso: string | null) => !!iso && agora - new Date(iso).getTime() < 45 * DIA;
+    .filter((l) => l.encontros >= BARRA_NUCLEO && (l.diasSemAparecer ?? 0) >= DIAS_SUMIU)
+    .sort((a, b) => b.encontros - a.encontros);
+  const recente = (iso: string | null) =>
+    !!iso && agora - new Date(iso).getTime() < DIAS_SUMIU * DIA;
 
   // ── Coortes ──────────────────────────────────────────────────
   const coortes: RetratoPessoas["coortes"] = [];
   const porMes = new Map<string, { estreantes: number; voltaram: number }>();
   for (const l of linhas) {
-    if (!l.estreia || l.presencas === 0) continue;
+    if (!l.estreia || l.encontros === 0) continue;
     const e = new Date(l.estreia);
     // O mês corrente fica de fora: quem estreou anteontem ainda não teve tempo
     // de voltar, e incluí-lo derruba a taxa sem que nada tenha acontecido.
@@ -560,7 +736,7 @@ export async function montarRetrato(
     const k = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}`;
     const c = porMes.get(k) ?? { estreantes: 0, voltaram: 0 };
     c.estreantes++;
-    if (l.presencas >= 2) c.voltaram++;
+    if (l.encontros >= 2) c.voltaram++;
     porMes.set(k, c);
   }
   Array.from(porMes.entries()).sort().forEach(([k, v]) => {
@@ -635,8 +811,8 @@ export async function montarRetrato(
   const notasAprovados = aprovados
     .map((l) => l.seletivo!.nota)
     .filter((n): n is number => n != null);
-  const porPresenca = (a: PessoaLinha, b: PessoaLinha) =>
-    b.presencas - a.presencas || (b.seletivo?.nota ?? 0) - (a.seletivo?.nota ?? 0);
+  const porEncontros = (a: PessoaLinha, b: PessoaLinha) =>
+    b.encontros - a.encontros || (b.seletivo?.nota ?? 0) - (a.seletivo?.nota ?? 0);
 
   const seletivo: RetratoSeletivo = {
     candidatos: candidaturas.length,
@@ -645,33 +821,40 @@ export async function montarRetrato(
     semStatus: doSeletivo.length - aprovados.length - rejeitados.length,
     corte: notasAprovados.length ? Math.min(...notasAprovados) : null,
     jaEramPessoa,
-    aprovadosQueVieram: aprovados.filter((l) => l.presencas > 0).sort(porPresenca),
+    aprovadosQueVieram: aprovados.filter((l) => l.encontros > 0).sort(porEncontros),
     aprovadosQueNaoVieram: aprovados
-      .filter((l) => l.presencas === 0)
+      .filter((l) => l.encontros === 0)
       .sort((a, b) => (b.seletivo?.nota ?? 0) - (a.seletivo?.nota ?? 0)),
-    rejeitadosQueVieram: rejeitados.filter((l) => l.presencas > 0).sort(porPresenca),
+    rejeitadosQueVieram: rejeitados.filter((l) => l.encontros > 0).sort(porEncontros),
   };
 
   // ── Totais dos recortes ──────────────────────────────────────
-  // A janela decide quem entra na lista; os recortes continuam lendo a vida
+  // O período decide quem entra na lista; os recortes continuam lendo a vida
   // inteira de quem entrou. Ver o comentário da assinatura da função.
-  const naBase = linhas.filter((l) => l.presencas > 0 || l.temConta);
+  const naBase = linhas.filter((l) => l.encontros > 0 || l.temConta);
   const validas = naBase.filter(dentroDaJanela);
-  const comGrupo = validas.filter((l) => l.presencas > 0);
+  const comGrupo = validas.filter((l) => l.encontros > 0);
 
-  // ── O movimento da janela ────────────────────────────────────
+  // ── Quantas em cada estado ───────────────────────────────────
+  const estados: ContagemPorEstado = {
+    nucleo: 0, chegando: 0, esporadico: 0, esfriando: 0, sumiu: 0,
+    estreante: 0, "uma-vez": 0, "so-assiste": 0, "sem-sinal": 0,
+  };
+  for (const l of validas) estados[l.estado]++;
+
+  // ── O movimento do período ───────────────────────────────────
   // A média de vezes por pessoa vem acompanhada da mediana porque as duas
   // discordam muito aqui: com 62% da base vindo uma única vez, a média fica
   // perto de 2 e a mediana é 1. Publicar só a média descreveria uma formação
   // que não existe.
-  const presentesNaJanela = validas.filter((l) => l.presencasJanela > 0);
-  const presencasNaJanela = presentesNaJanela.reduce((s, l) => s + l.presencasJanela, 0);
-  const vezes = presentesNaJanela.map((l) => l.presencasJanela).sort((a, b) => a - b);
-  const fluxo: FluxoNaJanela = {
-    presencas: presencasNaJanela,
-    pessoas: presentesNaJanela.length,
-    vezesPorPessoa: presentesNaJanela.length
-      ? Math.round((presencasNaJanela / presentesNaJanela.length) * 10) / 10
+  const presentes = validas.filter((l) => l.encontrosNoPeriodo > 0);
+  const encontrosNoPeriodo = presentes.reduce((s, l) => s + l.encontrosNoPeriodo, 0);
+  const vezes = presentes.map((l) => l.encontrosNoPeriodo).sort((a, b) => a - b);
+  const fluxo: FluxoNoPeriodo = {
+    encontros: encontrosNoPeriodo,
+    pessoas: presentes.length,
+    vezesPorPessoa: presentes.length
+      ? Math.round((encontrosNoPeriodo / presentes.length) * 10) / 10
       : null,
     medianaVezes: vezes.length ? vezes[Math.floor(vezes.length / 2)] : 0,
     estreantes: validas.filter((l) => l.estreia && naJanela(new Date(l.estreia).getTime())).length,
@@ -680,6 +863,14 @@ export async function montarRetrato(
   return {
     geradoEm: new Date(agora).toISOString(),
     janela,
+    regras: {
+      janelaNucleoDias: JANELA_NUCLEO_DIAS,
+      barraNucleo: BARRA_NUCLEO,
+      barraChegando: BARRA_CHEGANDO,
+      diasSumiu: DIAS_SUMIU,
+      diasEsfriando: DIAS_ESFRIANDO,
+      diasEstreante: DIAS_ESTREANTE,
+    },
     fluxo,
     cobertura: {
       encontrosCapturados: encontros.filter((e) => !e.descartado).length,
@@ -691,12 +882,20 @@ export async function montarRetrato(
     },
     nucleo: {
       total: nucleo.length,
+      pessoas: nucleo,
       serie,
       quentes: nucleo.length - esfriando.length - frios.length,
       esfriando: esfriando.length,
       frios: frios.length,
-      aproximacao: linhas.filter((l) => l.presencas90 === 3 || l.presencas90 === 4).length,
+      aproximacao: linhas.filter((l) => l.estado === "chegando").length,
     },
+    estados,
+    // Os destaques ignoram o período de propósito: marcar alguém é dizer
+    // "lembra desta pessoa", e ela sumir da lista porque não apareceu nos
+    // últimos quinze dias é exatamente o contrário do que a marca serve.
+    destacadas: naBase
+      .filter((l) => l.destaque != null)
+      .sort((a, b) => (b.destaque?.criadaEm ?? "").localeCompare(a.destaque?.criadaEm ?? "")),
     sumidos: {
       semSinal: sumidos.filter((l) => !recente(l.ultimoMeet)),
       soFormulario: sumidos.filter((l) => recente(l.ultimoMeet)),
@@ -704,18 +903,20 @@ export async function montarRetrato(
     coortes,
     pessoas: validas
       .slice()
-      .sort((a, b) => b.presencas - a.presencas || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9)),
+      .sort((a, b) => b.encontros - a.encontros || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9)),
     condutores,
     seletivo,
     totais: {
       pessoas: validas.length,
       comConta: validas.filter((l) => l.temConta).length,
-      soGrupo: validas.filter((l) => l.presencas > 0 && !l.temConta).length,
-      soPlataforma: validas.filter((l) => l.presencas === 0 && l.temConta).length,
-      nosDois: validas.filter((l) => l.presencas > 0 && l.temConta).length,
-      umaVezSo: comGrupo.filter((l) => l.presencas === 1).length,
+      soGrupo: validas.filter((l) => l.encontros > 0 && !l.temConta).length,
+      soPlataforma: validas.filter((l) => l.encontros === 0 && l.temConta).length,
+      nosDois: validas.filter((l) => l.encontros > 0 && l.temConta).length,
+      umaVezSo: comGrupo.filter((l) => l.encontros === 1).length,
       escrevemRelato: validas.filter((l) => l.relatosLongos > 0).length,
       doSeletivo: validas.filter((l) => l.seletivo != null).length,
+      destacadas: naBase.filter((l) => l.destaque != null).length,
+      mudos: validas.filter((l) => l.encontrosNaSala > 0 && l.turnosFala === 0).length,
       pessoasNaBase: naBase.length,
     },
   };
