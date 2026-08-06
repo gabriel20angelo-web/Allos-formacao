@@ -20,7 +20,7 @@
 
 "use client";
 
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
@@ -33,6 +33,8 @@ import {
   Mic,
   Shield,
   AlertTriangle,
+  Upload,
+  GraduationCap,
 } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import Card from "@/components/ui/Card";
@@ -44,6 +46,19 @@ import type { PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
 const TERRACOTA = "#C84B31";
 const TEAL = "#2E9E8F";
 const DOURADO = "#D4854A";
+
+interface ResumoImport {
+  linhas: number;
+  casamPorEmail: number;
+  casamPorTelefone: number;
+  pessoasNovas: number;
+  jaImportados: number;
+  semEmail: number;
+  semTelefone: number;
+  pessoasCriadas?: number;
+  tentativasNovas?: number;
+  tentativasRepetidas?: number;
+}
 
 type Recorte =
   | "todas"
@@ -70,6 +85,11 @@ export default function AdminPessoasPage() {
   const [verTodosCondutores, setVerTodosCondutores] = useState(false);
   const [verTodosSumidos, setVerTodosSumidos] = useState(false);
   const [glossarioAberto, setGlossarioAberto] = useState(false);
+  // Importação do processo seletivo
+  const [csv, setCsv] = useState<{ nome: string; conteudo: string } | null>(null);
+  const [previa, setPrevia] = useState<ResumoImport | null>(null);
+  const [importando, setImportando] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
 
   const carregar = useCallback(async () => {
     try {
@@ -147,6 +167,41 @@ export default function AdminPessoasPage() {
     toast.success("Baixado com o recorte e a ordem que estão na tela.");
   };
 
+  // ── Importação do seletivo ─────────────────────────────────
+  // A prévia e a gravação chamam a mesma rota e o mesmo cálculo. Se fossem
+  // dois caminhos, a prévia prometeria um número e a gravação faria outro.
+  const enviarSeletivo = useCallback(
+    async (conteudo: string, nome: string, gravar: boolean) => {
+      setImportando(true);
+      try {
+        const r = await fetch("/formacao/api/admin/seletivo/importar", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ conteudo, previa: !gravar }),
+        });
+        const j = await r.json();
+        if (!r.ok) throw new Error(j.error || "Não foi possível ler o arquivo.");
+        if (gravar) {
+          setPrevia(null);
+          setCsv(null);
+          toast.success(
+            `${j.resumo.pessoasCriadas} pessoas novas, ${j.resumo.tentativasNovas} tentativas gravadas.`,
+          );
+          setLoading(true);
+          carregar();
+        } else {
+          setCsv({ nome, conteudo });
+          setPrevia(j.resumo);
+        }
+      } catch (e) {
+        toast.error(e instanceof Error ? e.message : "Erro ao importar");
+      } finally {
+        setImportando(false);
+      }
+    },
+    [carregar],
+  );
+
   if (!isAdmin) {
     return (
       <div className="text-center py-20">
@@ -220,6 +275,92 @@ export default function AdminPessoasPage() {
           </p>
           <HintButton text="Comparando a lista do Meet com quem enviou formulário, mais ou menos metade de quem esteve na sala preenche. E não é sorteio: quem preenche costuma preencher sempre, quem não preenche nunca preenche. Todo número desta tela que vem do formulário está por baixo do real, e existe gente frequente que ele nunca viu." />
         </div>
+      </motion.div>
+
+      {/* ── Importar o processo seletivo ── */}
+      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.05 }}>
+        <Card>
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-start gap-2.5">
+              <GraduationCap className="h-4 w-4 mt-0.5 flex-shrink-0" style={{ color: "#6C5CE7" }} />
+              <div>
+                <p className="font-dm text-sm text-cream/80">Processo seletivo</p>
+                <p className="font-dm text-[11px] text-cream/35 mt-0.5 leading-relaxed">
+                  Solte aqui o CSV completo do AvaliAllos. Cada candidato é ligado a uma pessoa
+                  pelo e-mail ou pelo WhatsApp, nunca pelo nome. Quem não existe ainda vira pessoa nova.
+                </p>
+              </div>
+            </div>
+            <input
+              ref={fileRef}
+              type="file"
+              accept=".csv,text/csv"
+              className="hidden"
+              onChange={async (e) => {
+                const f = e.target.files?.[0];
+                e.target.value = "";
+                if (!f) return;
+                enviarSeletivo(await f.text(), f.name, false);
+              }}
+            />
+            <button
+              onClick={() => fileRef.current?.click()}
+              disabled={importando}
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05] self-start whitespace-nowrap disabled:opacity-50"
+              style={{ color: "#6C5CE7", border: "1px solid rgba(108,92,231,0.35)" }}
+            >
+              <Upload className="h-3.5 w-3.5" />
+              {importando ? "Lendo..." : "Escolher arquivo"}
+            </button>
+          </div>
+
+          {previa && csv && (
+            <div className="mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <p className="font-dm text-[11px] text-cream/30 mb-3">{csv.nome}</p>
+              <div className="flex flex-wrap gap-x-6 gap-y-2 mb-4">
+                {[
+                  { r: "candidatos no arquivo", v: previa.linhas, c: undefined },
+                  { r: "já são pessoas conhecidas", v: previa.casamPorEmail + previa.casamPorTelefone, c: TEAL },
+                  { r: "viram pessoas novas", v: previa.pessoasNovas, c: DOURADO },
+                  { r: "já importados antes", v: previa.jaImportados, c: undefined },
+                ].map((x) => (
+                  <div key={x.r}>
+                    <p className="font-fraunces font-bold text-xl tabular-nums" style={{ color: x.c ?? "rgba(253,251,247,0.8)" }}>
+                      {x.v}
+                    </p>
+                    <p className="font-dm text-[10px] text-cream/30">{x.r}</p>
+                  </div>
+                ))}
+              </div>
+              {(previa.semEmail > 0 || previa.semTelefone > 0) && (
+                <p className="font-dm text-[11px] mb-3" style={{ color: DOURADO }}>
+                  {previa.semEmail} sem e-mail e {previa.semTelefone} sem WhatsApp. Esses só podem virar
+                  pessoa nova, porque sem chave forte não dá para afirmar que já são alguém.
+                </p>
+              )}
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={() => enviarSeletivo(csv.conteudo, csv.nome, true)}
+                  disabled={importando}
+                  className="font-dm text-xs px-4 py-2 rounded-full transition-all disabled:opacity-50"
+                  style={{ background: "linear-gradient(135deg, #C84B31, #A33D27)", color: "#FDFBF7" }}
+                >
+                  {importando ? "Gravando..." : `Gravar ${previa.linhas} candidatos`}
+                </button>
+                <button
+                  onClick={() => { setPrevia(null); setCsv(null); }}
+                  className="font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05]"
+                  style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
+                >
+                  Cancelar
+                </button>
+              </div>
+              <p className="font-dm text-[10px] text-cream/25 mt-3">
+                Nada foi gravado ainda. Importar o mesmo arquivo duas vezes não duplica nada.
+              </p>
+            </div>
+          )}
+        </Card>
       </motion.div>
 
       {/* ── Núcleo ── */}
