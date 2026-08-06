@@ -62,7 +62,17 @@ function dataCurta(iso: string): string {
 /** A seta da tendência, com a cor do que ela significa e não do que ela é. */
 function Tendencia({ v }: { v: number | null }) {
   if (v === null) {
-    return <span className="font-dm text-[11px] text-cream/25">faltam encontros</span>;
+    // Um travessão, e não "faltam encontros": o texto quebrava em duas linhas
+    // dentro da coluna e, com quase todo grupo tendo um encontro só, repetia a
+    // mesma frase em todas as linhas. A explicação vive uma vez, no rodapé.
+    return (
+      <span
+        className="font-dm text-[11px] text-cream/20"
+        title="Precisa de quatro encontros para medir tendência"
+      >
+        —
+      </span>
+    );
   }
   if (v === 0) return <span className="font-dm text-xs text-cream/40">estável</span>;
   const sobe = v > 0;
@@ -237,7 +247,9 @@ export default function GruposPage() {
               </div>
               <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
                 Ordenado por quórum. Um grupo que mudou de horário continua sendo um
-                grupo só, e aparece com os dois horários somados.
+                grupo só, e aparece com os dois horários somados. Tendência com
+                travessão é grupo que ainda não tem os quatro encontros que ela
+                precisa para significar alguma coisa.
               </p>
 
               {/* Cabeçalho só no desktop: no celular cada grupo vira um cartão. */}

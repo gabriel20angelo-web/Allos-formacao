@@ -155,11 +155,17 @@ export default function PainelCondutores({
                     )}
                   </p>
                   <p className="font-dm text-[10px] text-cream/25 truncate">
+                    {/* A frase precisa dizer a verdade sobre CADA caso. Antes
+                        havia só dois ramos, e quem tinha nota no formulário sem
+                        ficha era descrito como "aparece na sala", que é outra
+                        coisa e mandaria procurar no lugar errado. */}
                     {m?.atividades.length
                       ? m.atividades.join(", ")
                       : l.fichaId
                         ? "nenhum encontro capturado ainda"
-                        : "aparece na sala e não tem ficha no cadastro"}
+                        : l.notas > 0
+                          ? "citado no formulário, sem ficha no cadastro"
+                          : "sem ficha no cadastro"}
                   </p>
                 </div>
                 <span className="font-dm text-xs text-cream/50 tabular-nums text-right hidden sm:block">
@@ -271,7 +277,9 @@ export default function PainelCondutores({
             <p style={{ color: DOURADO }}>
               {semFicha} {semFicha === 1 ? "nome apareceu" : "nomes apareceram"} na sala
               ou no formulário sem ficha no cadastro. Sem ficha não há como ligar a
-              conta da pessoa, e a área do condutor não abre para ela.
+              conta da pessoa, e a área do condutor não abre para ela. Um deles é
+              &quot;Outros&quot;, que é opção do formulário e não uma pessoa: as
+              avaliações que caíram ali não têm dono e não somam para ninguém.
             </p>
           )}
           {comSala === 0 && (
