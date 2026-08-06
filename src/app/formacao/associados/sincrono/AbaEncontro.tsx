@@ -30,7 +30,8 @@ import {
   Youtube,
 } from "lucide-react";
 import LembreteDoEncontro from "./LembreteDoEncontro";
-import { DIAS, ROXO, type SalaC } from "./tipos";
+import EscolhaDeFormato from "./EscolhaDeFormato";
+import { DIAS, ROXO, type FormatoC, type SalaC } from "./tipos";
 
 /** A lista de um encontro, do pedido até a resposta. */
 interface Presenca {
@@ -44,12 +45,15 @@ export default function AbaEncontro({
   salas,
   trabalhando,
   aoMudarSala,
+  aoMudarFormato,
   aoEncerrar,
   aoVerCortes,
 }: {
   salas: SalaC[];
   trabalhando: string | null;
   aoMudarSala: (sala: SalaC, campos: Record<string, unknown>) => void;
+  /** Rota própria: o formato não é campo da sala, é pedido para o próximo corte. */
+  aoMudarFormato: (sala: SalaC, formato: FormatoC) => void;
   aoEncerrar: (sala: SalaC) => void;
   aoVerCortes: () => void;
 }) {
@@ -265,6 +269,15 @@ export default function AbaEncontro({
                 {sala.duracao_min ? `${sala.duracao_min} min` : "duração padrão"}
               </span>
             </div>
+
+            {/* Separado dos interruptores porque não muda nada dentro da
+                reunião: é um recado para quem vai mandar cortar depois. */}
+            <EscolhaDeFormato
+              valor={sala.formato_clipes}
+              aoEscolher={(f) => aoMudarFormato(sala, f)}
+              ocupado={ocupado}
+              titulo="Formato dos cortes deste grupo"
+            />
 
             {/* Os encontros passados: quando foram, quanto duraram, quem veio.
                 Os cortes ficam na outra aba — daqui sai só o atalho, porque

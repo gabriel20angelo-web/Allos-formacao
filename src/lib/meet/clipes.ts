@@ -21,8 +21,10 @@ import {
   criarProjeto,
   ehCedoDemais,
   OpusError,
+  type FormatoCorte,
 } from "./opusclip";
 import { abrirSessaoUpload, consultarProgresso, enviarAte, tamanhoDoArquivo } from "./youtube";
+import { FORMATO_PADRAO, pedidoDeFormato } from "./formato";
 import type { SupabaseClient } from "@supabase/supabase-js";
 
 /* eslint-disable @typescript-eslint/no-explicit-any */
@@ -241,7 +243,7 @@ export async function processarClipes(
   const agora = new Date().toISOString();
   const { data: pendentes } = await sb
     .from("formacao_clip_jobs")
-    .select("id, titulo, video_url, video_url_envio, tentativas, esperas")
+    .select("id, titulo, video_url, video_url_envio, tentativas, esperas, formato")
     .eq("status", "pendente")
     .not("video_url_envio", "is", null)
     .lt("tentativas", MAX_TENTATIVAS)
@@ -256,7 +258,12 @@ export async function processarClipes(
       const projeto = await criarProjeto(
         endereco,
         job.titulo,
-        `${baseUrl}/formacao/api/meet/clipes-webhook`
+        `${baseUrl}/formacao/api/meet/clipes-webhook`,
+        undefined,
+        // A proporção foi decidida quando o vídeo entrou na fila, e é lida daqui
+        // e não do pedido de quem conduz: entre o clique e o envio pode passar
+        // uma semana, e o corte tem que sair no que foi combinado e aprovado.
+        (job.formato as FormatoCorte) || "reels"
       );
       await sb
         .from("formacao_clip_jobs")
@@ -422,7 +429,8 @@ export async function recolherProjeto(
 export async function enfileirarEncontro(
   sb: Sb,
   encontroId: string,
-  criadoPor?: string
+  criadoPor?: string,
+  formatoEscolhido?: FormatoCorte
 ): Promise<{ ok: boolean; motivo?: string }> {
   const { data: e } = await sb
     .from("formacao_meet_encontros")
@@ -451,6 +459,13 @@ export async function enfileirarEncontro(
     .eq("space_name", e.space_name)
     .maybeSingle();
 
+  // A proporção pedida por quem conduz aquele grupo. Vale só se ninguém disse
+  // outra coisa no clique: quem envia é quem paga, e a última palavra é dele.
+  const formato =
+    formatoEscolhido ||
+    (await pedidoDeFormato(sb, "sala", e.space_name)) ||
+    FORMATO_PADRAO;
+
   const { error } = await sb.from("formacao_clip_jobs").insert({
     encontro_id: e.id,
     curso_id: space?.curso_id || null,
@@ -459,6 +474,7 @@ export async function enfileirarEncontro(
     video_url_envio: ORIGENS_ACEITAS.test(url) ? url : null,
     drive_file_id: e.gravacao_file_id || idDoDrive(url),
     youtube_video_id: e.youtube_video_id || null,
+    formato,
     criado_por: criadoPor || null,
   });
 

@@ -32,6 +32,7 @@ import {
 } from "@/lib/meet/client";
 import type { AccessType } from "@/lib/meet/types";
 import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
+import { pedidosDeFormato } from "@/lib/meet/formato";
 
 export const dynamic = "force-dynamic";
 
@@ -150,6 +151,11 @@ export async function GET() {
     ]);
   }
 
+  // Em que proporção os cortes desta sala devem sair no próximo envio. Vem
+  // junto e não numa segunda chamada porque a tela já mostra os interruptores
+  // da sala, e este é mais um deles do ponto de vista de quem conduz.
+  const formatos = await pedidosDeFormato(sb, "sala", nomes);
+
   const lista = (spaces || []).map((s: { space_name: string; slot_id: string | null }) => {
     const slot = s.slot_id ? slotPorId.get(s.slot_id) : null;
     return {
@@ -157,6 +163,7 @@ export async function GET() {
       dia_semana: slot?.dia_semana ?? null,
       hora: slot?.formacao_horarios?.hora ?? null,
       atividade_nome: slot?.atividade_nome ?? null,
+      formato_clipes: formatos.get(s.space_name) || null,
       minha: minhas.has(s.space_name),
       encontros: encontrosPorSala.get(s.space_name) || [],
     };

@@ -13,6 +13,13 @@ import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { enfileirarEncontro, idDoDrive, rotaDoVideo } from "@/lib/meet/clipes";
 import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
+import {
+  ehFormato,
+  FORMATO_PADRAO,
+  pedidoDeFormato,
+  pedidosDeFormato,
+  type FormatoCorte,
+} from "@/lib/meet/formato";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +73,13 @@ export async function GET(req: NextRequest) {
       ((secoes || []) as { id: string; title: string }[]).map((s) => [s.id, s.title])
     );
 
+    // O que quem conduz pediu para este curso. A tela abre já nessa proporção,
+    // e quem envia pode trocar antes de clicar: é o pedido que herda, não uma
+    // ordem que amarra.
+    const formatoPedido = await pedidoDeFormato(sb, "curso", cursoId);
+
     return NextResponse.json({
+      formato_pedido: formatoPedido,
       aulas: (lessons || []).map(
         (l: {
           id: string;
@@ -241,6 +254,11 @@ export async function POST(req: NextRequest) {
     acao?: "publicar" | "cortar" | "publicar_e_cortar";
     /** Depois de publicar, a aula passa a tocar pelo YouTube em vez do Drive. */
     trocar_fonte?: boolean;
+    /**
+     * A proporção deste envio. Sem isto vale o pedido de quem conduz, e sem
+     * pedido vale o formato em pé, que é como sempre saiu.
+     */
+    formato?: string;
   };
   try {
     body = await req.json();
@@ -248,10 +266,18 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "JSON inválido" }, { status: 400 });
   }
 
+  if (body.formato !== undefined && !ehFormato(body.formato)) {
+    return NextResponse.json(
+      { error: "Formato inválido. Use reels ou horizontal." },
+      { status: 400 }
+    );
+  }
+  const formatoEscolhido = ehFormato(body.formato) ? body.formato : undefined;
+
   const sb = await createServiceRoleClient();
 
   if (body.encontro_id) {
-    const r = await enfileirarEncontro(sb, body.encontro_id, auth.userId);
+    const r = await enfileirarEncontro(sb, body.encontro_id, auth.userId, formatoEscolhido);
     return r.ok
       ? NextResponse.json({ ok: true, enfileirados: 1 })
       : NextResponse.json({ error: r.motivo }, { status: 400 });
@@ -329,9 +355,24 @@ export async function POST(req: NextRequest) {
     const acao = body.acao || "cortar";
     const vaiCortar = acao !== "publicar";
 
+    // A proporção de cada aula sai do curso dela, e não de uma escolha só para
+    // o lote: uma lista de ids soltos pode atravessar cursos, e cada condutor
+    // pediu o que pediu para o seu.
+    const cursosEnvolvidos = Array.from(
+      new Set(
+        Array.from(cursoDaSecao.values())
+          .map((c) => c.id)
+          .concat(body.curso_id ? [body.curso_id] : [])
+          .filter(Boolean)
+      )
+    );
+    const pedidos = await pedidosDeFormato(sb, "curso", cursosEnvolvidos);
+
     let enfileirados = 0;
     let jaNoYoutube = 0;
     const repetidos: string[] = [];
+    /** Em que proporções o lote foi enfileirado, para dizer no aviso. */
+    const proporcoes = new Set<FormatoCorte>();
 
     for (const a of aulas as {
       id: string;
@@ -348,25 +389,47 @@ export async function POST(req: NextRequest) {
       }
 
       const curso = cursoDaSecao.get(a.section_id);
+      const cursoDaAula = curso?.id || body.curso_id || null;
+      const formato: FormatoCorte =
+        formatoEscolhido ||
+        (cursoDaAula ? pedidos.get(cursoDaAula) : undefined) ||
+        FORMATO_PADRAO;
+
       const { error } = await sb.from("formacao_clip_jobs").insert({
         lesson_id: a.id,
-        curso_id: curso?.id || body.curso_id || null,
+        curso_id: cursoDaAula,
         titulo: `${curso?.titulo || "Curso"} · ${a.title}`,
         video_url: a.video_url,
         // Vídeo que mora no Drive não pode ir direto ao corte: o OpusClip não
         // lê Drive. Guardar o file id aqui é o que permite ao agendador
         // levá-lo ao YouTube antes.
         ...rota,
+        formato,
         gerar_clipes: vaiCortar,
         trocar_fonte_da_aula: !!body.trocar_fonte,
         criado_por: auth.userId,
       });
       if (error) repetidos.push(a.title);
-      else enfileirados++;
+      else {
+        enfileirados++;
+        proporcoes.add(formato);
+      }
     }
 
+    // A proporção entra no aviso porque é a única parte da escolha que não dá
+    // para desfazer depois: o corte sai naquele formato, já pago, e refazer no
+    // outro é pagar os mesmos minutos de novo.
+    const comoVaiSair =
+      !vaiCortar || !proporcoes.size
+        ? ""
+        : proporcoes.size > 1
+          ? " Saem nas proporções pedidas por cada curso."
+          : proporcoes.has("horizontal")
+            ? " Saem em 16:9, horizontal."
+            : " Saem em 9:16, em pé.";
+
     const oQueVaiAcontecer = vaiCortar
-      ? "Cada um é cobrado por minuto de vídeo."
+      ? `Cada um é cobrado por minuto de vídeo.${comoVaiSair}`
       : "Sobem como não listados, um por vez. Não há custo: só o corte é cobrado.";
 
     return NextResponse.json({

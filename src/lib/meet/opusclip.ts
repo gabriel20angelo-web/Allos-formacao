@@ -78,6 +78,76 @@ export interface ProjetoCriado {
   status?: string;
 }
 
+/** Em pé para redes, ou deitado como a gravação nasceu. */
+export type FormatoCorte = "reels" | "horizontal";
+
+/** O nome que o OpusClip dá a cada proporção. */
+const ASPECTO: Record<FormatoCorte, "portrait" | "landscape"> = {
+  reels: "portrait",
+  horizontal: "landscape",
+};
+
+interface BrandTemplate {
+  templateId: string;
+  name: string;
+  isDefault: boolean;
+  preferences?: { layoutAspectRatio?: string };
+}
+
+/**
+ * Os templates da conta, guardados por dez minutos.
+ *
+ * A proporção não viaja solta no pedido de criação: ela mora no template de
+ * marca, que é também quem carrega logo, fonte e legenda. Apontar para o
+ * template certo é, portanto, o jeito de pedir 16:9 sem desmontar o resto da
+ * identidade visual junto.
+ *
+ * Buscar a lista em vez de fixar os identificadores no código é o que faz isso
+ * continuar valendo quando alguém refizer o template no aplicativo: o id muda,
+ * a proporção declarada não.
+ */
+let cacheTemplates: { quando: number; lista: BrandTemplate[] } | null = null;
+const CACHE_MS = 10 * 60_000;
+
+async function templates(): Promise<BrandTemplate[]> {
+  if (cacheTemplates && Date.now() - cacheTemplates.quando < CACHE_MS) {
+    return cacheTemplates.lista;
+  }
+  const resp = await fetch(`${API}/brand-templates?q=mine`, {
+    headers: { Authorization: `Bearer ${chave()}` },
+    cache: "no-store",
+  });
+  if (!resp.ok) {
+    // Sem lista não dá para escolher, e inventar um id seria pior: o pedido
+    // seguiria e o corte sairia na proporção errada, já pago.
+    throw new OpusError(
+      traduzir(resp.status, await resp.text()),
+      resp.status
+    );
+  }
+  const lista = (JSON.parse(await resp.text()) as BrandTemplate[]) || [];
+  cacheTemplates = { quando: Date.now(), lista };
+  return lista;
+}
+
+/**
+ * O template da conta que corta na proporção pedida.
+ *
+ * Devolve `null` quando não existe nenhum: quem chama decide se isso é motivo
+ * para parar. Para o formato em pé não é, porque em pé já é o padrão da conta;
+ * para o horizontal é, senão o pedido sai caro e volta errado.
+ */
+export async function templateDoFormato(
+  formato: FormatoCorte
+): Promise<string | null> {
+  const querido = ASPECTO[formato];
+  const candidatos = (await templates()).filter(
+    (t) => t.preferences?.layoutAspectRatio === querido
+  );
+  if (!candidatos.length) return null;
+  return (candidatos.find((t) => t.isDefault) || candidatos[0]).templateId;
+}
+
 /**
  * Manda um vídeo para ser cortado.
  *
@@ -89,7 +159,8 @@ export async function criarProjeto(
   videoUrl: string,
   titulo: string,
   webhookUrl?: string,
-  customPrompt?: string
+  customPrompt?: string,
+  formato: FormatoCorte = "reels"
 ): Promise<ProjetoCriado> {
   const corpo: Record<string, unknown> = {
     videoUrl,
@@ -118,6 +189,22 @@ export async function criarProjeto(
 
   if (webhookUrl) {
     corpo.conclusionActions = [{ type: "WEBHOOK", notifyFailure: true, url: webhookUrl }];
+  }
+
+  // A proporção. Sem template apontado, o OpusClip aplica o padrão da conta,
+  // que está em pé: era assim que todos os cortes saíam antes de existir
+  // escolha, sem ninguém ter pedido.
+  const template = await templateDoFormato(formato);
+  if (template) {
+    corpo.brandTemplateId = template;
+  } else if (formato === "horizontal") {
+    // Parar aqui é de propósito. Seguir sem o template produziria um corte em
+    // pé, cobrado por minuto de vídeo, entregue como se fosse o que se pediu:
+    // o erro só apareceria depois de pago, na hora de olhar o arquivo.
+    throw new OpusError(
+      "A conta do OpusClip não tem nenhum template horizontal (16:9). Crie um no aplicativo, com a proporção landscape, e envie de novo.",
+      400
+    );
   }
 
   const resp = await fetch(`${API}/clip-projects`, {

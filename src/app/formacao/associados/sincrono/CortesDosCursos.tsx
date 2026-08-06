@@ -18,11 +18,14 @@ import Card from "@/components/ui/Card";
 import { toast } from "sonner";
 import { ChevronLeft, Play } from "lucide-react";
 import ClipeGrade, { type ClipeC } from "./ClipeGrade";
+import EscolhaDeFormato, { type FormatoC } from "./EscolhaDeFormato";
 
 interface CursoComCortes {
   id: string;
   title: string;
   videos: number;
+  /** O que foi pedido para os próximos cortes; `null` se ninguém pediu. */
+  formato: FormatoC | null;
 }
 interface EncontroDoCurso {
   job_id: string;
@@ -55,6 +58,7 @@ export default function CortesDosCursos({
   const [encontros, setEncontros] = useState<EncontroDoCurso[]>([]);
   const [abertoId, setAbertoId] = useState<string | null>(null);
   const [carregando, setCarregando] = useState(true);
+  const [salvandoFormato, setSalvandoFormato] = useState(false);
 
   const carregarCursos = useCallback(async () => {
     try {
@@ -71,6 +75,43 @@ export default function CortesDosCursos({
   useEffect(() => {
     carregarCursos();
   }, [carregarCursos]);
+
+  /**
+   * A proporção pedida para os próximos cortes deste curso.
+   *
+   * Fica no curso e não na sala porque a maior parte do acervo nasceu de aulas
+   * gravadas, que não têm sala nenhuma: pedir pela sala deixaria de fora
+   * justamente o material que mais se corta.
+   */
+  async function pedirFormato(curso: CursoComCortes, formato: FormatoC) {
+    const antes = curso.formato;
+    const aplicar = (f: FormatoC | null) => {
+      setCursos((lista) => lista.map((x) => (x.id === curso.id ? { ...x, formato: f } : x)));
+      setEscolhido((e) => (e && e.id === curso.id ? { ...e, formato: f } : e));
+    };
+
+    setSalvandoFormato(true);
+    aplicar(formato);
+    try {
+      const r = await fetch("/formacao/api/condutor/formato", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ escopo: "curso", chave: curso.id, formato }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Não consegui salvar.");
+      toast.success(
+        formato === "horizontal"
+          ? "Os próximos cortes deste curso saem deitados, 16:9."
+          : "Os próximos cortes deste curso saem em pé, 9:16."
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+      aplicar(antes);
+    } finally {
+      setSalvandoFormato(false);
+    }
+  }
 
   async function abrirCurso(c: CursoComCortes) {
     setEscolhido(c);
@@ -117,7 +158,12 @@ export default function CortesDosCursos({
               style={{ border: "1px solid rgba(255,255,255,0.06)" }}
             >
               <span className="text-sm text-cream/80 min-w-0 break-words">{c.title}</span>
-              <span className="text-xs text-cream/30 shrink-0">
+              <span className="text-xs text-cream/30 shrink-0 flex items-center gap-2">
+                {/* Só o pedido fora do comum aparece: marcar "9:16" em todos
+                    seria ruído, já que é o que acontece sem escolha nenhuma. */}
+                {c.formato === "horizontal" && (
+                  <span className="text-[10px] text-cream/45">16:9</span>
+                )}
                 {c.videos} {c.videos === 1 ? "encontro" : "encontros"}
               </span>
             </button>
@@ -137,9 +183,19 @@ export default function CortesDosCursos({
         <ChevronLeft className="h-3.5 w-3.5" /> todos os cursos
       </button>
 
-      <p className="text-sm text-cream font-semibold mb-3">{escolhido.title}</p>
+      <p className="text-sm text-cream font-semibold">{escolhido.title}</p>
 
-      <div className="space-y-2">
+      {/* No topo do curso, e não em cada encontro: a proporção é do material
+          inteiro, e repetir a escolha por linha convidaria a pedir uma coisa
+          num encontro e outra no vizinho, o que só produz acervo desencontrado. */}
+      <EscolhaDeFormato
+        valor={escolhido.formato}
+        aoEscolher={(f) => pedirFormato(escolhido, f)}
+        ocupado={salvandoFormato}
+        titulo="Formato dos cortes deste curso"
+      />
+
+      <div className="space-y-2 mt-3">
         {encontros.map((e0) => {
           // O que já foi avaliado nesta visita vale mais que o que veio do
           // servidor quando a lista carregou.

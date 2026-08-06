@@ -22,7 +22,7 @@ import AbaCortes from "./AbaCortes";
 import Player from "./Player";
 import { toast } from "sonner";
 import { BookOpen, Scissors, Video } from "lucide-react";
-import type { ClipeC, SalaC } from "./tipos";
+import type { ClipeC, FormatoC, SalaC } from "./tipos";
 
 type Aba = "encontro" | "cortes" | "combinado";
 
@@ -87,6 +87,48 @@ export default function TelaDoGrupo() {
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Erro");
       await carregar();
+    } finally {
+      setTrabalhando(null);
+    }
+  }
+
+  /**
+   * A proporção pedida para os próximos cortes daquele grupo.
+   *
+   * Rota separada da que muda a sala de propósito: aquela conversa com o
+   * Google a cada mudança, e esta só guarda uma preferência que ninguém do
+   * lado de lá precisa saber.
+   */
+  async function pedirFormatoDaSala(sala: SalaC, formato: FormatoC) {
+    const antes = sala.formato_clipes;
+    setTrabalhando(sala.space_name);
+    setSalas((s) =>
+      s.map((x) =>
+        x.space_name === sala.space_name ? { ...x, formato_clipes: formato } : x
+      )
+    );
+    try {
+      const r = await fetch("/formacao/api/condutor/formato", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ escopo: "sala", chave: sala.space_name, formato }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error || "Não consegui salvar.");
+      toast.success(
+        formato === "horizontal"
+          ? "Os próximos cortes deste grupo saem deitados, 16:9."
+          : "Os próximos cortes deste grupo saem em pé, 9:16."
+      );
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Erro");
+      // Voltar ao que era: deixar o botão aceso numa escolha que não foi
+      // gravada faria a pessoa acreditar que pediu.
+      setSalas((s) =>
+        s.map((x) =>
+          x.space_name === sala.space_name ? { ...x, formato_clipes: antes } : x
+        )
+      );
     } finally {
       setTrabalhando(null);
     }
@@ -248,6 +290,7 @@ export default function TelaDoGrupo() {
           salas={salas}
           trabalhando={trabalhando}
           aoMudarSala={mudarSala}
+          aoMudarFormato={pedirFormatoDaSala}
           aoEncerrar={encerrarReuniao}
           aoVerCortes={() => setAba("cortes")}
         />

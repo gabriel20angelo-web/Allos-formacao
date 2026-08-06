@@ -4,8 +4,9 @@
 // em cada uma seria pedir para elas divergirem quando um campo mudar.
 
 import type { ClipeC } from "./ClipeGrade";
+import type { FormatoC } from "./EscolhaDeFormato";
 
-export type { ClipeC };
+export type { ClipeC, FormatoC };
 
 export interface EncontroC {
   id: string;
@@ -32,6 +33,14 @@ export interface SalaC {
   dia_semana: number | null;
   hora: string | null;
   atividade_nome: string | null;
+  /**
+   * Em que proporção os próximos cortes deste grupo devem sair.
+   *
+   * `null` quer dizer que ninguém escolheu, e não que escolheram em pé: o
+   * resultado é o mesmo, mas a tela precisa da diferença para não afirmar uma
+   * decisão que não foi tomada.
+   */
+  formato_clipes: FormatoC | null;
   /**
    * Esta é a sala do vínculo de quem está olhando.
    *

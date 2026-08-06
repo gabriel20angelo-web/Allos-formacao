@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { identificarCondutor } from "@/lib/condutor";
 import { renovarEnderecos, type ClipeComEndereco } from "@/lib/meet/clipes-enderecos";
+import { pedidosDeFormato } from "@/lib/meet/formato";
 
 export const dynamic = "force-dynamic";
 
@@ -55,10 +56,15 @@ export async function GET(req: NextRequest) {
       .in("id", ids)
       .order("title", { ascending: true });
 
+    // A proporção pedida para os próximos cortes deste curso. Só o pedido: o
+    // que já foi cortado guarda o formato dele no próprio job.
+    const formatos = await pedidosDeFormato(sb, "curso", ids);
+
     return NextResponse.json({
       cursos: (cursos || []).map((c: { id: string }) => ({
         ...c,
         videos: contagem.get(c.id) || 0,
+        formato: formatos.get(c.id) || null,
       })),
     });
   }

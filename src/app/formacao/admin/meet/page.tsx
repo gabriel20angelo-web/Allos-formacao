@@ -19,7 +19,7 @@ import {
   FolderOpen, FolderPlus, Loader2, Mic, PhoneOff, RefreshCw, ShieldCheck,
   UserSearch, Video, FileText, X, Youtube,
   Trash2, Download, Play, ThumbsUp, ThumbsDown, EyeOff, Copy, ChevronDown, ChevronRight,
-  ImageOff,
+  ImageOff, RectangleHorizontal, RectangleVertical,
 } from "lucide-react";
 
 const DIAS = ["Segunda", "Terça", "Quarta", "Quinta", "Sexta"];
@@ -207,6 +207,8 @@ interface ClipJob {
   youtube_bytes_total: number | null;
   youtube_erro: string | null;
   tentar_apos: string | null;
+  /** A proporção com que este vídeo foi enfileirado, congelada no envio. */
+  formato?: "reels" | "horizontal" | null;
   clipes: Clipe[];
 }
 interface AulaParaClipe {
@@ -288,6 +290,9 @@ export default function MeetAdminPage() {
   const [cursoParaClipes, setCursoParaClipes] = useState("");
   const [aulasParaClipe, setAulasParaClipe] = useState<AulaParaClipe[]>([]);
   const [marcadas, setMarcadas] = useState<string[]>([]);
+  const [formatoDoEnvio, setFormatoDoEnvio] = useState<"reels" | "horizontal">("reels");
+  /** O que quem conduz pediu, para a tela poder dizer de onde veio a escolha. */
+  const [formatoHerdado, setFormatoHerdado] = useState<"reels" | "horizontal" | null>(null);
   const [buscandoAulas, setBuscandoAulas] = useState(false);
   const [falhouEncontros, setFalhouEncontros] = useState(false);
   const [diagDrive, setDiagDrive] = useState<string | null>(null);
@@ -316,10 +321,15 @@ export default function MeetAdminPage() {
     setAulasParaClipe([]);
     if (!cursoId) return;
     setBuscandoAulas(true);
-    const j = await pegarJson<{ aulas?: AulaParaClipe[] }>(
-      `/formacao/api/admin/meet/clipes?curso_id=${cursoId}`
-    );
+    const j = await pegarJson<{
+      aulas?: AulaParaClipe[];
+      formato_pedido?: "reels" | "horizontal" | null;
+    }>(`/formacao/api/admin/meet/clipes?curso_id=${cursoId}`);
     setAulasParaClipe(j?.aulas || []);
+    // A proporção começa no que quem conduz pediu para este curso. É herança,
+    // não trava: trocar aqui vale para este envio e não altera o pedido dele.
+    setFormatoDoEnvio(j?.formato_pedido || "reels");
+    setFormatoHerdado(j?.formato_pedido || null);
     setBuscandoAulas(false);
   }, []);
 
@@ -334,10 +344,17 @@ export default function MeetAdminPage() {
       ? `São ${minutos} minutos de vídeo${semDuracao ? ` (mais ${semDuracao} sem duração registrada)` : ""}.`
       : "A duração desses vídeos não está registrada, então não dá para estimar o custo aqui.";
 
+    // A proporção entra na pergunta porque é a escolha sem volta do lote: o
+    // corte sai naquele formato e refazer no outro é pagar de novo.
+    const proporcao =
+      formatoDoEnvio === "horizontal"
+        ? "Saem deitados, 16:9."
+        : "Saem em pé, 9:16, para reels.";
+
     if (
       !confirm(
         `Gerar clipes de ${escolhidas.length} ${escolhidas.length === 1 ? "vídeo" : "vídeos"}?\n\n` +
-          `${custo}\n\nA cobrança é por minuto de vídeo original, não por clipe gerado.`
+          `${custo}\n\nA cobrança é por minuto de vídeo original, não por clipe gerado.\n${proporcao}`
       )
     )
       return;
@@ -347,7 +364,7 @@ export default function MeetAdminPage() {
       const r = await fetch("/formacao/api/admin/meet/clipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ lesson_ids: marcadas }),
+        body: JSON.stringify({ lesson_ids: marcadas, formato: formatoDoEnvio }),
       });
       const j = await lerResposta(r);
       toast.success((j.aviso as string) || "Enviado.");
@@ -2475,6 +2492,46 @@ export default function MeetAdminPage() {
                   ))}
                 </select>
 
+                {/* A proporção do lote. Aparece assim que há curso escolhido,
+                    antes da lista, porque decide o que se compra: um corte em
+                    pé recorta a tela, um deitado não. */}
+                {cursoParaClipes && !buscandoAulas && aulasParaClipe.length > 0 && (
+                  <div className="mt-3 flex items-start gap-2 flex-wrap">
+                    {(
+                      [
+                        ["reels", "Em pé 9:16", RectangleVertical],
+                        ["horizontal", "Deitado 16:9", RectangleHorizontal],
+                      ] as const
+                    ).map(([id, rotulo, Icone]) => {
+                      const ativo = formatoDoEnvio === id;
+                      return (
+                        <button
+                          key={id}
+                          onClick={() => setFormatoDoEnvio(id)}
+                          title={
+                            id === "reels"
+                              ? "Para reels e shorts. A ferramenta recorta a tela para caber em pé."
+                              : "Como a gravação nasceu. Quase não há recorte, e a tela compartilhada aparece inteira."
+                          }
+                          className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs"
+                          style={{
+                            background: ativo ? "rgba(108,92,231,0.12)" : "rgba(255,255,255,0.03)",
+                            color: ativo ? ROXO : "rgba(253,251,247,0.35)",
+                            border: `1px solid ${ativo ? "rgba(108,92,231,0.3)" : "rgba(255,255,255,0.06)"}`,
+                          }}
+                        >
+                          <Icone className="h-3 w-3" /> {rotulo}
+                        </button>
+                      );
+                    })}
+                    <p className="text-[11px] text-cream/30 w-full">
+                      {formatoHerdado
+                        ? `Quem conduz pediu ${formatoHerdado === "horizontal" ? "deitado" : "em pé"} para este curso.`
+                        : "Ninguém pediu proporção para este curso, então vale o padrão em pé."}
+                    </p>
+                  </div>
+                )}
+
                 {buscandoAulas && (
                   <p className="text-xs text-cream/40 mt-3">Procurando os vídeos…</p>
                 )}
@@ -2582,7 +2639,24 @@ export default function MeetAdminPage() {
                   <Card key={j.id} className="p-4">
                     <div className="flex items-start justify-between gap-3 flex-wrap">
                       <div className="min-w-[200px] flex-1">
-                        <p className="text-sm text-cream">{j.titulo}</p>
+                        <p className="text-sm text-cream flex items-center gap-2 flex-wrap">
+                          <span>{j.titulo}</span>
+                          {/* Só o deitado é marcado: em pé é o que sai sem
+                              ninguém pedir, e um selo em toda linha viraria
+                              ruído em vez de informação. */}
+                          {j.formato === "horizontal" && (
+                            <span
+                              className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px]"
+                              style={{
+                                background: "rgba(108,92,231,0.12)",
+                                color: ROXO,
+                                border: "1px solid rgba(108,92,231,0.25)",
+                              }}
+                            >
+                              <RectangleHorizontal className="h-2.5 w-2.5" /> 16:9
+                            </span>
+                          )}
+                        </p>
                         <p className="text-xs text-cream/40 mt-0.5">
                           {/* Depois de enviado, o YouTube ainda processa o
                               arquivo, e nessa janela o corte não pode começar.
