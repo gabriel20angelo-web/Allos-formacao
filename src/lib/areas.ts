@@ -96,6 +96,18 @@ export const AREAS: Area[] = [
     grupo: "formacao",
   },
   {
+    // A tela que junta os três lugares onde a mesma pessoa aparece: o formulário
+    // de certificado, a sala do Meet e a plataforma. Fica ao lado da Formação
+    // porque é dela que se olha para decidir com quem falar.
+    id: "pessoas",
+    rotulo: "Pessoas",
+    href: "/formacao/admin/pessoas",
+    resumo: "Quem volta, quem sumiu e com quem vale conversar.",
+    cargos: ["instructor"],
+    onde: ["painel"],
+    grupo: "formacao",
+  },
+  {
     id: "certificados",
     rotulo: "Certificados",
     href: "/formacao/admin/certificados",

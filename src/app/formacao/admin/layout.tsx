@@ -21,6 +21,7 @@ import {
   User,
   Calendar,
   Users,
+  UserSearch,
 } from "lucide-react";
 import { countSugestoesPendentes } from "@/lib/queries/aprimoramento-sugestoes-admin";
 import { NOME_DO_CARGO } from "@/lib/cargos";
@@ -42,6 +43,7 @@ const ICONE_DA_AREA: Record<string, typeof LayoutDashboard> = {
   "associados-admin": Users,
   dashboard: LayoutDashboard,
   "formacao-base": Calendar,
+  pessoas: UserSearch,
   certificados: Award,
   moderacao: MessageSquare,
   configuracoes: Settings,
