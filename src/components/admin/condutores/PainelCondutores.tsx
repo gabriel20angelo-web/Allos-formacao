@@ -277,9 +277,10 @@ export default function PainelCondutores({
             <p style={{ color: DOURADO }}>
               {semFicha} {semFicha === 1 ? "nome apareceu" : "nomes apareceram"} na sala
               ou no formulário sem ficha no cadastro. Sem ficha não há como ligar a
-              conta da pessoa, e a área do condutor não abre para ela. Um deles é
-              &quot;Outros&quot;, que é opção do formulário e não uma pessoa: as
-              avaliações que caíram ali não têm dono e não somam para ninguém.
+              conta da pessoa, e a área do condutor não abre para ela. Quando o mesmo
+              nome aparece duas vezes com grafias diferentes, uma com ficha e outra
+              sem, são a mesma pessoa: o formulário aceita texto livre e o cadastro
+              não é consultado na hora de escrever.
             </p>
           )}
           {comSala === 0 && (
