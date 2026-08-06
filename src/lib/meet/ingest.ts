@@ -669,8 +669,22 @@ export async function ingerir(opts?: {
         // tivesse acontecido, com o motivo apagado junto.
         const decidiuNaMao = !!existente?.descartado_manual;
 
+        // Arquivo que chega depois do carimbo reabre o arquivamento.
+        //
+        // `arquivos_movidos_em` é um carimbo por encontro, mas os dois arquivos
+        // ficam prontos em momentos diferentes: em 05/08/2026 a transcrição foi
+        // movida às 20h18 e o carimbo fechou o assunto, então a gravação, que
+        // apareceu depois, jamais entraria na pasta do grupo nem seria
+        // renomeada. Zerar aqui devolve o encontro para a fila do Drive. Mover
+        // o que já está no lugar é inofensivo, então a transcrição só é
+        // reconferida.
+        const chegouArquivoNovo =
+          (!!gravacaoFileId && gravacaoFileId !== existente?.gravacao_file_id) ||
+          (!!transcricaoFileId && transcricaoFileId !== existente?.transcricao_file_id);
+
         const encontroRow = {
           conference_record_id: conf.name,
+          ...(chegouArquivoNovo ? { arquivos_movidos_em: null } : {}),
           ...(decidiuNaMao
             ? {}
             : {
