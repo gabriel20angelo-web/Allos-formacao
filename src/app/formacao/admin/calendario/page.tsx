@@ -840,6 +840,11 @@ export default function CalendarioPage() {
     }
   }
 
+  // Quem está esperando confirmação. O diálogo mora no fim do arquivo, junto
+  // dos outros, e estes dois guardam o que o texto dele precisa dizer.
+  const [slotAApagar, setSlotAApagar] = useState<{ id: string; nome: string | null } | null>(null);
+  const [horarioAApagar, setHorarioAApagar] = useState<{ id: string; hora: string; slots: number } | null>(null);
+
   async function deleteSlot(id: string) {
     const supabase = createClient();
     const { error } = await supabase.from("formacao_slots").delete().eq("id", id);
@@ -970,77 +975,33 @@ export default function CalendarioPage() {
   }
 
   // ─── Nova Semana ──────────────────────────────────────────────────────────
+  /**
+   * Fecha a semana pela rota, que roda exatamente o que o cron roda.
+   *
+   * ⛔ Isto era cem linhas de lógica própria no navegador, e ela discordava do
+   * cron em quatro pontos: nomeava a semana pela segunda CORRENTE enquanto o
+   * cron usa a ANTERIOR, tinha bug de fuso que gravava o dia seguinte depois das
+   * 21h, não rodava a marcação de status antes de congelar, e não filtrava os
+   * slots criados depois da semana que estava congelando. O efeito mais caro:
+   * um clique numa segunda fazia o cron da semana seguinte achar que já estava
+   * fechada e a semana passava sem fechamento nenhum.
+   */
   async function handleNovaSemana() {
-    const supabase = createClient();
-    const activeSlots = slots.filter((s) => s.ativo);
-    if (activeSlots.length === 0) { toast.error("Nenhum slot ativo."); setResetModalOpen(false); return; }
-
-    // 1. Build snapshot data from current state
-    const now = new Date();
-    const day = now.getDay(); // 0=Sun, 1=Mon...
-    const diffToMon = day === 0 ? -6 : 1 - day;
-    const monday = new Date(now);
-    monday.setDate(now.getDate() + diffToMon);
-    const friday = new Date(monday);
-    friday.setDate(monday.getDate() + 4);
-    const fmt = (d: Date) => d.toISOString().split("T")[0];
-
-    const snapshotSlots = activeSlots.map((s) => ({
-      slot_id: s.id,
-      dia_semana: s.dia_semana,
-      horario_hora: s.formacao_horarios?.hora || "",
-      atividade_nome: s.atividade_nome,
-      status: s.status,
-      meet_link: s.meet_link,
-      condutores: alocacoes
-        .filter((a) => a.slot_id === s.id)
-        .map((a) => ({
-          id: a.condutor_id,
-          nome: a.certificado_condutores?.nome || "",
-        })),
-    }));
-
-    // 2. Save snapshot via Supabase direto (RLS admin já cobre).
-    const { data: snapshot, error: snapErr } = await supabase
-      .from("formacao_snapshots")
-      .insert({ semana_inicio: fmt(monday), semana_fim: fmt(friday) })
-      .select()
-      .single();
-    if (snapErr || !snapshot) {
-      console.error("[calendario] snapshot:", snapErr);
-      toast.error("Erro ao salvar snapshot da semana. Reset cancelado.");
-      return;
-    }
-    if (snapshotSlots.length > 0) {
-      const rows = snapshotSlots.map((s) => ({
-        snapshot_id: snapshot.id,
-        slot_id: s.slot_id,
-        dia_semana: s.dia_semana,
-        horario_hora: s.horario_hora,
-        atividade_nome: s.atividade_nome,
-        status: s.status,
-        meet_link: s.meet_link,
-        condutores: s.condutores,
-      }));
-      const { error: slotsErr } = await supabase
-        .from("formacao_snapshot_slots")
-        .insert(rows);
-      if (slotsErr) {
-        console.error("[calendario] snapshot_slots:", slotsErr);
-        toast.error("Erro ao salvar slots do snapshot. Reset cancelado.");
+    try {
+      const r = await fetch("/formacao/api/admin/meet/fechar-semana", { method: "POST" });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? "não consegui fechar a semana");
+      if (!j.fechou) {
+        toast.error(j.motivo ?? "Nada a fechar.");
+        setResetModalOpen(false);
         return;
       }
+      setSlots((prev) => prev.map((s) => (s.ativo ? { ...s, status: "pendente" } : s)));
+      setResetModalOpen(false);
+      toast.success(`Semana de ${j.semana} arquivada, com ${j.slots} grupos. A grade recomeça zerada.`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "não consegui fechar a semana");
     }
-
-    // 3. Reset statuses
-    const { error } = await supabase
-      .from("formacao_slots")
-      .update({ status: "pendente", status_automatico_em: null })
-      .in("id", activeSlots.map((s) => s.id));
-    if (error) { toast.error("Erro ao resetar semana."); return; }
-    setSlots((prev) => prev.map((s) => (s.ativo ? { ...s, status: "pendente" } : s)));
-    setResetModalOpen(false);
-    toast.success("Semana salva e nova semana iniciada!");
   }
 
   // ─── Horario CRUD ─────────────────────────────────────────────────────────
@@ -1519,7 +1480,7 @@ export default function CalendarioPage() {
                                 <EyeOff className="h-3 w-3" style={{ color: "rgba(253,251,247,0.25)" }} />
                               </button>
                               <button
-                                onClick={() => deleteSlot(slot.id)}
+                                onClick={() => setSlotAApagar({ id: slot.id, nome: slot.atividade_nome })}
                                 className="p-1 rounded hover:bg-red-500/10 transition-colors"
                                 title="Remover"
                               >
@@ -1840,7 +1801,7 @@ export default function CalendarioPage() {
                                 <EyeOff className="h-4 w-4" style={{ color: "rgba(253,251,247,0.35)" }} />
                               </button>
                               <button
-                                onClick={() => deleteSlot(slot.id)}
+                                onClick={() => setSlotAApagar({ id: slot.id, nome: slot.atividade_nome })}
                                 className="p-2.5 rounded-lg hover:bg-red-500/10 transition-colors"
                                 title="Remover"
                               >
@@ -2155,7 +2116,13 @@ export default function CalendarioPage() {
                       </button>
                       {/* Delete */}
                       <button
-                        onClick={() => deleteHorario(h.id)}
+                        onClick={() =>
+                          setHorarioAApagar({
+                            id: h.id,
+                            hora: h.hora,
+                            slots: slots.filter((s) => s.horario_id === h.id).length,
+                          })
+                        }
                         className="p-2.5 md:p-1.5 rounded-lg hover:bg-red-500/10 transition-colors"
                       >
                         <Trash2 className="h-4 w-4" style={{ color: "rgba(239,68,68,0.6)" }} />
@@ -2341,9 +2308,51 @@ export default function CalendarioPage() {
         title="Nova Semana"
         description={
           <p className="font-dm text-cream-70">
-            Tem certeza que deseja iniciar uma nova semana? Todos os status dos slots
-            ativos serão resetados para{" "}
-            <strong className="text-[#9ca3af]">&quot;Pendente&quot;</strong>.
+            A semana atual vai virar um retrato guardado no histórico, com a grade,
+            os condutores e o status de cada grupo como estão agora. Depois disso
+            todos os status voltam para{" "}
+            <strong className="text-[#9ca3af]">&quot;Pendente&quot;</strong>. O
+            retrato não pode ser desfeito.
+          </p>
+        }
+      />
+
+      {/* ⛔ Apagar um horário derruba TODOS os slots dele em cascata, e com eles
+          o histórico de status, os condutores alocados e a sala do Meet. Hoje
+          apagar "14:00" levaria quatro dos seis grupos. Antes isso acontecia com
+          um clique e sem nenhuma pergunta. */}
+      <ConfirmDialog
+        open={Boolean(horarioAApagar)}
+        onClose={() => setHorarioAApagar(null)}
+        onConfirm={() => {
+          if (horarioAApagar) deleteHorario(horarioAApagar.id);
+          setHorarioAApagar(null);
+        }}
+        title={`Apagar o horário ${horarioAApagar?.hora ?? ""}?`}
+        description={
+          <p className="font-dm text-cream-70">
+            {horarioAApagar?.slots
+              ? `Isto apaga também os ${horarioAApagar.slots} grupos que estão neste horário, e com eles o histórico de status, os condutores alocados e a sala do Meet de cada um. Os encontros já capturados sobrevivem, mas perdem o vínculo com o grupo. Não há como desfazer.`
+              : "Nenhum grupo está neste horário, então nada mais é apagado junto."}
+          </p>
+        }
+      />
+
+      {/* Mesma cascata, um grupo de cada vez. */}
+      <ConfirmDialog
+        open={Boolean(slotAApagar)}
+        onClose={() => setSlotAApagar(null)}
+        onConfirm={() => {
+          if (slotAApagar) deleteSlot(slotAApagar.id);
+          setSlotAApagar(null);
+        }}
+        title="Tirar este grupo da grade?"
+        description={
+          <p className="font-dm text-cream-70">
+            {slotAApagar?.nome ? <strong>{slotAApagar.nome}</strong> : "Este grupo"} sai
+            da grade, e junto vão o histórico de status dele, os condutores alocados
+            e a sala permanente do Meet. Os encontros já capturados sobrevivem, mas
+            ficam sem grupo. A atividade continua existindo no cadastro.
           </p>
         }
       />

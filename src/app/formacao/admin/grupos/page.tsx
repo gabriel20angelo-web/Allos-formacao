@@ -28,18 +28,22 @@
 
 import { useState } from "react";
 import dynamic from "next/dynamic";
-import { LayoutGrid, CalendarDays, Radio } from "lucide-react";
+import { LayoutGrid, CalendarDays, Radio, History } from "lucide-react";
 import { useAuth } from "@/hooks/useAuth";
 import Panorama from "./Panorama";
 
 const GradePage = dynamic(() => import("@/app/formacao/admin/calendario/page"), { ssr: false });
 const CapturaPage = dynamic(() => import("@/app/formacao/admin/meet/page"), { ssr: false });
+const CiclosPage = dynamic(() => import("./Ciclos"), { ssr: false });
 
-type Aba = "grupos" | "grade" | "captura";
+type Aba = "grupos" | "grade" | "ciclos" | "captura";
 
 const ABAS: { id: Aba; rotulo: string; icone: typeof LayoutGrid; dica: string }[] = [
   { id: "grupos", rotulo: "Grupos", icone: LayoutGrid, dica: "O catálogo e a saúde de cada um" },
   { id: "grade", rotulo: "Grade", icone: CalendarDays, dica: "A semana, os horários e quem conduz" },
+  // ⭐ Ciclos fica colado na Grade porque é a história dela: a grade é o
+  // cronograma de agora, o ciclo é o cronograma que rodou e fechou.
+  { id: "ciclos", rotulo: "Ciclos", icone: History, dica: "Os cronogramas que rodaram, e a comparação entre eles" },
   { id: "captura", rotulo: "Captura", icone: Radio, dica: "Conta do Google, ingestão e nomes a resolver" },
 ];
 
@@ -81,6 +85,7 @@ export default function GruposPage() {
 
       {aba === "grupos" && <Panorama />}
       {aba === "grade" && <GradePage />}
+      {aba === "ciclos" && <CiclosPage />}
       {aba === "captura" && <CapturaPage />}
     </div>
   );

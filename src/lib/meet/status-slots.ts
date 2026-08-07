@@ -293,44 +293,87 @@ export async function atualizarStatusSlots(
   return res;
 }
 
+/** Qual semana está terminando agora, do ponto de vista de quem fecha. */
+export function semanaQueEstaFechando(agora: Date): Date {
+  const segundaAtual = segundaDaSemana(agora);
+  // Na segunda, a semana que acabou é a anterior: os status dos slots ainda
+  // descrevem ela. Em qualquer outro dia, quem fecha à mão está fechando a
+  // semana corrente, porque é dela que os status falam.
+  if (diaSemanaLocal(agora) !== 0) return segundaAtual;
+  const anterior = new Date(segundaAtual);
+  anterior.setDate(segundaAtual.getDate() - 7);
+  return anterior;
+}
+
 /**
  * Fecha a semana: guarda o retrato e zera os status.
  *
- * Roda na madrugada de segunda. O índice único por semana_inicio é o que
- * garante que rodar de hora em hora não crie vários snapshots nem apague o que
- * a semana acumulou.
+ * Roda na madrugada de segunda pelo cron, e à mão pelo botão do calendário.
+ * O índice único por `semana_inicio` é o que garante que rodar de hora em hora
+ * não crie vários snapshots nem apague o que a semana acumulou.
+ *
+ * ⛔ O botão manual tinha um caminho próprio, e ele nomeava a semana DIFERENTE
+ * do cron: o cron gravava a segunda anterior, o botão gravava a segunda
+ * corrente. Um clique numa segunda fazia o cron da semana seguinte encontrar o
+ * snapshot já criado, sair sem fazer nada, e **a semana passava sem fechamento**,
+ * com os status vazando para a semana nova. O botão ainda tinha bug de fuso
+ * (`toISOString` sobre `Date` local grava o dia seguinte depois das 21h), não
+ * rodava a marcação antes de congelar e não logava o reset.
+ *
+ * Agora há um caminho só. `forcar` pula apenas a checagem de dia da semana.
  */
 export async function fecharSemanaSePreciso(
-  sb: Sb
-): Promise<{ fechou: boolean; motivo?: string; slots?: number }> {
+  sb: Sb,
+  opcoes: { forcar?: boolean } = {},
+): Promise<{ fechou: boolean; motivo?: string; slots?: number; semana?: string }> {
   const agora = new Date();
   // Segunda no fuso de Brasília, não no do servidor.
-  if (diaSemanaLocal(agora) !== 0) return { fechou: false, motivo: "Hoje não é segunda." };
+  if (!opcoes.forcar && diaSemanaLocal(agora) !== 0) {
+    return { fechou: false, motivo: "Hoje não é segunda." };
+  }
 
-  const segundaAtual = segundaDaSemana(agora);
-  const segundaAnterior = new Date(segundaAtual);
-  segundaAnterior.setDate(segundaAtual.getDate() - 7);
-  const sextaAnterior = new Date(segundaAnterior);
-  sextaAnterior.setDate(segundaAnterior.getDate() + 4);
+  const segundaAlvo = semanaQueEstaFechando(agora);
+  // O corte de criação é a segunda seguinte à semana fechada, e não a sexta: um
+  // slot criado no fim de semana pertence à semana que acabou mais do que à que
+  // vai começar, e a folga evita que fuso horário decida isso.
+  const segundaAtual = new Date(segundaAlvo);
+  segundaAtual.setDate(segundaAlvo.getDate() + 7);
+  const sextaAnterior = new Date(segundaAlvo);
+  sextaAnterior.setDate(segundaAlvo.getDate() + 4);
 
-  const inicio = dataLocal(segundaAnterior);
+  const inicio = dataLocal(segundaAlvo);
 
   const { data: existente } = await sb
     .from("formacao_snapshots")
     .select("id")
     .eq("semana_inicio", inicio)
     .maybeSingle();
-  if (existente) return { fechou: false, motivo: "Semana já foi fechada." };
+  if (existente) {
+    return { fechou: false, motivo: `A semana de ${inicio} já foi fechada.`, semana: inicio };
+  }
 
   // Marca o que a captura sabe sobre a semana que terminou ANTES de congelar o
   // retrato: depois do snapshot não há como corrigir, o histórico já foi.
-  await atualizarStatusSlots(sb, segundaAnterior);
+  await atualizarStatusSlots(sb, segundaAlvo);
+
+  // ⛔ Só os slots que EXISTIAM na semana que está sendo fechada.
+  //
+  // Sem este filtro o snapshot congela a grade do momento do fechamento, não a
+  // da semana que ele nomeia. Medido em 06/08/2026: o único snapshot da base
+  // diz "semana de 27/07 a 31/07" e **quatro dos seis slots congelados nele
+  // foram criados em 03/08**, depois da semana terminar. O histórico afirmava
+  // que grupos existiam antes de existirem, e é sobre esse histórico que a
+  // comparação entre ciclos vai se apoiar.
+  const limiteCriacao = dataLocal(segundaAtual);
 
   const { data: slots } = await sb
     .from("formacao_slots")
     .select("id, dia_semana, horario_id, atividade_nome, status, meet_link")
-    .eq("ativo", true);
-  if (!slots?.length) return { fechou: false, motivo: "Nenhum slot ativo." };
+    .eq("ativo", true)
+    .lt("created_at", limiteCriacao);
+  if (!slots?.length) {
+    return { fechou: false, motivo: "Nenhum slot ativo que já existisse nesta semana." };
+  }
 
   const { data: horarios } = await sb.from("formacao_horarios").select("id, hora");
   const horaPorId = new Map(
@@ -395,6 +438,25 @@ export async function fecharSemanaSePreciso(
     return { fechou: false, motivo: errLinhas.message };
   }
 
+  // ⛔ O reset precisa aparecer no log, senão o histórico conta uma história
+  // falsa. Sem esta linha o mesmo slot vai de `pendente` para `conduzido` toda
+  // semana sem nunca voltar, e quatro encontros viram doze transições: foi
+  // exatamente o que o log da base mostrava em 06/08/2026. Só quem muda de
+  // status entra, para o log não engordar com seis linhas iguais por semana.
+  const aResetar = (slots as { id: string; status: string; atividade_nome: string | null }[])
+    .filter((s) => s.status !== "pendente");
+  for (const s of aResetar) {
+    await registrarLog(
+      sb,
+      s.id,
+      s.status,
+      "pendente",
+      s.atividade_nome,
+      "automatico",
+      `Semana de ${inicio} fechada: status zerado para a semana nova.`,
+    );
+  }
+
   await sb
     .from("formacao_slots")
     .update({ status: "pendente", status_automatico_em: null })
@@ -403,5 +465,5 @@ export async function fecharSemanaSePreciso(
       (slots as { id: string }[]).map((s) => s.id)
     );
 
-  return { fechou: true, slots: linhas.length };
+  return { fechou: true, slots: linhas.length, semana: inicio };
 }

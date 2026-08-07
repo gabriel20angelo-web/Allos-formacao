@@ -337,7 +337,15 @@ function temFala(e: EncontroRow): boolean {
  */
 export async function lerSala(
   sb: SupabaseClient,
-  opcoes: { desde?: string | null } = {},
+  /**
+   * `desde` e `ate` em `YYYY-MM-DD`, inclusivos.
+   *
+   * `ate` existe para o ciclo: uma janela que só tem começo serve para "os
+   * últimos N dias", e não para "o período que foi de março a junho". Sem o
+   * fim, comparar um ciclo encerrado com o ciclo novo somaria o novo dentro do
+   * velho.
+   */
+  opcoes: { desde?: string | null; ate?: string | null } = {},
 ): Promise<DadosDaSala> {
   const [encRows, partRows, subRows] = await Promise.all([
     lerTudo<EncontroRow>(
@@ -373,9 +381,13 @@ export async function lerSala(
   }
 
   const desde = opcoes.desde ?? null;
+  const ate = opcoes.ate ?? null;
   // Encontro descartado é teste de link, não encontro. Fica fora de toda média.
   const validos = encRows.filter(
-    (e) => !e.descartado && (!desde || e.data_reuniao >= desde),
+    (e) =>
+      !e.descartado &&
+      (!desde || e.data_reuniao >= desde) &&
+      (!ate || e.data_reuniao <= ate),
   );
 
   /**
