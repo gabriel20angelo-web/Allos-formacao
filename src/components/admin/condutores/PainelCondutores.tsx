@@ -23,14 +23,22 @@ import { motion } from "framer-motion";
 import { Users } from "lucide-react";
 import Card from "@/components/ui/Card";
 import { chaveTexto, type Sala, type CondutorSala } from "@/hooks/useSala";
+import { REGUA, atende } from "@/lib/meet/regua";
 import type { CertificadoCondutor } from "@/types";
 
 const TEAL = "#2E9E8F";
 const ROXO = "#6C5CE7";
 const DOURADO = "#D4854A";
 
-/** Abaixo disso a média é ruído, e a tela diz isso em vez de mostrar o número. */
-const PISO_DE_NOTAS = 5;
+/**
+ * ⛔ Nomes do cadastro que não são pessoas.
+ *
+ * "Outros" é uma linha ativa de `certificado_condutores` com 67 avaliações e
+ * média 9,61, o segundo maior volume do painel. Sem esta lista ele entra na
+ * comparação como se fosse alguém, e um balde nunca é um bom condutor nem um
+ * ruim: ele é a soma de todos os que não foram nomeados.
+ */
+const NAO_SAO_PESSOAS = new Set(["outros", "sem condutor", "diretoria", "diretoria allos"]);
 
 interface Linha {
   chave: string;
@@ -99,9 +107,13 @@ export default function PainelCondutores({
       .filter((l) => !l.arquivado || l.medido || l.notas > 0)
       .sort(
         (a, b) =>
+          // ⛔ O desempate por número de notas saiu daqui. O rodapé prometia que
+          // nenhuma coluna ordenava a lista, e com todos os condutores tendo um
+          // encontro só, a ordem visível era decidida inteiramente pela contagem
+          // de formulários, que é justamente a coluna que esta tela existe para
+          // não deixar ordenar. Empate agora vai para ordem alfabética.
           (b.medido?.encontros ?? 0) - (a.medido?.encontros ?? 0) ||
-          b.notas - a.notas ||
-          a.nome.localeCompare(b.nome),
+          a.nome.localeCompare(b.nome, "pt-BR"),
       );
   }, [sala, condutorStats, fichas]);
 
@@ -144,7 +156,7 @@ export default function PainelCondutores({
         <div className="space-y-1.5">
           {linhas.map((l) => {
             const m = l.medido;
-            const media = l.notas >= PISO_DE_NOTAS ? l.somaNotas / l.notas : null;
+            const media = atende(l.notas, REGUA.nota) ? l.somaNotas / l.notas : null;
             const Conteudo = (
               <>
                 <div className="min-w-0">
@@ -268,11 +280,19 @@ export default function PainelCondutores({
           style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
         >
           <p>
-            A nota aparece só a partir de {PISO_DE_NOTAS} avaliações. Abaixo disso o
-            número existe e não quer dizer nada, e mostrar assim mesmo convida a
-            comparar quem não dá para comparar. Nenhuma coluna daqui ordena a lista,
-            de propósito.
+            A nota aparece só a partir de {REGUA.nota.minimo} avaliações. Abaixo
+            disso o número existe e não quer dizer nada, e mostrar assim mesmo
+            convida a comparar quem não dá para comparar. A lista é ordenada por
+            número de encontros, e o empate vai para ordem alfabética: nenhuma
+            coluna de qualidade ordena nada aqui, de propósito.
           </p>
+          {linhas.some((l) => NAO_SAO_PESSOAS.has(chaveTexto(l.nome))) && (
+            <p>
+              Há linhas aqui que não são pessoas, como &quot;Outros&quot;: elas
+              somam o que o formulário recebeu sem nome, e a média delas não fala
+              de ninguém em particular.
+            </p>
+          )}
           {semFicha > 0 && (
             <p style={{ color: DOURADO }}>
               {semFicha} {semFicha === 1 ? "nome apareceu" : "nomes apareceram"} na sala

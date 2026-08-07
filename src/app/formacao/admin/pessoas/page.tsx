@@ -51,6 +51,7 @@ import { SeletorJanela, JanelaPropria } from "@/components/admin/SeletorJanela";
 import Destaque, { CORES_DESTAQUE, type MudancaDestaque } from "@/components/admin/pessoas/Destaque";
 import BlocoClinica from "@/components/admin/pessoas/BlocoClinica";
 import { CORES, ROTULOS, ORDEM_ESTADOS, definicao } from "@/components/admin/pessoas/estados";
+import { REGUA, atende } from "@/lib/meet/regua";
 import { RANGE_LABELS, type ActivityRange } from "@/lib/utils/activity";
 import type { EstadoPessoa, PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
 
@@ -750,7 +751,9 @@ export default function AdminPessoasPage() {
                       <p className="font-fraunces font-bold text-xl text-cream mt-1 tabular-nums">
                         {c.voltaram} <span className="text-cream/35 font-dm text-sm font-normal">de {c.estreantes}</span>
                       </p>
-                      {c.estreantes >= 30 && (
+                      {/* O piso do percentual vem da régua, e não de um 30 solto
+                          aqui: era o sétimo limiar espalhado pelo painel. */}
+                      {atende(c.estreantes, REGUA.percentual) && (
                         <p className="font-dm text-xs text-cream/40 tabular-nums">{Math.round(pct)}%</p>
                       )}
                       {/* Escala fixa de 0 a 60: normalizar pelo maior faria 43% parecer o dobro de 32%. */}

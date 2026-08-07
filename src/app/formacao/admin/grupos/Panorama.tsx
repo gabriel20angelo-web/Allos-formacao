@@ -120,12 +120,19 @@ export default function Panorama() {
       .filter((a) => !q || a.nome.toLowerCase().includes(q))
       .map((a) => ({ ...a, medido: medidoPorId.get(a.id) ?? null }))
       .sort((a, b) => {
-        // Quem tem encontro medido primeiro, e dentro disso o mais cheio. Um
-        // grupo sem sala não é menos importante, mas é sobre ele que não há o
-        // que decidir esta semana.
+        // Quem tem encontro medido primeiro. Isso não é mérito, é relevância:
+        // sobre o grupo sem sala não há o que decidir esta semana.
+        const temA = a.medido ? 1 : 0;
+        const temB = b.medido ? 1 : 0;
+        if (temA !== temB) return temB - temA;
+        // ⛔ Dentro disso, ordem alfabética enquanto a base for fina. Ordenar por
+        // quórum com um encontro por grupo é pódio decidido por um dia, e uma
+        // lista ordenada convida a ler o topo como "o melhor" por mais ressalva
+        // que a legenda carregue. Quem decide é a régua, na rota.
+        if (!sala?.regua?.podeRanquear) return a.nome.localeCompare(b.nome, "pt-BR");
         const qa = a.medido?.quorumMedio ?? -1;
         const qb = b.medido?.quorumMedio ?? -1;
-        return qb - qa || a.nome.localeCompare(b.nome);
+        return qb - qa || a.nome.localeCompare(b.nome, "pt-BR");
       });
   }, [sala, grupos, busca, verArquivados]);
 
@@ -298,8 +305,13 @@ export default function Panorama() {
             </motion.div>
           )}
 
-          {/* ── horário contra condução ── */}
-          {sala.diaSemana.length > 1 && (
+          {/* ── horário contra condução ──
+              ⛔ Só aparece quando algum dia tem mais de um grupo. Com um grupo
+              por dia, "por dia da semana" e "por grupo" são a mesma coluna com
+              outro rótulo, e o card entrega exatamente o contrário do que
+              promete: em vez de separar horário de condução, confunde os dois e
+              dá ao leitor a impressão de que separou. */}
+          {sala.diaSemana.length > 1 && sala.regua.diaSemanaSeparaEfeito && (
             <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12 }}>
               <Card>
                 <div className="flex items-center gap-2 mb-1 flex-wrap">
@@ -461,7 +473,20 @@ export default function Panorama() {
                   ingestão parar, ninguém deve virar assíduo por acidente.
                 </p>
                 {sala.sumindo.length === 0 ? (
-                  <p className="font-dm text-xs text-cream/25 py-2">Ninguém nessa situação.</p>
+                  // ⛔ Lista vazia tem dois significados opostos, e antes ela só
+                  // sabia dizer o bom. Com um histórico mais novo que a janela,
+                  // ninguém PODE ter sumido, e "ninguém nessa situação" lia como
+                  // tranquilidade quando era cegueira.
+                  !sala.regua.sumicoMensuravel ? (
+                    <p className="font-dm text-xs text-cream/40 py-2 leading-relaxed">
+                      Ainda não dá para saber. A sala tem {sala.regua.diasDeHistorico}{" "}
+                      {sala.regua.diasDeHistorico === 1 ? "dia" : "dias"} de histórico
+                      medido, e sumiço exige vinte e um dias de ausência: ninguém pode
+                      aparecer aqui antes disso. Não é boa notícia, é falta de base.
+                    </p>
+                  ) : (
+                    <p className="font-dm text-xs text-cream/25 py-2">Ninguém nessa situação.</p>
+                  )
                 ) : (
                   <div className="space-y-1">
                     {sala.sumindo.map((p) => (
@@ -530,13 +555,34 @@ export default function Panorama() {
               </h2>
               <JanelaPropria motivo="agrupado por atividade, não por horário" />
             </div>
-            <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+            <p className="font-dm text-xs text-cream/40 mb-3 leading-relaxed">
               Todos os grupos do cadastro, e não só os que tiveram encontro medido:
               treze das dezenove atividades não têm posição na grade e mesmo assim
-              carregam feedback. Ordenado por quórum, e quem não tem sala vai para o
-              fim. Tendência com travessão é grupo que ainda não tem os quatro
-              encontros que ela precisa para significar alguma coisa.
+              carregam feedback. Quem não tem sala vai para o fim. Tendência sem
+              número é grupo que ainda não tem os quatro encontros que ela precisa
+              para significar alguma coisa.
             </p>
+
+            {/* ⛔ A recusa de ranquear, dita antes da lista e não depois.
+                A decisão vem da rota; a tela só conta o motivo. */}
+            {!sala.regua.podeRanquear && (
+              <div
+                className="flex items-start gap-2 px-3 py-2.5 rounded-[10px] mb-4"
+                style={{ background: "rgba(212,133,74,0.06)", border: "1px solid rgba(212,133,74,0.15)" }}
+              >
+                <AlertTriangle className="h-3.5 w-3.5 shrink-0 mt-0.5" style={{ color: DOURADO }} />
+                <p className="font-dm text-[11px] text-cream/50 leading-relaxed">
+                  <strong className="text-cream/75">A lista está em ordem alfabética, de propósito.</strong>{" "}
+                  Ordenar por mérito exige {sala.regua.minimoParaComparar} encontros
+                  com transcrição em pelo menos dois grupos, e hoje{" "}
+                  {sala.regua.gruposComparaveis === 0
+                    ? "nenhum grupo chegou lá"
+                    : `só ${sala.regua.gruposComparaveis} chegou lá`}
+                  . O motivo é que {sala.regua.porqueNaoRanqueia}: os números abaixo
+                  já estão certos e medem o dia, não o grupo.
+                </p>
+              </div>
+            )}
 
             <div className="flex flex-col sm:flex-row gap-2 mb-4">
               <input
@@ -583,16 +629,21 @@ export default function Panorama() {
               )}
             </div>
 
+            {/* A cobertura do formulário saiu da grade e foi para a linha de
+                baixo do nome, junto dos condutores: ela é ressalva de leitura,
+                não medida do grupo, e ocupava uma coluna que interação e
+                permanência usam melhor. */}
             <div
               className="hidden sm:grid gap-2 px-3 pb-2 font-dm text-[10px] uppercase tracking-wider text-cream/25"
-              style={{ gridTemplateColumns: "1fr 64px 76px 84px 72px 72px" }}
+              style={{ gridTemplateColumns: "1fr 58px 66px 74px 62px 76px 74px" }}
             >
               <span>Grupo</span>
-              <span className="text-right">Encontros</span>
+              <span className="text-right">Enc.</span>
               <span className="text-right">Na sala</span>
               <span className="text-right">Tendência</span>
               <span className="text-right">Falaram</span>
-              <span className="text-right">Formulário</span>
+              <span className="text-right">Fala/pes.</span>
+              <span className="text-right">Perman.</span>
             </div>
 
             <div className="space-y-1.5">
@@ -618,7 +669,7 @@ export default function Panorama() {
                   >
                     <div
                       className="hidden sm:grid gap-2 items-center"
-                      style={{ gridTemplateColumns: "1fr 64px 76px 84px 72px 72px" }}
+                      style={{ gridTemplateColumns: "1fr 58px 66px 74px 62px 76px 74px" }}
                     >
                       <div className="min-w-0">
                         <p className="font-dm text-xs text-cream/80 truncate">
@@ -632,6 +683,16 @@ export default function Panorama() {
                               ? "sem condutor reconhecido"
                               : "sem sala, nenhum encontro capturado"}
                           {m && m.slots > 1 ? ` · ${m.slots} horários` : ""}
+                          {m?.coberturaPct != null && (
+                            <span
+                              style={{
+                                color: m.coberturaPct < 40 ? DOURADO : undefined,
+                              }}
+                            >
+                              {" · "}
+                              {m.coberturaPct.toFixed(0)}% no formulário
+                            </span>
+                          )}
                         </p>
                       </div>
                       <span className="font-dm text-xs text-cream/50 tabular-nums text-right">
@@ -643,19 +704,40 @@ export default function Panorama() {
                       <span className="text-right">
                         {m ? <Tendencia v={m.tendencia} /> : <span className="font-dm text-[11px] text-cream/20">—</span>}
                       </span>
-                      <span className="font-dm text-xs tabular-nums text-right" style={{ color: ROXO }}>
+                      {/* Sem valor, o traço é neutro: um traço colorido parece um
+                          número que não deu para ler, e não ausência de medida. */}
+                      <span
+                        className="font-dm text-xs tabular-nums text-right"
+                        style={{ color: m?.vozesAtivasPct == null ? "rgba(253,251,247,0.2)" : ROXO }}
+                      >
                         {m?.vozesAtivasPct == null ? "—" : `${m.vozesAtivasPct.toFixed(0)}%`}
                       </span>
+                      {/* ⭐ Fala de quem não é a conta institucional, por pessoa
+                          presente. O total sozinho premiaria o grupo grande. */}
                       <span
                         className="font-dm text-xs tabular-nums text-right"
                         style={{
-                          color:
-                            m?.coberturaPct != null && m.coberturaPct < 40
-                              ? DOURADO
-                              : "rgba(253,251,247,0.4)",
+                          color: m?.interacaoPorPessoaMin == null ? "rgba(253,251,247,0.2)" : ROXO,
                         }}
+                        title={
+                          m?.interacaoMin == null
+                            ? undefined
+                            : `${m.interacaoMin.toFixed(1)} min no total, em ${m.encontrosComTranscricao} encontro(s) com transcrição`
+                        }
                       >
-                        {m?.coberturaPct == null ? "—" : `${m.coberturaPct.toFixed(0)}%`}
+                        {m?.interacaoPorPessoaMin == null
+                          ? "—"
+                          : `${m.interacaoPorPessoaMin.toFixed(1)} min`}
+                      </span>
+                      {/* Mediana, não média: a cauda de quem entra e sai em dois
+                          minutos derruba a média em até vinte pontos. */}
+                      <span
+                        className="font-dm text-xs tabular-nums text-right text-cream/50"
+                        title="Mediana da permanência das pessoas deste grupo"
+                      >
+                        {m?.interacao?.permanenciaMedianaPct == null
+                          ? "—"
+                          : `${m.interacao.permanenciaMedianaPct.toFixed(0)}%`}
                       </span>
                     </div>
 
@@ -676,6 +758,16 @@ export default function Panorama() {
                           <span className="font-dm text-[11px] text-cream/45">
                             {m.encontros} {m.encontros === 1 ? "encontro" : "encontros"}
                           </span>
+                          {m.interacaoPorPessoaMin != null && (
+                            <span className="font-dm text-[11px]" style={{ color: ROXO }}>
+                              {m.interacaoPorPessoaMin.toFixed(1)} min de fala por pessoa
+                            </span>
+                          )}
+                          {m.interacao?.permanenciaMedianaPct != null && (
+                            <span className="font-dm text-[11px] text-cream/45">
+                              {m.interacao.permanenciaMedianaPct.toFixed(0)}% de permanência
+                            </span>
+                          )}
                           <Tendencia v={m.tendencia} />
                         </div>
                       )}

@@ -36,6 +36,12 @@ import {
   type EncontroMedido,
 } from "@/lib/meet/quorum";
 import { lerTudo } from "@/lib/supabase/paginar";
+import {
+  REGUA,
+  atende,
+  porQueNaoDaParaLer,
+  DIAS_ESFRIANDO,
+} from "@/lib/meet/regua";
 
 export const dynamic = "force-dynamic";
 
@@ -86,7 +92,7 @@ export async function GET(req: NextRequest) {
   }>(sb, "certificado_atividades", "id,nome,carga_horaria,ativo,arquivado", "nome");
   const idPorChave = new Map(catalogo.map((a) => [chaveTexto(a.nome), a.id]));
 
-  const grupos = Array.from(porAtividade(encontros).entries())
+  const gruposCrus = Array.from(porAtividade(encontros).entries())
     .map(([chave, g]) => {
       // Os condutores que passaram pelo grupo na janela, não só o do primeiro
       // encontro. A rota antiga usava `encs[0].condutor_nome`, que atribui todo
@@ -107,8 +113,39 @@ export async function GET(req: NextRequest) {
         // encontros, isto diz quanto as pessoas deste grupo falam e ficam.
         interacao: interacaoDoGrupo(pessoaPorGrupo, chave),
       };
-    })
-    .sort((a, b) => (b.quorumMedio ?? 0) - (a.quorumMedio ?? 0));
+    });
+
+  // ── ⛔ a recusa de ranquear ──
+  //
+  // Isto mora aqui, e não na tela, de propósito. Ordenar é o que transforma
+  // medição em juízo, e uma lista já ordenada convida a ler o topo como "o
+  // melhor" por mais ressalva que a legenda carregue. Enquanto a base for fina,
+  // a rota devolve os grupos em ordem alfabética e diz por quê.
+  //
+  // O precedente é a remoção do ranking de condutor por nota: 21 condutores
+  // entre 9,14 e 10, com o primeiro lugar decidido por ruído. A lista "Grupo a
+  // grupo" repetia o mesmo erro em outro eixo, ordenando por quórum médio com
+  // um encontro por grupo e nenhuma régua.
+  const comparaveis = gruposCrus.filter((g) =>
+    atende(g.encontrosComTranscricao, REGUA.comparacaoEntreGrupos),
+  ).length;
+  const podeRanquear = atende(comparaveis, REGUA.ranking);
+
+  const grupos = gruposCrus
+    .map((g) => ({
+      ...g,
+      /** Este grupo sozinho tem base para entrar numa comparação. */
+      comparavel: atende(g.encontrosComTranscricao, REGUA.comparacaoEntreGrupos),
+      faltaParaComparar: porQueNaoDaParaLer(
+        g.encontrosComTranscricao,
+        REGUA.comparacaoEntreGrupos,
+      ),
+    }))
+    .sort((a, b) =>
+      podeRanquear
+        ? (b.quorumMedio ?? 0) - (a.quorumMedio ?? 0)
+        : a.nome.localeCompare(b.nome, "pt-BR"),
+    );
 
   const condutores = Array.from(porCondutor(encontros).entries())
     .map(([chave, c]) => {
@@ -127,17 +164,51 @@ export async function GET(req: NextRequest) {
   // O relógio é HOJE, não o último encontro capturado. Ancorar na captura faz
   // a ingestão parada virar boa notícia: ninguém "some" porque o tempo parou.
   const hoje = new Date().toISOString().slice(0, 10);
-  const limite = new Date(Date.now() - 21 * 86400000).toISOString().slice(0, 10);
+  const limite = new Date(Date.now() - DIAS_ESFRIANDO * 86400000)
+    .toISOString()
+    .slice(0, 10);
 
   const sumindo = pessoas
-    .filter((p) => p.encontros >= 3 && p.ultima < limite)
+    .filter((p) => atende(p.encontros, REGUA.sumico) && p.ultima < limite)
     .sort((a, b) => a.ultima.localeCompare(b.ultima))
     .slice(0, 20);
 
+  // ⛔ Sem histórico suficiente, "ninguém sumiu" NÃO é boa notícia, é ausência
+  // de base: a captura pela API do Meet começou em 03/08/2026, e ninguém pode
+  // ter 21 dias de ausência num histórico mais novo que 21 dias. A lista vazia
+  // lia como tranquilidade e era cegueira. A tela precisa saber a diferença.
+  const primeiroDia = encontros.reduce(
+    (a, e) => (a && a < e.data ? a : e.data),
+    "",
+  );
+  const diasDeHistorico = primeiroDia
+    ? Math.floor(
+        (Date.parse(hoje + "T12:00:00") - Date.parse(primeiroDia + "T12:00:00")) /
+          86400000,
+      )
+    : 0;
+  const sumicoMensuravel = diasDeHistorico >= DIAS_ESFRIANDO;
+
   const calados = pessoas
-    .filter((p) => p.caladaEm >= 3 && p.caladaEm === p.comTranscricao)
+    .filter(
+      (p) => atende(p.caladaEm, REGUA.sumico) && p.caladaEm === p.comTranscricao,
+    )
     .sort((a, b) => b.caladaEm - a.caladaEm)
     .slice(0, 20);
+
+  // ⛔ "Por dia da semana" promete separar efeito de horário de efeito de
+  // condução. Com um grupo por dia, as duas coisas são literalmente a mesma
+  // coluna, e o card entrega o contrário do que promete. Só vale mostrar quando
+  // algum dia tiver mais de um grupo distinto.
+  const gruposPorDia = new Map<number, Set<string>>();
+  for (const e of encontros) {
+    const s = gruposPorDia.get(e.diaSemana) ?? new Set<string>();
+    s.add(e.atividadeChave);
+    gruposPorDia.set(e.diaSemana, s);
+  }
+  const diaSemanaSeparaEfeito = Array.from(gruposPorDia.values()).some(
+    (s) => s.size > 1,
+  );
 
   const maisPresentes = [...pessoas]
     .sort((a, b) => b.encontros - a.encontros || b.minutos - a.minutos)
@@ -173,6 +244,18 @@ export async function GET(req: NextRequest) {
     ),
     grupos,
     condutores,
+    // ⛔ A régua, junto do que ela libera. A tela não decide isso sozinha.
+    regua: {
+      podeRanquear,
+      gruposComparaveis: comparaveis,
+      minimoParaComparar: REGUA.comparacaoEntreGrupos.minimo,
+      porqueNaoRanqueia: podeRanquear
+        ? null
+        : REGUA.comparacaoEntreGrupos.porque,
+      sumicoMensuravel,
+      diasDeHistorico,
+      diaSemanaSeparaEfeito,
+    },
     diaSemana: porDiaSemana(encontros),
     semanas: serieSemanal(encontros, pessoasPorEncontro),
     fluxo: fluxoDeEncontros(encontros, pessoasPorEncontro),

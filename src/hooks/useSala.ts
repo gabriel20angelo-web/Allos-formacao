@@ -81,6 +81,29 @@ export interface GrupoSala extends ResumoSala {
   slots: number;
   condutores: string[];
   interacao: InteracaoGrupo | null;
+  /** Este grupo tem base para entrar numa comparação entre grupos. */
+  comparavel: boolean;
+  /** "1 de 3 encontros com transcrição", ou `null` quando já dá. */
+  faltaParaComparar: string | null;
+}
+
+/**
+ * ⛔ O que a base autoriza a tela a afirmar.
+ *
+ * Vem da rota, não da tela, porque ordenar é o que transforma medição em juízo
+ * e essa decisão não pode ficar espalhada por seis componentes.
+ */
+export interface ReguaSala {
+  /** Falso enquanto `grupos` vier em ordem alfabética, e não por mérito. */
+  podeRanquear: boolean;
+  gruposComparaveis: number;
+  minimoParaComparar: number;
+  porqueNaoRanqueia: string | null;
+  /** Falso quando o histórico é mais novo que a janela de sumiço. */
+  sumicoMensuravel: boolean;
+  diasDeHistorico: number;
+  /** Falso quando cada dia da semana tem um grupo só, e dia é o grupo. */
+  diaSemanaSeparaEfeito: boolean;
 }
 
 /** Uma linha da comparação da mesma pessoa entre os grupos que ela frequenta. */
@@ -165,6 +188,7 @@ export interface Sala {
   encontros: EncontroSala[];
   grupos: GrupoSala[];
   condutores: CondutorSala[];
+  regua: ReguaSala;
   diaSemana: { dia: number; encontros: number; quorumMedio: number | null }[];
   semanas: { semana: string; pessoas: number }[];
   fluxo: FluxoSala[];

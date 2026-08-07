@@ -40,6 +40,12 @@ import Skeleton from "@/components/ui/Skeleton";
 import Button from "@/components/ui/Button";
 import { useAuth } from "@/hooks/useAuth";
 import { DIAS_DA_SEMANA } from "@/lib/meet/quorum";
+import {
+  REGUA,
+  atende,
+  porQueNaoDaParaLer,
+  DIAS_ESFRIANDO,
+} from "@/lib/meet/regua";
 import { toast } from "sonner";
 
 const TERRACOTA = "#C84B31";
@@ -123,7 +129,43 @@ interface Dossie {
     falaCondutorPct: number | null;
     condutores: string[];
   }[];
-  pessoas: { chave: string; nome: string; encontros: number; caladaEm: number; comTranscricao: number; ultima: string }[];
+  /** A interação e a permanência medidas POR PESSOA. `medido` agrega encontros. */
+  interacao: {
+    pessoas: number;
+    falaram: number;
+    minutosFala: number;
+    permanenciaMedianaPct: number | null;
+    permanenciaMediaPct: number | null;
+    mudas: number;
+    comTranscricao: number;
+  } | null;
+  /** Estreou, voltou, retomou e sumiu contra o encontro anterior deste grupo. */
+  fluxo: {
+    encontroId: string;
+    data: string;
+    presentes: number;
+    estrearam: number | null;
+    voltaram: number | null;
+    retomaram: number | null;
+    sumiram: number | null;
+  }[];
+  pessoas: {
+    chave: string;
+    nome: string;
+    alunoId: string | null;
+    encontros: number;
+    minutos: number;
+    minutosFala: number;
+    segmentosFala: number;
+    permanenciaMedianaPct: number | null;
+    caladaEm: number;
+    comTranscricao: number;
+    primeira: string;
+    ultima: string;
+    /** O denominador que faltava: "veio 4 vezes" sem "de 12 na vida" não diz nada. */
+    encontrosNaFormacao: number;
+    gruposNaFormacao: number;
+  }[];
   feedbacks: {
     id: string;
     created_at: string;
@@ -154,6 +196,16 @@ function num(n: number | null, casas = 1): string {
   return n === null ? "—" : n.toFixed(casas);
 }
 
+/** Mesmo corte da tela de Pessoas. Uma lista longa é a queixa mais antiga daqui. */
+const PAGINA_PESSOAS = 25;
+
+const ORDENS_PESSOA = [
+  ["frequencia", "Vem mais"],
+  ["fala", "Fala mais"],
+  ["permanencia", "Fica mais"],
+  ["nome", "Nome"],
+] as const;
+
 export default function GrupoPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
@@ -163,6 +215,12 @@ export default function GrupoPage() {
   const [erro, setErro] = useState<string | null>(null);
   const [aba, setAba] = useState<Aba>("geral");
   const [ocupado, setOcupado] = useState<string | null>(null);
+  // A aba Pessoas renderizava 76 linhas sem busca, sem ordem e sem corte, com
+  // quatro encontros no mundo. O padrão de corte em 25 já existia na tela de
+  // Pessoas; aqui ele faltava, e era a aba que mais ia crescer.
+  const [buscaPessoa, setBuscaPessoa] = useState("");
+  const [ordemPessoa, setOrdemPessoa] = useState<"frequencia" | "fala" | "permanencia" | "nome">("frequencia");
+  const [mostrandoPessoas, setMostrandoPessoas] = useState(PAGINA_PESSOAS);
 
   async function carregar() {
     try {
@@ -360,6 +418,74 @@ export default function GrupoPage() {
             )}
           </Card>
 
+          {/* ⭐ Interação e permanência, medidas POR PESSOA.
+              O cartão de cima agrega encontros e responde "como foram os
+              encontros deste grupo". Este responde "quanto as pessoas deste
+              grupo falam e quanto tempo elas ficam", que é a pergunta do
+              pedido, e por isso o denominador aqui é gente e não sessão. */}
+          {d.interacao && d.interacao.comTranscricao > 0 && (
+            <Card>
+              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-4">
+                Como as pessoas ficam e falam aqui
+              </h2>
+              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 sm:gap-x-8 gap-y-5">
+                {[
+                  {
+                    r: "pessoas medidas",
+                    v: String(d.interacao.pessoas),
+                  },
+                  {
+                    r: "permanência típica",
+                    v:
+                      d.interacao.permanenciaMedianaPct === null
+                        ? "—"
+                        : `${d.interacao.permanenciaMedianaPct.toFixed(0)}%`,
+                  },
+                  {
+                    r: "fala de quem não conduz",
+                    v: `${d.interacao.minutosFala.toFixed(1)} min`,
+                    cor: ROXO,
+                  },
+                  {
+                    r: "fala por pessoa presente",
+                    v: `${(d.interacao.minutosFala / Math.max(1, d.interacao.pessoas)).toFixed(2)} min`,
+                    cor: ROXO,
+                  },
+                  {
+                    r: `nunca falaram, de ${d.interacao.comTranscricao}`,
+                    v: String(d.interacao.mudas),
+                  },
+                ].map((x) => (
+                  <div key={x.r}>
+                    <p
+                      className="font-fraunces font-bold text-2xl tabular-nums leading-none"
+                      style={{ color: x.cor ?? "rgba(253,251,247,0.85)" }}
+                    >
+                      {x.v}
+                    </p>
+                    <p className="font-dm text-[11px] text-cream/30 mt-1.5">{x.r}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="font-dm text-[11px] text-cream/30 mt-4 leading-relaxed">
+                A fala aqui é a de quem não é a conta institucional, e a conta
+                institucional é o microfone de quem conduz. Permanência típica é a
+                mediana: a média é puxada para baixo por quem entra e sai em dois
+                minutos.
+                {!atende(d.medido.encontrosComTranscricao, REGUA.comparacaoEntreGrupos) && (
+                  <span style={{ color: DOURADO }}>
+                    {" "}Com{" "}
+                    {porQueNaoDaParaLer(
+                      d.medido.encontrosComTranscricao,
+                      REGUA.comparacaoEntreGrupos,
+                    )}
+                    , estes números medem o dia e não o grupo: {REGUA.comparacaoEntreGrupos.porque}.
+                  </span>
+                )}
+              </p>
+            </Card>
+          )}
+
           <Card>
             <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-4">
               O que escrevem no formulário
@@ -373,18 +499,22 @@ export default function GrupoPage() {
               </div>
               <div>
                 <p className="font-fraunces font-bold text-2xl tabular-nums leading-none text-cream/85">
-                  {d.notas.grupoN >= 5 ? num(d.notas.grupo) : "—"}
+                  {atende(d.notas.grupoN, REGUA.nota) ? num(d.notas.grupo) : "—"}
                 </p>
                 <p className="font-dm text-[11px] text-cream/30 mt-1.5">
-                  {d.notas.grupoN >= 5 ? `nota do grupo, em ${d.notas.grupoN}` : `${d.notas.grupoN} notas só`}
+                  {atende(d.notas.grupoN, REGUA.nota)
+                    ? `nota do grupo, em ${d.notas.grupoN}`
+                    : porQueNaoDaParaLer(d.notas.grupoN, REGUA.nota)}
                 </p>
               </div>
               <div>
                 <p className="font-fraunces font-bold text-2xl tabular-nums leading-none text-cream/85">
-                  {d.notas.condutorN >= 5 ? num(d.notas.condutor) : "—"}
+                  {atende(d.notas.condutorN, REGUA.nota) ? num(d.notas.condutor) : "—"}
                 </p>
                 <p className="font-dm text-[11px] text-cream/30 mt-1.5">
-                  {d.notas.condutorN >= 5 ? `nota do condutor, em ${d.notas.condutorN}` : `${d.notas.condutorN} notas só`}
+                  {atende(d.notas.condutorN, REGUA.nota)
+                    ? `nota do condutor, em ${d.notas.condutorN}`
+                    : porQueNaoDaParaLer(d.notas.condutorN, REGUA.nota)}
                 </p>
               </div>
               <div>
@@ -500,11 +630,57 @@ export default function GrupoPage() {
                           </span>
                         )}
                       </div>
+
+                      {/* ⭐ O fluxo de pessoas, sempre contra o encontro ANTERIOR
+                          DESTE GRUPO. No primeiro encontro medido os quatro
+                          números são nulos e não zero: sem anterior, "0
+                          estrearam" leria como "ninguém novo apareceu", que é o
+                          oposto da verdade. */}
+                      {(() => {
+                        const f = d.fluxo.find((x) => x.encontroId === e.id);
+                        if (!f) return null;
+                        if (f.estrearam === null) {
+                          return (
+                            <p className="font-dm text-[11px] text-cream/25 mt-1.5">
+                              Primeiro encontro medido deste grupo. Não há anterior
+                              contra o qual dizer quem estreou ou sumiu.
+                            </p>
+                          );
+                        }
+                        return (
+                          <div className="flex flex-wrap gap-x-4 gap-y-1 mt-1.5">
+                            <span className="font-dm text-[11px] tabular-nums" style={{ color: TEAL }}>
+                              {f.estrearam} estrearam
+                            </span>
+                            <span className="font-dm text-[11px] text-cream/35 tabular-nums">
+                              {f.voltaram} voltaram
+                            </span>
+                            {(f.retomaram ?? 0) > 0 && (
+                              <span className="font-dm text-[11px] text-cream/35 tabular-nums">
+                                {f.retomaram} retomaram
+                              </span>
+                            )}
+                            <span
+                              className="font-dm text-[11px] tabular-nums"
+                              style={{ color: (f.sumiram ?? 0) > 0 ? "#E07A5F" : "rgba(253,251,247,0.35)" }}
+                            >
+                              {f.sumiram} não vieram
+                            </span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
               </div>
             )}
+            <p className="font-dm text-[11px] text-cream/30 mt-4 leading-relaxed">
+              Estreou, voltou e não veio são sempre contra o encontro anterior deste
+              grupo, nunca contra o anterior no calendário: duas turmas na mesma
+              semana não têm nada a ver uma com a outra. Retomou é quem faltou ao
+              anterior e já tinha vindo antes dele, e existe porque grupo que perde
+              gente e grupo que tem gente indo e voltando pedem providências opostas.
+            </p>
           </Card>
         </motion.div>
       )}
@@ -663,51 +839,139 @@ export default function GrupoPage() {
             </h2>
             <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
               Contado pela sala do Meet, que mede quem entrou. Quem só preenche o
-              formulário e não é capturado na sala não aparece aqui.
+              formulário e não é capturado na sala não aparece aqui. Minutos e fala
+              são <strong className="text-cream/60">neste grupo</strong>, e ao lado
+              vem quantas vezes a pessoa veio na formação inteira: sem esse
+              denominador, &quot;veio 4 vezes&quot; não diz se ela é da casa ou se
+              passou por aqui.
             </p>
+
             {d.pessoas.length === 0 ? (
               <p className="font-dm text-xs text-cream/30 py-2">
                 Nenhuma presença medida ainda neste grupo.
               </p>
             ) : (
-              <div className="space-y-1">
-                {d.pessoas.map((p) => {
-                  const sumiu =
-                    d.medido.ultimo !== null &&
-                    p.ultima < d.medido.ultimo &&
-                    Date.now() - new Date(p.ultima + "T12:00:00").getTime() > 21 * 86400000;
-                  const muda = p.comTranscricao > 0 && p.caladaEm === p.comTranscricao;
-                  return (
-                    <div
-                      key={p.chave}
-                      className="flex items-center gap-3 px-3 py-2 rounded-[10px]"
-                      style={{ background: "rgba(255,255,255,0.02)" }}
-                    >
-                      <span className="font-fraunces font-bold text-sm text-cream tabular-nums w-8 text-right shrink-0">
-                        {p.encontros}
-                      </span>
-                      <div className="min-w-0 flex-1">
-                        <p className="font-dm text-xs text-cream/75 truncate">{p.nome}</p>
-                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
-                          <span className="font-dm text-[10px] text-cream/25">
-                            {p.encontros === 1 ? "veio uma vez" : `veio ${p.encontros} vezes`} · última em {dataCurta(p.ultima)}
-                          </span>
-                          {muda && (
-                            <span className="font-dm text-[10px]" style={{ color: ROXO }}>
-                              nunca falou ({p.caladaEm} c/ transcrição)
-                            </span>
-                          )}
-                          {sumiu && (
-                            <span className="font-dm text-[10px]" style={{ color: "#E07A5F" }}>
-                              não vem há mais de 21 dias
-                            </span>
-                          )}
-                        </div>
-                      </div>
+              (() => {
+                const q = buscaPessoa.trim().toLowerCase();
+                const lista = d.pessoas
+                  .filter((p) => !q || p.nome.toLowerCase().includes(q))
+                  .sort((a, b) => {
+                    if (ordemPessoa === "nome") return a.nome.localeCompare(b.nome, "pt-BR");
+                    if (ordemPessoa === "fala") return b.minutosFala - a.minutosFala || b.encontros - a.encontros;
+                    if (ordemPessoa === "permanencia")
+                      return (b.permanenciaMedianaPct ?? -1) - (a.permanenciaMedianaPct ?? -1);
+                    return b.encontros - a.encontros || b.minutos - a.minutos;
+                  });
+                return (
+                  <>
+                    <div className="flex flex-col sm:flex-row gap-2 mb-3">
+                      <input
+                        value={buscaPessoa}
+                        onChange={(e) => {
+                          setBuscaPessoa(e.target.value);
+                          setMostrandoPessoas(PAGINA_PESSOAS);
+                        }}
+                        placeholder="Buscar pessoa"
+                        className="dark-input flex-1 rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm"
+                      />
                     </div>
-                  );
-                })}
-              </div>
+                    <div className="flex gap-1.5 flex-wrap mb-3">
+                      {ORDENS_PESSOA.map(([v, rotulo]) => (
+                        <button
+                          key={v}
+                          onClick={() => setOrdemPessoa(v)}
+                          className="font-dm text-[11px] px-3 py-1.5 rounded-full transition-all"
+                          style={{
+                            background: ordemPessoa === v ? "rgba(200,75,49,0.12)" : "rgba(255,255,255,0.03)",
+                            color: ordemPessoa === v ? TERRACOTA : "rgba(253,251,247,0.35)",
+                            border: `1px solid ${ordemPessoa === v ? "rgba(200,75,49,0.3)" : "rgba(255,255,255,0.06)"}`,
+                          }}
+                        >
+                          {rotulo}
+                        </button>
+                      ))}
+                    </div>
+
+                    <div className="space-y-1">
+                      {lista.slice(0, mostrandoPessoas).map((p) => {
+                        const sumiu =
+                          d.medido.ultimo !== null &&
+                          p.ultima < d.medido.ultimo &&
+                          Date.now() - new Date(p.ultima + "T12:00:00").getTime() >
+                            DIAS_ESFRIANDO * 86400000;
+                        // O silêncio precisa da régua: uma vez calada é um dia,
+                        // não um jeito de estar ali.
+                        const muda =
+                          atende(p.comTranscricao, REGUA.silencio) &&
+                          p.caladaEm === p.comTranscricao;
+                        return (
+                          <div
+                            key={p.chave}
+                            className="flex items-center gap-3 px-3 py-2 rounded-[10px]"
+                            style={{ background: "rgba(255,255,255,0.02)" }}
+                          >
+                            <span className="font-fraunces font-bold text-sm text-cream tabular-nums w-8 text-right shrink-0">
+                              {p.encontros}
+                            </span>
+                            <div className="min-w-0 flex-1">
+                              <p className="font-dm text-xs text-cream/75 truncate">{p.nome}</p>
+                              <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                                <span className="font-dm text-[10px] text-cream/25">
+                                  {p.encontrosNaFormacao > p.encontros
+                                    ? `${p.encontros} de ${p.encontrosNaFormacao} na formação`
+                                    : p.encontros === 1
+                                      ? "veio uma vez"
+                                      : `veio ${p.encontros} vezes`}
+                                  {" · "}
+                                  {Math.round(p.minutos)} min aqui
+                                  {p.permanenciaMedianaPct !== null &&
+                                    ` · ${p.permanenciaMedianaPct.toFixed(0)}% de permanência`}
+                                </span>
+                                {p.comTranscricao > 0 && p.minutosFala > 0 && (
+                                  <span className="font-dm text-[10px]" style={{ color: ROXO }}>
+                                    {p.minutosFala.toFixed(1)} min de fala
+                                  </span>
+                                )}
+                                {muda && (
+                                  <span className="font-dm text-[10px]" style={{ color: ROXO }}>
+                                    nunca falou ({p.caladaEm} c/ transcrição)
+                                  </span>
+                                )}
+                                {p.gruposNaFormacao > 1 && (
+                                  <span className="font-dm text-[10px] text-cream/25">
+                                    também em {p.gruposNaFormacao - 1} outro
+                                    {p.gruposNaFormacao > 2 ? "s" : ""}
+                                  </span>
+                                )}
+                                {sumiu && (
+                                  <span className="font-dm text-[10px]" style={{ color: "#E07A5F" }}>
+                                    não vem há mais de {DIAS_ESFRIANDO} dias
+                                  </span>
+                                )}
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {lista.length === 0 && (
+                      <p className="font-dm text-xs text-cream/30 py-3">
+                        Ninguém com esse nome neste grupo.
+                      </p>
+                    )}
+                    {lista.length > mostrandoPessoas && (
+                      <button
+                        onClick={() => setMostrandoPessoas((n) => n + PAGINA_PESSOAS)}
+                        className="w-full mt-3 font-dm text-xs py-2.5 rounded-[10px] transition-colors hover:bg-white/[.04]"
+                        style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
+                      >
+                        Carregar mais ({lista.length - mostrandoPessoas} restantes)
+                      </button>
+                    )}
+                  </>
+                );
+              })()
             )}
           </Card>
         </motion.div>

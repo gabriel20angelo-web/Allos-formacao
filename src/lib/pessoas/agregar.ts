@@ -29,6 +29,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { getRangeStart, type ActivityRange } from "@/lib/utils/activity";
+import { DIAS_ESFRIANDO as DIAS_ESFRIANDO_REGUA } from "@/lib/meet/regua";
 
 // ═══════════════════════════════════════════════════════════════
 // As réguas
@@ -57,8 +58,15 @@ const BARRA_CHEGANDO = 3;
 /** Dias sem nenhum sinal para a pessoa contar como sumida. */
 const DIAS_SUMIU = 45;
 
-/** Dias sem sinal para ela contar como esfriando, ainda em tempo de resgate. */
-const DIAS_ESFRIANDO = 21;
+/**
+ * Dias sem sinal para ela contar como esfriando, ainda em tempo de resgate.
+ *
+ * ⚠️ Vem de `lib/meet/regua.ts`, e não daqui. Este número existia em dois
+ * arquivos, e a tela do grupo usava um 21 escrito à mão ignorando este: dois
+ * limiares com o mesmo nome e valores que podem divergir fazem a mesma pessoa
+ * aparecer como sumida numa tela e ativa na outra.
+ */
+const DIAS_ESFRIANDO = DIAS_ESFRIANDO_REGUA;
 
 /** Quem estreou dentro deste prazo ainda é gente nova, e não gente que sumiu. */
 const DIAS_ESTREANTE = 30;

@@ -35,6 +35,7 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { lerTudo } from "@/lib/supabase/paginar";
 import { ehContaDaCasa } from "@/lib/meet/nomes";
+import { REGUA, atende } from "@/lib/meet/regua";
 
 /**
  * Sem acento, minúsculo, espaço colapsado. Renomear só o acento não parte o grupo.
@@ -187,6 +188,53 @@ interface ParticipacaoRow {
   eh_condutor: boolean;
 }
 
+/**
+ * Junta duas participações da MESMA pessoa no MESMO encontro.
+ *
+ * Acontece quando alguém entra pelo celular e pelo computador: são dois
+ * `participant_api_id`, duas linhas, uma pessoa. Medido em 06/08/2026, isso
+ * fazia alguém aparecer com "2 encontros" num grupo que teve um só, e inflava o
+ * quórum em uma pessoa.
+ *
+ * Presença e permanência ficam com o **maior** dos dispositivos: ela esteve na
+ * sala uma vez, não duas, e somar os minutos inventaria tempo que não existiu.
+ * Saída antecipada fica com a **menor**, pelo mesmo motivo: ela saiu quando o
+ * último aparelho saiu. Fala e turnos **somam**, porque cada microfone
+ * contribuiu com um pedaço diferente da mesma conversa. Sessões somam porque
+ * cada dispositivo é de fato uma entrada a mais na sala.
+ */
+export function juntarDispositivos<
+  T extends {
+    minutos_presentes: number;
+    permanencia_pct: number | null;
+    saida_antecipada_min: number | null;
+    n_sessoes: number | null;
+    minutos_fala: number | null;
+    n_turnos_fala: number | null;
+  },
+>(a: T, b: T): T {
+  return {
+    ...a,
+    minutos_presentes: Math.max(a.minutos_presentes, b.minutos_presentes),
+    permanencia_pct: Math.max(a.permanencia_pct ?? 0, b.permanencia_pct ?? 0),
+    saida_antecipada_min: Math.min(
+      a.saida_antecipada_min ?? Infinity,
+      b.saida_antecipada_min ?? Infinity,
+    ),
+    n_sessoes: (a.n_sessoes ?? 0) + (b.n_sessoes ?? 0),
+    // `null` nos dois é ausência de transcrição, e continua ausência. Zero aqui
+    // diria "não falou", que é outra coisa.
+    minutos_fala:
+      a.minutos_fala === null && b.minutos_fala === null
+        ? null
+        : (a.minutos_fala ?? 0) + (b.minutos_fala ?? 0),
+    n_turnos_fala:
+      a.n_turnos_fala === null && b.n_turnos_fala === null
+        ? null
+        : (a.n_turnos_fala ?? 0) + (b.n_turnos_fala ?? 0),
+  };
+}
+
 export interface PessoaNaSala {
   chave: string;
   nome: string;
@@ -330,17 +378,32 @@ export async function lerSala(
     (e) => !e.descartado && (!desde || e.data_reuniao >= desde),
   );
 
-  const porEncontro = new Map<string, ParticipacaoRow[]>();
+  /**
+   * ⛔ Uma pessoa, um encontro, uma linha. Feito ANTES de qualquer conta.
+   *
+   * A mesma pessoa entrando pelo celular e pelo computador produz DUAS
+   * participações no mesmo encontro, com `participant_api_id` diferentes.
+   * Medido em 06/08/2026: alguém aparecia com "2 encontros" num grupo que teve
+   * um só, e o quórum contava uma pessoa a mais do que esteve. A definição da
+   * casa sempre foi "presentes distintos"; o código é que contava linhas.
+   *
+   * Presença e permanência ficam com o maior dos dispositivos, porque ela esteve
+   * na sala uma vez e não duas. Fala soma, porque cada microfone contribuiu com
+   * um pedaço diferente da mesma conversa. Saída antecipada fica com a menor,
+   * pelo mesmo motivo da presença: ela saiu quando o último aparelho saiu.
+   */
+  const porEncontro = new Map<string, Map<string, ParticipacaoRow>>();
   for (const p of partRows) {
-    const lista = porEncontro.get(p.encontro_id);
-    if (lista) lista.push(p);
-    else porEncontro.set(p.encontro_id, [p]);
+    if (ehDaCasaOuConduz(p)) continue;
+    const chave = chavePessoa(p);
+    const noEncontro = porEncontro.get(p.encontro_id) ?? new Map<string, ParticipacaoRow>();
+    const antes = noEncontro.get(chave);
+    noEncontro.set(chave, antes ? juntarDispositivos(antes, p) : p);
+    porEncontro.set(p.encontro_id, noEncontro);
   }
 
   const encontros: EncontroMedido[] = validos.map((e) => {
-    const todas = porEncontro.get(e.id) ?? [];
-    // O único ponto onde o condutor sai. Vale para tudo que vem depois.
-    const presentes = todas.filter((p) => !ehDaCasaOuConduz(p));
+    const presentes = Array.from((porEncontro.get(e.id) ?? new Map()).values());
     const temTranscricao = temFala(e);
     const falas = presentes
       .map((p) => p.minutos_fala)
@@ -404,8 +467,12 @@ export async function lerSala(
   const acc = new Map<string, PessoaNaSala>();
   const pessoasPorEncontro = new Map<string, Set<string>>();
   const pessoaPorGrupo = new Map<string, Map<string, MetricaNoGrupo>>();
-  for (const p of partRows) {
-    if (!idsValidos.has(p.encontro_id) || ehDaCasaOuConduz(p)) continue;
+  // As mesmas linhas já juntadas por dispositivo que os encontros usaram: uma
+  // pessoa por encontro, e nunca duas contas da mesma coisa.
+  const linhas = Array.from(porEncontro.entries())
+    .filter(([id]) => idsValidos.has(id))
+    .flatMap(([, m]) => Array.from(m.values()));
+  for (const p of linhas) {
     const chave = chavePessoa(p);
     const dataEnc = dataDoEncontro.get(p.encontro_id) ?? "";
     const houve = comTranscricao.has(p.encontro_id);
@@ -467,11 +534,12 @@ export async function lerSala(
 /**
  * Metade recente contra metade antiga, em pessoas, com sinal.
  *
- * Exige quatro encontros: com três, cada ponto move a conta em um terço e a
- * "tendência" vira ruído com seta.
+ * O mínimo mora em `regua.ts` junto do motivo, e não solto aqui: era o primeiro
+ * de sete limiares espalhados pelo painel, dois deles duplicados com valores
+ * diferentes.
  */
 export function tendencia(quoruns: number[]): number | null {
-  if (quoruns.length < 4) return null;
+  if (!atende(quoruns.length, REGUA.tendencia)) return null;
   const meio = Math.floor(quoruns.length / 2);
   const antiga = media(quoruns.slice(0, meio));
   const recente = media(quoruns.slice(meio));

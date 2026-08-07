@@ -3,6 +3,7 @@ import {
   chaveTexto,
   chavePessoa,
   mediana,
+  juntarDispositivos,
   separarCondutores,
   tendencia,
   porCondutor,
@@ -233,6 +234,54 @@ describe("serieSemanal", () => {
       mapa,
     );
     expect(r).toEqual([{ semana: "2026-08-03", pessoas: 1 }]);
+  });
+});
+
+describe("juntarDispositivos", () => {
+  const disp = (p: Partial<Parameters<typeof juntarDispositivos>[0]>) => ({
+    minutos_presentes: 0,
+    permanencia_pct: null,
+    saida_antecipada_min: null,
+    n_sessoes: null,
+    minutos_fala: null,
+    n_turnos_fala: null,
+    ...p,
+  });
+
+  it("presença fica com o maior, não com a soma", () => {
+    // Ela esteve na sala uma vez, não duas. Somar inventaria 130 minutos num
+    // encontro de 85, e foi assim que alguém apareceu com dois encontros num
+    // grupo que teve um só.
+    const r = juntarDispositivos(
+      disp({ minutos_presentes: 82, permanencia_pct: 96.5 }),
+      disp({ minutos_presentes: 48, permanencia_pct: 56.4 }),
+    );
+    expect(r.minutos_presentes).toBe(82);
+    expect(r.permanencia_pct).toBe(96.5);
+  });
+
+  it("fala soma, porque os dois microfones falaram coisas diferentes", () => {
+    const r = juntarDispositivos(
+      disp({ minutos_fala: 3, n_turnos_fala: 10 }),
+      disp({ minutos_fala: 1.5, n_turnos_fala: 4 }),
+    );
+    expect(r.minutos_fala).toBe(4.5);
+    expect(r.n_turnos_fala).toBe(14);
+  });
+
+  it("sem transcrição nos dois, continua sem transcrição e não vira zero", () => {
+    // Zero diria "não falou". Nulo diz "não medimos", e são coisas diferentes.
+    const r = juntarDispositivos(disp({}), disp({}));
+    expect(r.minutos_fala).toBeNull();
+    expect(r.n_turnos_fala).toBeNull();
+  });
+
+  it("saiu quando o último aparelho saiu", () => {
+    const r = juntarDispositivos(
+      disp({ saida_antecipada_min: 40 }),
+      disp({ saida_antecipada_min: 2 }),
+    );
+    expect(r.saida_antecipada_min).toBe(2);
   });
 });
 
