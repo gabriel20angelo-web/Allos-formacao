@@ -25,6 +25,7 @@
  */
 
 import { useState, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { motion } from "framer-motion";
 import {
   Users,
@@ -88,6 +89,7 @@ function Tendencia({ v }: { v: number | null }) {
 
 export default function GruposPage() {
   const { isAdmin } = useAuth();
+  const router = useRouter();
   const [janela, setJanela] = useState<ActivityRange>("all");
   const dias = useMemo(() => janelaEmDias(janela), [janela]);
   const { sala, carregando, erro } = useSala(dias);
@@ -269,7 +271,16 @@ export default function GruposPage() {
                 {grupos.map((x) => (
                   <div
                     key={x.chave}
-                    className="px-3 py-2.5 rounded-[10px]"
+                    onClick={() => x.atividadeId && router.push(`/formacao/admin/grupos/${x.atividadeId}`)}
+                    role={x.atividadeId ? "button" : undefined}
+                    tabIndex={x.atividadeId ? 0 : undefined}
+                    onKeyDown={(ev) => {
+                      if (x.atividadeId && (ev.key === "Enter" || ev.key === " ")) {
+                        ev.preventDefault();
+                        router.push(`/formacao/admin/grupos/${x.atividadeId}`);
+                      }
+                    }}
+                    className={`px-3 py-2.5 rounded-[10px] ${x.atividadeId ? "cursor-pointer transition-colors hover:bg-white/[0.04]" : ""}`}
                     style={{ background: "rgba(255,255,255,0.02)" }}
                   >
                     <div

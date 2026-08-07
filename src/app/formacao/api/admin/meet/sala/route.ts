@@ -29,8 +29,10 @@ import {
   porCondutor,
   porDiaSemana,
   serieSemanal,
+  chaveTexto,
   type EncontroMedido,
 } from "@/lib/meet/quorum";
+import { lerTudo } from "@/lib/supabase/paginar";
 
 export const dynamic = "force-dynamic";
 
@@ -69,6 +71,17 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ vazio: true, dias, encontros: [] });
   }
 
+  // O id do catálogo, para a linha da lista virar link para a página do grupo.
+  // A junção é por nome normalizado porque é a única que alcança tanto o
+  // encontro quanto o formulário; ver o cabeçalho de `api/admin/grupos/[id]`.
+  const catalogo = await lerTudo<{ id: string; nome: string }>(
+    sb,
+    "certificado_atividades",
+    "id,nome",
+    "id",
+  );
+  const idPorChave = new Map(catalogo.map((a) => [chaveTexto(a.nome), a.id]));
+
   const grupos = Array.from(porAtividade(encontros).entries())
     .map(([chave, g]) => {
       // Os condutores que passaram pelo grupo na janela, não só o do primeiro
@@ -78,6 +91,9 @@ export async function GET(req: NextRequest) {
       g.encontros.forEach((e) => e.condutores.forEach((n) => nomes.add(n)));
       return {
         chave,
+        // `null` quando o grupo existe na sala e não está no catálogo. Acontece
+        // com sala avulsa e com atividade digitada fora do cadastro.
+        atividadeId: idPorChave.get(chave) ?? null,
         nome: g.nome,
         slots: g.slots.size,
         condutores: Array.from(nomes),

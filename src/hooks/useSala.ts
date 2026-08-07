@@ -53,6 +53,8 @@ export interface EncontroSala {
 
 export interface GrupoSala extends ResumoSala {
   chave: string;
+  /** `certificado_atividades.id`. `null` quando o grupo não está no catálogo. */
+  atividadeId: string | null;
   nome: string;
   slots: number;
   condutores: string[];
