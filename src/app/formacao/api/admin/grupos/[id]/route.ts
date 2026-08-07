@@ -156,6 +156,7 @@ export async function GET(
     await Promise.all([
       lerTudo<SlotRow>(
         sb,
+        "formacao_slots",
         // `atividade_id` é a chave forte da migration 093. Sem ela no select,
         // a coluna chega indefinida, o casamento cai no nome e a tela avisa que
         // a migration não rodou mesmo depois de ela ter rodado.
