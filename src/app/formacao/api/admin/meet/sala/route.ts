@@ -74,12 +74,13 @@ export async function GET(req: NextRequest) {
   // O id do catálogo, para a linha da lista virar link para a página do grupo.
   // A junção é por nome normalizado porque é a única que alcança tanto o
   // encontro quanto o formulário; ver o cabeçalho de `api/admin/grupos/[id]`.
-  const catalogo = await lerTudo<{ id: string; nome: string }>(
-    sb,
-    "certificado_atividades",
-    "id,nome",
-    "id",
-  );
+  const catalogo = await lerTudo<{
+    id: string;
+    nome: string;
+    carga_horaria: number | null;
+    ativo: boolean;
+    arquivado: boolean;
+  }>(sb, "certificado_atividades", "id,nome,carga_horaria,ativo,arquivado", "nome");
   const idPorChave = new Map(catalogo.map((a) => [chaveTexto(a.nome), a.id]));
 
   const grupos = Array.from(porAtividade(encontros).entries())
@@ -151,5 +152,10 @@ export async function GET(req: NextRequest) {
     sumindo,
     calados,
     totalPessoas: pessoas.length,
+    // O catálogo inteiro, e não só quem teve encontro medido. Treze das
+    // dezenove atividades não têm posição na grade, e elas carregam 185
+    // feedbacks: uma lista de grupos que só mostrasse a sala esconderia dois
+    // terços do que existe.
+    catalogo,
   });
 }

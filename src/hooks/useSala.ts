@@ -78,8 +78,24 @@ export interface PessoaSala {
   ultima: string;
 }
 
+/** Uma linha do catálogo de atividades, que é o catálogo de grupos. */
+export interface AtividadeCatalogo {
+  id: string;
+  nome: string;
+  carga_horaria: number | null;
+  ativo: boolean;
+  arquivado: boolean;
+}
+
 export interface Sala {
   vazio: boolean;
+  /**
+   * Todos os grupos do cadastro, medidos ou não.
+   *
+   * `grupos` só traz quem teve encontro capturado, que hoje são 6 de 19. As
+   * outras 13 não têm posição na grade e mesmo assim carregam 185 feedbacks.
+   */
+  catalogo: AtividadeCatalogo[];
   dias: number;
   hoje: string;
   geral: ResumoSala;
@@ -113,7 +129,7 @@ export function useSala(dias = 3650) {
         }
         const j = (await r.json()) as Sala;
         if (!vivo) return;
-        setSala(j.vazio ? { ...j, grupos: [], condutores: [], encontros: [] } : j);
+        setSala(j.vazio ? { ...j, grupos: [], condutores: [], encontros: [], catalogo: j.catalogo ?? [] } : j);
         setErro(null);
       } catch (e) {
         if (!vivo) return;
