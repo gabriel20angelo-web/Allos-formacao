@@ -168,6 +168,17 @@ function CoursePageContent() {
 
           if (cancelled) return;
 
+          // Matrícula cancelada é ausência de matrícula, e precisa ser tratada
+          // aqui e não só na listagem. Sem isto, desmatricular alguém não fecha
+          // nada: a pessoa continua com o vídeo tocando, e a linha `cancelled`
+          // ainda impede o insert de baixo de recriá-la, então o admin vê a
+          // matrícula sumir da tela e a pessoa não vê diferença nenhuma.
+          if (enrollData && enrollData.status === "cancelled") {
+            toast.error("Sua matrícula neste curso foi encerrada.");
+            router.push("/formacao/meus-cursos");
+            return;
+          }
+
           if (enrollData) {
             setEnrollment(enrollData);
           } else if (courseData.is_free) {

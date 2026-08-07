@@ -25,10 +25,17 @@ import { AlertTriangle, Download, Lock, Mail, UserCircle } from "lucide-react";
 import { hourLabel } from "@/lib/utils/activity";
 import { TYPE_META } from "./ActivityTimeline";
 import AcoesPessoa from "./AcoesPessoa";
+import { toast } from "sonner";
 
 export interface PessoaRef {
   nome: string;
   email?: string;
+  /**
+   * `pessoas.id`. Opcional porque o modal também abre da timeline do dashboard,
+   * que só conhece nome e e-mail. Sem ele, as ações que precisam da identidade
+   * canônica ficam escondidas em vez de agir sobre a pessoa errada.
+   */
+  pessoaId?: string;
 }
 
 /**
@@ -53,6 +60,14 @@ interface Dossie {
   eventos: TimelineEvent[];
   /** A captura do Meet bateu no teto de linhas: a linha do tempo avisa. */
   encontrosTruncados: boolean;
+  /** Uma linha por curso, inclusive as canceladas, que a lista mostra apagadas. */
+  matriculas: {
+    id: string;
+    cursoId: string;
+    titulo: string;
+    status: string;
+    matriculadaEm: string;
+  }[];
   resumo: {
     matriculas: number;
     concluidos: number;
@@ -88,6 +103,37 @@ export default function PessoaModal({
   const [dossie, setDossie] = useState<Dossie | null>(null);
   const [loading, setLoading] = useState(false);
   const [range, setRange] = useState<ActivityRange>("all");
+
+  const [desmatriculando, setDesmatriculando] = useState<string | null>(null);
+
+  /**
+   * Encerra ou refaz uma matrícula.
+   *
+   * Vai por rota de servidor porque a policy de `enrollments` compara
+   * `role = 'admin'` direto e o instrutor tem só SELECT: pelo cliente, o DELETE
+   * barrado por RLS devolvia `error === null` e a tela anunciava sucesso sobre
+   * zero linhas afetadas.
+   */
+  async function mudarMatricula(cursoId: string, acao: "cancelar" | "rematricular") {
+    if (!pessoa?.pessoaId) return;
+    setDesmatriculando(cursoId);
+    try {
+      const r = await fetch("/formacao/api/admin/pessoas/matricula", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ pessoa_id: pessoa.pessoaId, course_id: cursoId, acao }),
+      });
+      const j = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(j.error ?? "não consegui mudar");
+      if (j.certificado?.aviso) toast.warning(j.certificado.aviso);
+      else toast.success(acao === "cancelar" ? "Matrícula encerrada." : "Matrícula refeita.");
+      await carregar(pessoa);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "não consegui mudar");
+    } finally {
+      setDesmatriculando(null);
+    }
+  }
 
   const carregar = useCallback(async (ref: PessoaRef) => {
     setLoading(true);
@@ -146,7 +192,7 @@ export default function PessoaModal({
         userId
           ? sb
               .from("enrollments")
-              .select("id, enrolled_at, completed_at, status, course:courses!course_id(title)")
+              .select("id, course_id, enrolled_at, completed_at, status, course:courses!course_id(title)")
               .eq("user_id", userId)
           : Promise.resolve({ data: [] }),
         userId
@@ -360,8 +406,16 @@ export default function PessoaModal({
       aliases,
       eventos: eventosAnotados,
       encontrosTruncados: encontros.truncado,
+      matriculas: enrolls.map((e) => ({
+        id: e.id,
+        cursoId: (e as unknown as { course_id: string }).course_id,
+        titulo:
+          (e as unknown as { course?: { title?: string } | null }).course?.title ?? "curso sem nome",
+        status: e.status as string,
+        matriculadaEm: e.enrolled_at as string,
+      })),
       resumo: {
-        matriculas: enrolls.length,
+        matriculas: enrolls.filter((e) => e.status !== "cancelled").length,
         concluidos: enrolls.filter((e) => e.status === "completed").length,
         certificados: certs.length,
         aulas: aulas.length,
@@ -603,6 +657,63 @@ export default function PessoaModal({
               </div>
             ))}
           </div>
+
+          {/* ── Cursos matriculados ──
+              Esta lista veio da tela de Alunos, que mostrava a mesma coisa para
+              as 277 pessoas com conta enquanto Pessoas já conhece 511. O que
+              faltava aqui era o recorte por curso e a ação. */}
+          {dossie.matriculas.length > 0 && (
+            <div>
+              <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-2">
+                Cursos matriculados
+              </p>
+              <div className="space-y-1">
+                {dossie.matriculas.map((m) => {
+                  const cancelada = m.status === "cancelled";
+                  const ocupada = desmatriculando === m.cursoId;
+                  return (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between gap-3 px-3 py-2 rounded-[10px] flex-wrap"
+                      style={{ background: "rgba(255,255,255,0.02)", opacity: cancelada ? 0.45 : 1 }}
+                    >
+                      <div className="min-w-0 flex-1">
+                        <p className="font-dm text-xs text-cream/75 truncate">{m.titulo}</p>
+                        <p className="font-dm text-[10px] text-cream/25">
+                          {cancelada
+                            ? "matrícula encerrada"
+                            : m.status === "completed"
+                              ? "concluído"
+                              : "em andamento"}
+                          {" · desde "}
+                          {new Date(m.matriculadaEm).toLocaleDateString("pt-BR")}
+                        </p>
+                      </div>
+                      {pessoa?.pessoaId && (
+                        <button
+                          onClick={() => mudarMatricula(m.cursoId, cancelada ? "rematricular" : "cancelar")}
+                          disabled={ocupada}
+                          className="font-dm text-[11px] px-3 py-1.5 rounded-full transition-all shrink-0 min-h-[36px] disabled:opacity-40"
+                          style={{
+                            background: "rgba(255,255,255,0.03)",
+                            color: cancelada ? "#2E9E8F" : "rgba(224,122,95,0.85)",
+                            border: "1px solid rgba(255,255,255,0.08)",
+                          }}
+                        >
+                          {ocupada ? "..." : cancelada ? "Rematricular" : "Desmatricular"}
+                        </button>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+              <p className="font-dm text-[10px] text-cream/25 mt-2 leading-relaxed">
+                Desmatricular encerra a matrícula e fecha o acesso ao curso, sem apagar
+                o histórico de estudo. Não anula certificado já emitido: para isso
+                existe a anulação, em Certificados.
+              </p>
+            </div>
+          )}
 
           {/* ── Sinais ── */}
           {dossie.sinais.length > 0 && (

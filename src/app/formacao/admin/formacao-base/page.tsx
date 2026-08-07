@@ -3,14 +3,13 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import { useAuth } from "@/hooks/useAuth";
-import { Shield, BookOpen, GraduationCap, Activity, Link as LinkIcon } from "lucide-react";
+import { Shield, BookOpen, Activity, Link as LinkIcon } from "lucide-react";
 
 // Lazy-load existing page content
 const CursosPage = dynamic(() => import("@/app/formacao/admin/cursos/page"), { ssr: false });
 
 
 const AtalhosPage = dynamic(() => import("@/app/formacao/admin/atalhos/page"), { ssr: false });
-const AlunosPage = dynamic(() => import("@/app/formacao/admin/alunos/page"), { ssr: false });
 
 
 const AnalyticsPage = dynamic(() => import("@/app/formacao/admin/analytics/page"), { ssr: false });
@@ -22,18 +21,16 @@ const AnalyticsPage = dynamic(() => import("@/app/formacao/admin/analytics/page"
 // `estatisticas` ficou, mas mudou de assunto: os dois cards de condutor dela
 // foram para /admin/condutores, e o que restou é status do calendário, que não
 // existe em nenhuma outra tela.
-type SubTab = "cursos" | "atalhos" | "alunos" | "analytics";
+type SubTab = "cursos" | "atalhos" | "analytics";
 
 const TABS: { key: SubTab; label: string; icon: typeof BookOpen }[] = [
   { key: "cursos", label: "Cursos", icon: BookOpen },
-  { key: "alunos", label: "Alunos", icon: GraduationCap },
-  { key: "atalhos", label: "Atalhos", icon: LinkIcon },
+    { key: "atalhos", label: "Atalhos", icon: LinkIcon },
   { key: "analytics", label: "Analytics", icon: Activity },
 ];
 
 const PAGE_MAP: Record<SubTab, React.ComponentType> = {
   cursos: CursosPage,
-  alunos: AlunosPage,
   atalhos: AtalhosPage,
   analytics: AnalyticsPage,
 };

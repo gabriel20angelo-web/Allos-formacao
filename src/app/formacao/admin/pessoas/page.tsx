@@ -336,7 +336,7 @@ export default function AdminPessoasPage() {
   const periodoAberto = janela === "all";
   const rotuloPeriodo = RANGE_LABELS[janela].toLowerCase();
   const abrirPessoa = (p: PessoaLinha) =>
-    setPessoaAberta({ nome: p.nome, email: p.email ?? undefined });
+    setPessoaAberta({ nome: p.nome, email: p.email ?? undefined, pessoaId: p.id });
 
   // A avaliação clínica casa por telefone e devolve o `pessoa_id`, não a linha
   // inteira. Quem não estiver no recorte do período em vigor simplesmente não
@@ -1273,6 +1273,16 @@ function LinhaPessoa({
             <Selo>
               {p.aulas} {p.aulas === 1 ? "aula" : "aulas"}
               {p.horasPlataforma > 0 && ` · ${p.horasPlataforma}h estudando`}
+            </Selo>
+          )}
+          {/* Matriculada e nunca abriu é o caso mais comum da base: 205 dos 277
+              alunos nunca concluíram uma aula. Por isso o selo destaca esse
+              estado em vez de só contar matrícula. */}
+          {p.matriculas > 0 && (
+            <Selo cor={p.aulas === 0 ? DOURADO : undefined}>
+              {p.matriculas} {p.matriculas === 1 ? "matrícula" : "matrículas"}
+              {p.matriculasConcluidas > 0 && `, ${p.matriculasConcluidas} concluída${p.matriculasConcluidas > 1 ? "s" : ""}`}
+              {p.aulas === 0 && " · nunca abriu"}
             </Selo>
           )}
           {p.encontrosNaSala > 0 && (

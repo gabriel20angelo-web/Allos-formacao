@@ -148,6 +148,10 @@ export interface PessoaLinha {
   relatosLongos: number;
   aulas: number;
   horasPlataforma: number;
+  /** Matrículas ativas ou concluídas. Cancelada não conta. */
+  matriculas: number;
+  /** Quantas dessas a pessoa concluiu. */
+  matriculasConcluidas: number;
   /** Encontros em que a captura do Meet reconheceu esta pessoa na sala. */
   encontrosNaSala: number;
   minutosNaSala: number;
@@ -347,7 +351,7 @@ export async function montarRetrato(
     t != null && (inicioJanela === null || t >= inicioJanela);
 
   const [
-    pessoas, idents, subs, profs, participacoes, encontros, aulas, sessoes,
+    pessoas, idents, subs, profs, participacoes, encontros, aulas, matriculas, sessoes,
     candidaturas, tentativas, destaques,
   ] = await Promise.all([
       lerTudo<{ id: string; nome_canonico: string }>(
@@ -373,6 +377,8 @@ export async function montarRetrato(
         "id,data_reuniao,atividade_nome,condutor_nome,descartado,fala_condutor_pct", "id"),
       lerTudo<{ user_id: string; completed: boolean | null; completed_at: string | null }>(
         sb, "lesson_progress", "user_id,completed,completed_at", "id"),
+      lerTudo<{ user_id: string; course_id: string; status: string }>(
+        sb, "enrollments", "user_id,course_id,status", "id"),
       lerTudo<{ user_id: string; seconds: number | null; created_at: string | null }>(
         sb, "usage_sessions", "user_id,seconds,created_at", "id"),
       // O seletivo pode não ter sido importado ainda, e nesse caso as duas
@@ -425,6 +431,8 @@ export async function montarRetrato(
     atividades: Set<string>;
     relatosLongos: number;
     aulas: number;
+    matriculas: number;
+    matriculasConcluidas: number;
     segundos: number;
     encontrosNaSala: number;
     minutosNaSala: number;
@@ -444,7 +452,7 @@ export async function montarRetrato(
   const vazio = (): Acc => ({
     encontrosSet: new Set(), encontrosRecentesSet: new Set(), encontrosPeriodoSet: new Set(),
     atividades: new Set(),
-    relatosLongos: 0, aulas: 0, segundos: 0, encontrosNaSala: 0, minutosNaSala: 0,
+    relatosLongos: 0, aulas: 0, matriculas: 0, matriculasConcluidas: 0, segundos: 0, encontrosNaSala: 0, minutosNaSala: 0,
     turnosFala: 0, ultimoFormulario: null, ultimoMeet: null, estreia: null,
     sinalNoPeriodo: false,
   });
@@ -513,6 +521,18 @@ export async function montarRetrato(
   }
 
   // ── Plataforma ───────────────────────────────────────────────
+  // Matrícula cancelada não conta em lugar nenhum: ela existe para impedir a
+  // rematrícula automática (todo curso é gratuito, e abrir o curso rematricula
+  // sozinho), não para dizer que a pessoa está no curso.
+  for (const m of matriculas) {
+    if (m.status === "cancelled") continue;
+    const pid = pessoaPorPerfil.get(m.user_id);
+    if (!pid) continue;
+    const a = de(pid);
+    a.matriculas++;
+    if (m.status === "completed") a.matriculasConcluidas++;
+  }
+
   for (const l of aulas) {
     if (!l.completed) continue;
     const pid = pessoaPorPerfil.get(l.user_id);
@@ -607,6 +627,8 @@ export async function montarRetrato(
       atividades: a.atividades.size,
       relatosLongos: a.relatosLongos,
       aulas: a.aulas,
+      matriculas: a.matriculas,
+      matriculasConcluidas: a.matriculasConcluidas,
       horasPlataforma: Math.round((a.segundos / 3600) * 10) / 10,
       encontrosNaSala: a.encontrosNaSala,
       minutosNaSala: Math.round(a.minutosNaSala),
