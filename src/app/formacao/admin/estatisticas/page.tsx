@@ -7,7 +7,7 @@ import { createClient } from "@/lib/supabase/client";
 import {
   BarChart3,
   TrendingUp,
-  Trophy,
+
   AlertTriangle,
   Calendar,
   Users,
@@ -40,24 +40,6 @@ interface SlotLog {
   changed_at: string;
 }
 
-/**
- * A segunda-feira da semana de uma data, como chave de agrupamento.
- *
- * É a unidade real do calendário da formação: cada horário acontece uma vez por
- * semana. Sem ela, o ranking conta linhas de auditoria, e a rotina de captura
- * escreve várias por encontro.
- */
-function segundaDaSemanaDe(iso: string): string {
-  const d = new Date(iso);
-  const desdeSegunda = (d.getDay() + 6) % 7; // getDay: 0 é domingo
-  d.setDate(d.getDate() - desdeSegunda);
-  return `${d.getFullYear()}-${d.getMonth() + 1}-${d.getDate()}`;
-}
-
-interface Condutor {
-  id: string;
-  nome: string;
-}
 
 type Periodo = "mes" | "trimestre" | "semestre" | "ano";
 const PERIODO_LABELS: Record<Periodo, string> = {
@@ -76,7 +58,6 @@ function getSince(p: Periodo): Date {
 
 export default function EstatisticasPage() {
   const [logs, setLogs] = useState<SlotLog[]>([]);
-  const [condutores, setCondutores] = useState<Condutor[]>([]);
   const [loading, setLoading] = useState(true);
   const [periodo, setPeriodo] = useState<Periodo>("mes");
 
@@ -91,18 +72,17 @@ export default function EstatisticasPage() {
         // tempo e qualquer número tirado dela mentiria sobre o presente. Quem
         // mede presença na sala hoje é a API do Meet, e esses dados moram em
         // /formacao/admin/meet.
-        const [logsRes, condRes] = await Promise.all([
-          sb.from("formacao_slot_logs")
-            .select("*")
-            .gte("changed_at", since.toISOString())
-            .order("changed_at", { ascending: false }),
-          sb.from("certificado_condutores")
-            .select("id, nome")
-            .eq("ativo", true),
-        ]);
+        // O ranking de condutores saiu daqui e virou /formacao/admin/condutores,
+        // onde ele fica ao lado do quórum medido na sala em vez de sozinho sobre
+        // uma tabela de auditoria. Com ele foi embora a leitura de
+        // `certificado_condutores`: esta tela olha o calendário, não as pessoas.
+        const logsRes = await sb
+          .from("formacao_slot_logs")
+          .select("*")
+          .gte("changed_at", since.toISOString())
+          .order("changed_at", { ascending: false });
 
         setLogs(logsRes.data || []);
-        setCondutores(condRes.data || []);
       } catch {
         console.error("Erro ao carregar estatísticas");
       } finally {
@@ -133,57 +113,6 @@ export default function EstatisticasPage() {
     return { total, conduzidos, cancelados, desmarcados, taxa, counts };
   }, [logs]);
 
-  // Conductor ranking from slot logs
-  //
-  // A unidade é o horário na semana, não a linha de log. `formacao_slot_logs` é
-  // uma tabela de auditoria: ela guarda cada VEZ que o status foi escrito, e a
-  // rotina de captura escreve de novo a cada rodada em que encontra o encontro.
-  // Contando linha a linha, o mesmo encontro rendia um ponto por rodada, e dois
-  // condutores apareciam com três conduções e 100% de aproveitamento num mês em
-  // que houve dois horários marcados e nenhum encontro válido.
-  //
-  // Pegar a última escrita de cada semana também é o que faz a correção valer:
-  // quando o encontro que marcou o horário é descartado, a rotina grava
-  // "pendente" por cima, e é essa palavra final que conta.
-  const conductorStats = useMemo(() => {
-    const map: Record<string, { total: number; conduzidos: number; cancelados: number; desmarcados: number }> = {};
-
-    // Os logs chegam do mais recente para o mais antigo, então o primeiro de
-    // cada horário-semana é a palavra final dela.
-    const ultimoDaSemana = new Map<string, SlotLog>();
-    logs.forEach((l) => {
-      const chave = `${l.slot_id}|${segundaDaSemanaDe(l.changed_at)}`;
-      if (!ultimoDaSemana.has(chave)) ultimoDaSemana.set(chave, l);
-    });
-
-    ultimoDaSemana.forEach((l) => {
-      if (l.status_novo === "pendente") return;
-      (l.condutor_ids || []).forEach((cid) => {
-        const nome = condutores.find((c) => c.id === cid)?.nome || cid;
-        if (!map[nome]) map[nome] = { total: 0, conduzidos: 0, cancelados: 0, desmarcados: 0 };
-        map[nome].total++;
-        if (l.status_novo === "conduzido") map[nome].conduzidos++;
-        if (l.status_novo === "cancelado") map[nome].cancelados++;
-        if (l.status_novo === "desmarcado") map[nome].desmarcados++;
-      });
-    });
-
-    return Object.entries(map)
-      .map(([nome, d]) => ({
-        nome,
-        ...d,
-        taxa: d.total > 0 ? Math.round((d.conduzidos / d.total) * 100) : 0,
-      }))
-      .sort((a, b) => b.taxa - a.taxa || b.total - a.total);
-  }, [logs, condutores]);
-
-  // Só há "mais confiável" se alguém conduziu alguma coisa. Sem esta condição,
-  // um mês em que nenhum encontro aconteceu elegia o primeiro da lista com 0%,
-  // e o card dizia o contrário do que o número mostrava logo abaixo.
-  const bestConductor =
-    conductorStats.length > 0 && conductorStats[0].conduzidos > 0
-      ? conductorStats[0]
-      : null;
   const hasData = logs.length > 0;
 
   if (loading) {
@@ -247,12 +176,6 @@ export default function EstatisticasPage() {
             icon: AlertTriangle, label: "Cancelamentos + Desmarques",
             value: (statusStats.cancelados + statusStats.desmarcados).toString(), color: "#ef4444",
           },
-          {
-            icon: Trophy, label: "Condutor mais confiável",
-            value: bestConductor ? bestConductor.nome : "Sem condução",
-            sub: bestConductor ? `${bestConductor.taxa}% de condução` : undefined,
-            color: "#d4af37",
-          },
         ].map((card, i) => (
           <motion.div key={card.label} initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }}
             transition={{ delay: i * 0.06, duration: 0.4 }}
@@ -263,7 +186,6 @@ export default function EstatisticasPage() {
               <span className="font-dm text-[11px] text-[#FDFBF7]/40 uppercase tracking-wider">{card.label}</span>
             </div>
             <p className="font-fraunces font-bold text-2xl text-[#FDFBF7] truncate">{card.value}</p>
-            {card.sub && <p className="font-dm text-[11px] text-[#FDFBF7]/30">{card.sub}</p>}
           </motion.div>
         ))}
         </div>
@@ -328,87 +250,6 @@ export default function EstatisticasPage() {
       </motion.div>
 
       {/* Conductor ranking from slot logs */}
-      {conductorStats.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.4 }}
-          className="rounded-xl p-4 sm:p-6" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-          <div className="flex items-center gap-2 mb-5">
-            <Trophy className="h-4 w-4 text-[#C84B31]" />
-            <h3 className="font-fraunces font-bold text-base text-[#FDFBF7]">Ranking de condutores (calendário)</h3>
-          </div>
-
-          {/* Desktop: grid com colunas fixas */}
-          <div className="hidden md:block">
-            <div className="grid gap-2 px-4 py-2 mb-1 font-dm text-[10px] uppercase tracking-wider text-[#FDFBF7]/25"
-              style={{ gridTemplateColumns: "1fr 60px 72px 80px 1fr" }}>
-              <span>Nome</span>
-              <span className="text-center">Alocados</span>
-              <span className="text-center">Conduzidos</span>
-              <span className="text-center">Desmarcados</span>
-              <span>Taxa</span>
-            </div>
-            <div className="space-y-1">
-              {conductorStats.map((c, i) => {
-                const taxaColor = c.taxa >= 80 ? "#22c55e" : c.taxa >= 50 ? "#f59e0b" : "#ef4444";
-                return (
-                  <div key={c.nome}
-                    className="grid gap-2 px-4 py-3 rounded-lg items-center hover:bg-white/[0.02]"
-                    style={{
-                      gridTemplateColumns: "1fr 60px 72px 80px 1fr",
-                      background: i === 0 ? "rgba(212,175,55,0.04)" : "transparent",
-                      border: i === 0 ? "1px solid rgba(212,175,55,0.1)" : "1px solid transparent",
-                    }}>
-                    <div className="flex items-center gap-2">
-                      {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
-                      <span className="font-dm text-sm text-[#FDFBF7] truncate">{c.nome}</span>
-                    </div>
-                    <span className="font-dm text-sm text-[#FDFBF7]/50 text-center">{c.total}</span>
-                    <span className="font-dm text-sm text-center" style={{ color: "#22c55e" }}>{c.conduzidos}</span>
-                    <span className="font-dm text-sm text-center" style={{ color: c.desmarcados > 0 ? "#8b5cf6" : "#FDFBF7", opacity: c.desmarcados > 0 ? 1 : 0.3 }}>{c.desmarcados}</span>
-                    <div className="flex items-center gap-3">
-                      <div className="flex-1 h-2 rounded-full overflow-hidden" style={{ background: "rgba(255,255,255,0.06)" }}>
-                        <div className="h-full rounded-full transition-all duration-500" style={{ width: `${c.taxa}%`, background: taxaColor }} />
-                      </div>
-                      <span className="font-dm text-xs font-semibold w-10 text-right" style={{ color: taxaColor }}>{c.taxa}%</span>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-
-          {/* Mobile: cards empilhados */}
-          <div className="md:hidden space-y-3">
-            {conductorStats.map((c, i) => {
-              const taxaColor = c.taxa >= 80 ? "#22c55e" : c.taxa >= 50 ? "#f59e0b" : "#ef4444";
-              return (
-                <div key={c.nome} className="rounded-lg px-4 py-3"
-                  style={{
-                    background: i === 0 ? "rgba(212,175,55,0.04)" : "rgba(255,255,255,0.02)",
-                    border: i === 0 ? "1px solid rgba(212,175,55,0.1)" : "1px solid rgba(255,255,255,0.05)",
-                  }}>
-                  <div className="flex items-center justify-between mb-2">
-                    <div className="flex items-center gap-2">
-                      {i === 0 && <Trophy className="h-3.5 w-3.5 text-amber-400" />}
-                      <span className="font-dm text-sm text-[#FDFBF7] font-medium">{c.nome}</span>
-                    </div>
-                    <span className="font-dm text-sm font-semibold" style={{ color: taxaColor }}>{c.taxa}%</span>
-                  </div>
-                  <div className="h-1.5 rounded-full overflow-hidden mb-2" style={{ background: "rgba(255,255,255,0.06)" }}>
-                    <div className="h-full rounded-full transition-all duration-500" style={{ width: `${c.taxa}%`, background: taxaColor }} />
-                  </div>
-                  <div className="flex gap-4">
-                    <span className="font-dm text-[11px] text-[#FDFBF7]/40">Alocados: <span className="text-[#FDFBF7]/60">{c.total}</span></span>
-                    <span className="font-dm text-[11px] text-[#FDFBF7]/40">Conduzidos: <span style={{ color: "#22c55e" }}>{c.conduzidos}</span></span>
-                    {c.desmarcados > 0 && (
-                      <span className="font-dm text-[11px] text-[#FDFBF7]/40">Desmarcados: <span style={{ color: "#8b5cf6" }}>{c.desmarcados}</span></span>
-                    )}
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        </motion.div>
-      )}
     </div>
   );
 }

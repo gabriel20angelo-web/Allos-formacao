@@ -165,15 +165,6 @@ export interface PessoaLinha {
   destaque: DestaqueDaPessoa | null;
 }
 
-export interface CondutorLinha {
-  nome: string;
-  encontros: number;
-  avaliacoes: number;
-  notaMedia: number | null;
-  relatos: { texto: string; data: string }[];
-  encontrosMeet: number;
-  falaPct: number | null;
-}
 
 /** O que o processo seletivo mostra sobre o conjunto, não sobre uma pessoa. */
 export interface RetratoSeletivo {
@@ -251,7 +242,6 @@ export interface RetratoPessoas {
   sumidos: { semSinal: PessoaLinha[]; soFormulario: PessoaLinha[] };
   coortes: { mes: string; rotulo: string; estreantes: number; voltaram: number }[];
   pessoas: PessoaLinha[];
-  condutores: CondutorLinha[];
   seletivo: RetratoSeletivo;
   totais: {
     pessoas: number;
@@ -744,61 +734,6 @@ export async function montarRetrato(
     coortes.push({ mes: k, rotulo: `${MESES_PT[+mes - 1]}/${ano.slice(2)}`, ...v });
   });
 
-  // ── Condutores ───────────────────────────────────────────────
-  // A nota só entra quando havia condutor a avaliar. O formulário público grava
-  // 5 fixo quando a atividade é evento sem condutor, e são 66 linhas assim: sem
-  // esse filtro a média de todo mundo cai 0,67 ponto por causa de uma pergunta
-  // que nunca foi feita.
-  const cond = new Map<string, { soma: number; n: number; relatos: { texto: string; data: string }[] }>();
-  for (const s of subs) {
-    if (!naJanela(new Date(s.created_at).getTime())) continue;
-    const nomes = (s.condutores ?? []).filter(Boolean);
-    if (nomes.length === 0) continue;
-    for (const c of nomes) {
-      const e = cond.get(c) ?? { soma: 0, n: 0, relatos: [] };
-      e.soma += s.nota_condutor ?? 0;
-      e.n++;
-      const r = (s.relato ?? "").trim();
-      if (r.length > 60) e.relatos.push({ texto: r, data: s.created_at });
-      cond.set(c, e);
-    }
-  }
-  const meetPorCondutor = new Map<string, { n: number; fala: number[] }>();
-  for (const e of encontros) {
-    if (e.descartado || !e.condutor_nome) continue;
-    if (e.data_reuniao && !naJanela(new Date(dia(e.data_reuniao)).getTime())) continue;
-    const m = meetPorCondutor.get(e.condutor_nome) ?? { n: 0, fala: [] };
-    m.n++;
-    // Zero aqui não quer dizer que o condutor ficou calado, quer dizer que a
-    // ingestão não reconheceu ninguém como condutor naquele encontro e gravou
-    // zero em vez de nulo (`ingest.ts`, na guarda que testa se ALGUÉM falou em
-    // vez de testar se o condutor foi identificado). Enquanto isso não for
-    // corrigido na origem, incluir esses zeros puxaria a média para baixo e
-    // faria um problema de casamento de nome parecer um traço da pessoa.
-    if (e.fala_condutor_pct != null && e.fala_condutor_pct > 0) {
-      m.fala.push(e.fala_condutor_pct);
-    }
-    meetPorCondutor.set(e.condutor_nome, m);
-  }
-  const condutores: CondutorLinha[] = Array.from(cond.entries())
-    .map(([nome, d]) => {
-      const m = meetPorCondutor.get(nome);
-      return {
-        nome,
-        encontros: d.n,
-        avaliacoes: d.n,
-        notaMedia: d.n > 0 ? Math.round((d.soma / d.n) * 10) / 10 : null,
-        relatos: d.relatos
-          .sort((x: { data: string }, y: { data: string }) => y.data.localeCompare(x.data))
-          .slice(0, 12),
-        encontrosMeet: m?.n ?? 0,
-        falaPct: m && m.fala.length
-          ? Math.round((m.fala.reduce((s, x) => s + x, 0) / m.fala.length) * 10) / 10
-          : null,
-      };
-    })
-    .sort((a, b) => b.encontros - a.encontros);
-
   // ── O retrato do seletivo ────────────────────────────────────
   // Quem foi aprovado e ainda não veio é a fila de convite mais óbvia que a
   // formação tem, e até hoje ela não existia em lugar nenhum: o resultado do
@@ -904,7 +839,6 @@ export async function montarRetrato(
     pessoas: validas
       .slice()
       .sort((a, b) => b.encontros - a.encontros || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9)),
-    condutores,
     seletivo,
     totais: {
       pessoas: validas.length,

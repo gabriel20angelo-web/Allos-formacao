@@ -206,21 +206,7 @@ export default function AdminDashboard() {
   const [dashPeriod, setDashPeriod] = useState<ActivityRange>("30d");
   const [formacaoStats, setFormacaoStats] = useState<{
     totalFeedbacks: number;
-    avgNotaGrupo: number;
-    /** Só as submissões que tinham condutor a avaliar. Ver o cálculo. */
-    avgNotaCondutor: number;
-    notasDeCondutor: number;
     totalRelatos: number;
-    topCondutores: {
-      name: string;
-      avg: number;
-      count: number;
-      relatos: { text: string; date: string }[];
-    }[];
-    activityDist: { name: string; count: number }[];
-    atividadesOcultas: number;
-    topGroups: { name: string; avgNota: number; count: number }[];
-    ratingDistribution: { rating: number; count: number }[];
   } | null>(null);
   // O quórum medido saiu daqui para /admin/grupos, junto com a faixa inteira.
   // Ele consumia um campo de nove de uma rota que varria todas as participações
@@ -855,71 +841,25 @@ export default function AdminDashboard() {
 
         const total = subs.length;
 
-        // Feedback sem nota fica fora do numerador E do denominador. Somar
-        // zero e dividir por todo mundo é a receita de uma média que cai
-        // sozinha toda vez que alguém pula a pergunta.
-        const notasG = subs.map((x) => x.nota_grupo).filter((n): n is number => n != null);
-        const avgG = notasG.length ? notasG.reduce((a, x) => a + x, 0) / notasG.length : 0;
-
-        // A nota do condutor só conta quando havia condutor a avaliar.
+        // As duas médias de nota saíram daqui: a do grupo para
+        // /formacao/admin/grupos e a do condutor para
+        // /formacao/admin/condutores. Elas só podem ser lidas ao lado da
+        // cobertura do formulário, que pega cerca de metade de quem esteve na
+        // sala e não por sorteio, e esse lado só existe nas telas novas.
         //
-        // Quando a atividade é evento sem condutor, o formulário público grava
-        // 5 fixo em `nota_condutor`. São 66 linhas assim, e a prova é que TODAS
-        // as 66 submissões sem condutor listado têm nota exatamente 5, contra
-        // uma única entre as 402 que têm condutor. Sem este filtro a média sai
-        // 9,07 onde a real é 9,74, e o painel subestima os condutores em dois
-        // terços de ponto por causa de uma pergunta que nunca foi feita. O
-        // filtro é por `condutores` vazio, e não por nota maior que zero: cinco
-        // é um valor válido da escala, então testar o valor deixaria as 66
-        // linhas passarem inteiras.
-        const notasC = subs
-          .filter((x) => (x.condutores ?? []).filter(Boolean).length > 0)
-          .map((x) => x.nota_condutor)
-          .filter((n): n is number => n != null);
-        const avgC = notasC.length ? notasC.reduce((a, x) => a + x, 0) / notasC.length : 0;
+        // A regra que ia junto continua valendo lá: a nota do condutor só conta
+        // quando havia condutor a avaliar. Evento sem condutor grava 5 fixo, são
+        // 66 linhas assim, e o filtro é por `condutores` vazio e nunca por nota
+        // maior que zero, porque cinco é valor válido da escala.
 
         const totalRelatos = subs.filter(
           (s) => s.relato && s.relato.trim().length > 0
         ).length;
 
-        // Conductor ranking with relatos
-        const cMap = new Map<
-          string,
-          {
-            sum: number;
-            count: number;
-            relatos: { text: string; date: string }[];
-          }
-        >();
-        // Este laço já era imune ao 5 fixo, porque só entra quem tem nome no
-        // array de condutores. Fica registrado para ninguém "consertar" depois.
-        subs.forEach((x) => {
-          (x.condutores || []).forEach((c: string) => {
-            const e = cMap.get(c) || { sum: 0, count: 0, relatos: [] };
-            e.sum += x.nota_condutor || 0;
-            e.count++;
-            if (x.relato && x.relato.trim().length > 0) {
-              e.relatos.push({ text: x.relato, date: x.created_at });
-            }
-            cMap.set(c, e);
-          });
-        });
-        // Por volume, não por nota.
-        //
-        // Ordenar por média fazia quem tem uma avaliação nota 10 passar na
-        // frente de quem tem quarenta avaliações nota 9,8. Com 21 condutores
-        // entre 9,14 e 10, a ordem por nota é decidida por ruído, e o rodapé
-        // que prometia "pondera nota e volume" descrevia um cálculo que não
-        // existia: o volume era só critério de desempate.
-        const topC = Array.from(cMap.entries())
-          .map(([name, d]) => ({
-            name,
-            avg: d.count > 0 ? d.sum / d.count : 0,
-            count: d.count,
-            relatos: d.relatos,
-          }))
-          .sort((a, b) => b.count - a.count || b.relatos.length - a.relatos.length)
-          .slice(0, 10);
+        // O ranking de condutores saiu daqui e virou o painel de
+        // /formacao/admin/condutores. A regra que ele carregava continua lá: a
+        // ordem é por volume, porque com 21 condutores entre 9,14 e 10 ordenar
+        // por nota é decidir o primeiro lugar por ruído.
 
         // O ranking de participantes saiu daqui e virou a tabela ordenável de
         // /formacao/admin/pessoas. Ele era pódio de cinco por horas, e como
@@ -928,19 +868,6 @@ export default function AdminDashboard() {
         // vez só, com frequência, relatos, aulas, fala no grupo e recência na
         // mesma linha, que é o que serve para decidir com quem conversar.
 
-        // Distribuição por atividade
-        const actMap = new Map<string, number>();
-        subs.forEach((s) => {
-          const name = s.atividade_nome || "Sem nome";
-          actMap.set(name, (actMap.get(name) || 0) + 1);
-        });
-        const activityDistTodas = Array.from(actMap.entries())
-          .map(([name, count]) => ({ name, count }))
-          .sort((a, b) => b.count - a.count);
-        // Doze é onde a lista ainda cabe na tela. Sem corte ela cresce com o
-        // catálogo e o card vira rolagem infinita de nomes com uma linha cada.
-        const activityDist = activityDistTodas.slice(0, 12);
-        const atividadesOcultas = activityDistTodas.length - activityDist.length;
 
         // A faixa de pessoas saiu daqui inteira: quantas pessoas diferentes,
         // vezes por pessoa, quem veio pela primeira vez, ativas em 30 dias,
@@ -955,37 +882,6 @@ export default function AdminDashboard() {
         // sempre. Quem responde a essa pergunta hoje é o retorno por coorte de
         // estreia, que compara cada turma com ela mesma.
 
-        // Group rankings by avg nota_grupo
-        const groupNotaMap = new Map<
-          string,
-          { sum: number; count: number }
-        >();
-        subs.forEach((s) => {
-          const name = s.atividade_nome || "Sem nome";
-          const e = groupNotaMap.get(name) || { sum: 0, count: 0 };
-          e.sum += s.nota_grupo || 0;
-          e.count++;
-          groupNotaMap.set(name, e);
-        });
-        const topGroups = Array.from(groupNotaMap.entries())
-          .map(([name, d]) => ({
-            name,
-            avgNota: d.count > 0 ? d.sum / d.count : 0,
-            count: d.count,
-          }))
-          .sort((a, b) => b.avgNota - a.avgNota)
-          .slice(0, 5);
-
-        // Rating distribution (nota_grupo 1-10)
-        const ratingDistribution: { rating: number; count: number }[] = [];
-        for (let r = 1; r <= 10; r++) {
-          ratingDistribution.push({
-            rating: r,
-            count: subs.filter(
-              (s) => Math.round(s.nota_grupo || 0) === r
-            ).length,
-          });
-        }
 
         // A distribuição da nota do condutor saiu da tela. Ela desenhava uma
         // barra de 67 casos no valor 5 que se lia como insatisfação, e nenhum
@@ -1004,15 +900,7 @@ export default function AdminDashboard() {
 
         setFormacaoStats({
           totalFeedbacks: total,
-          avgNotaGrupo: avgG,
-          avgNotaCondutor: avgC,
           totalRelatos,
-          notasDeCondutor: notasC.length,
-          topCondutores: topC,
-          activityDist,
-          atividadesOcultas,
-          topGroups,
-          ratingDistribution,
         });
       } catch (e) {
         // Sem isto o erro some e a aba fica em "Carregando..." para sempre,
@@ -1032,44 +920,20 @@ export default function AdminDashboard() {
   const exportCSV = () => {
     if (!formacaoStats) return;
     const lines: string[] = [];
+    // Quatro seções saíram daqui: condutores, distribuição por atividade,
+    // grupos por avaliação e distribuição de nota de grupo. Elas eram o CSV das
+    // telas que este dashboard não tem mais, e continuavam sendo calculadas a
+    // cada abertura só para alimentar este botão. Quem quer esse recorte agora
+    // exporta da tela que é dona dele.
     lines.push("=== RESUMO GERAL ===");
     lines.push(`Período,${RANGE_LABELS[dashPeriod]}`);
     lines.push(`Total Feedbacks,${formacaoStats.totalFeedbacks}`);
-    lines.push(
-      `Nota Média Grupo,${formacaoStats.avgNotaGrupo.toFixed(1)}`
-    );
-    lines.push(
-      `Nota Média Condutor,${formacaoStats.avgNotaCondutor.toFixed(1)}`
-    );
     lines.push(`Total Relatos,${formacaoStats.totalRelatos}`);
-    lines.push(`Notas de condutor consideradas,${formacaoStats.notasDeCondutor}`);
-    lines.push("");
-    lines.push("=== CONDUTORES ===");
-    lines.push("Nome,Nota Média,Avaliações");
-    formacaoStats.topCondutores.forEach((c) =>
-      lines.push(`${c.name},${c.avg.toFixed(1)},${c.count}`)
-    );
-    lines.push("");
-    lines.push("=== DISTRIBUIÇÃO POR ATIVIDADE ===");
-    lines.push("Atividade,Quantidade");
-    formacaoStats.activityDist.forEach((a) =>
-      lines.push(`${a.name},${a.count}`)
-    );
-    lines.push("");
-    lines.push("=== GRUPOS POR AVALIAÇÃO ===");
-    lines.push("Grupo,Nota Média,Sessões");
-    formacaoStats.topGroups.forEach((g) =>
-      lines.push(`${g.name},${g.avgNota.toFixed(1)},${g.count}`)
-    );
-    lines.push("");
-    lines.push("=== DISTRIBUIÇÃO NOTAS GRUPO (1-10) ===");
-    lines.push("Nota,Quantidade");
-    formacaoStats.ratingDistribution.forEach((r) =>
-      lines.push(`${r.rating},${r.count}`)
-    );
     lines.push("");
     lines.push("O que é por pessoa sai no CSV de /formacao/admin/pessoas,");
     lines.push("onde a mesma gente aparece uma vez só.");
+    lines.push("Condutor e grupo saem de /formacao/admin/condutores e");
+    lines.push("/formacao/admin/grupos, onde o quórum é medido na sala.");
     const csv = "\uFEFF" + lines.join("\n");
     const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
     const url = URL.createObjectURL(blob);

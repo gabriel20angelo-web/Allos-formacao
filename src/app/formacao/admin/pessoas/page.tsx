@@ -34,7 +34,7 @@ import {
   Search,
   Download,
   ChevronDown,
-  Mic,
+
   Shield,
   AlertTriangle,
   Upload,
@@ -128,7 +128,6 @@ export default function AdminPessoasPage() {
   const [ordem, setOrdem] = useState("frequencia");
   const [mostrando, setMostrando] = useState(PAGINA);
   const [pessoaAberta, setPessoaAberta] = useState<PessoaRef | null>(null);
-  const [verTodosCondutores, setVerTodosCondutores] = useState(false);
   const [verTodosSumidos, setVerTodosSumidos] = useState(false);
   const [verTodosAprovados, setVerTodosAprovados] = useState(false);
   const [glossarioAberto, setGlossarioAberto] = useState(false);
@@ -332,7 +331,7 @@ export default function AdminPessoasPage() {
     );
   }
 
-  const { nucleo, sumidos, coortes, condutores, totais, cobertura, fluxo, seletivo, estados, regras } = retrato;
+  const { nucleo, sumidos, coortes, totais, cobertura, fluxo, seletivo, estados, regras } = retrato;
   const sumidosVisiveis = verTodosSumidos ? sumidos.semSinal : sumidos.semSinal.slice(0, 4);
   const periodoAberto = janela === "all";
   const rotuloPeriodo = RANGE_LABELS[janela].toLowerCase();
@@ -1130,82 +1129,6 @@ export default function AdminPessoasPage() {
                 >
                   Carregar mais {Math.min(PAGINA, filtradas.length - mostrando)}
                   <span className="text-cream/25"> · {filtradas.length - mostrando} restantes</span>
-                </button>
-              )}
-            </>
-          )}
-        </Card>
-      </motion.div>
-
-      {/* ── Condutores ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.34 }}>
-        <Card>
-          <div className="flex items-center justify-between gap-2 mb-3">
-            <div className="flex items-center gap-2">
-              <Mic className="h-4 w-4" style={{ color: TEAL }} />
-              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">Condutores</h2>
-            </div>
-            <span className="font-dm text-xs text-cream/30 tabular-nums">{condutores.length}</span>
-          </div>
-
-          {condutores.length === 0 ? (
-            <p className="font-dm text-xs text-cream/30 py-6 text-center">
-              Nenhum condutor recebeu avaliação {periodoAberto ? "ainda" : `nos últimos ${rotuloPeriodo}`}.
-            </p>
-          ) : (
-            <>
-              <p className="font-dm text-[11px] text-cream/35 mb-4 leading-relaxed">
-                As notas ficam todas perto de 10, então elas não separam ninguém. O que separa é
-                quanto cada um conduz e o que escrevem sobre ele. A lista vai por volume, não por nota.
-                A nota só conta quando havia condutor a avaliar: evento sem condutor grava 5 fixo no
-                formulário, e essas linhas ficam de fora.
-              </p>
-              <div className="space-y-2">
-                {(verTodosCondutores ? condutores : condutores.slice(0, 5)).map((c) => (
-                  <div
-                    key={c.nome}
-                    className="px-3 py-2.5 rounded-[10px]"
-                    style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
-                  >
-                    <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
-                      <span className="font-dm text-sm text-cream/80">{c.nome}</span>
-                      <span className="font-dm text-[11px] text-cream/30">
-                        {c.avaliacoes} avaliaç{c.avaliacoes === 1 ? "ão" : "ões"}
-                        {c.relatos.length > 0 && ` · ${c.relatos.length} relato${c.relatos.length > 1 ? "s" : ""}`}
-                        {c.encontrosMeet > 0 && ` · ${c.encontrosMeet} no Meet`}
-                        {c.falaPct != null && ` · fala ${c.falaPct}%`}
-                      </span>
-                    </div>
-                    {c.avaliacoes < 5 ? (
-                      <p className="font-dm text-[11px] text-cream/30 mt-1">
-                        {c.avaliacoes} nota{c.avaliacoes > 1 ? "s" : ""} só. Ainda não dá para ler média nenhuma aqui.
-                      </p>
-                    ) : (
-                      <p className="font-dm text-[11px] text-cream/30 mt-1 tabular-nums">
-                        nota {c.notaMedia?.toFixed(1)} em {c.avaliacoes} notas
-                      </p>
-                    )}
-                    {c.relatos[0] && (
-                      <p className="font-dm text-xs text-cream/50 italic mt-2 leading-relaxed break-words">
-                        &ldquo;{c.relatos[0].texto.slice(0, 180)}
-                        {c.relatos[0].texto.length > 180 ? "..." : ""}&rdquo;
-                      </p>
-                    )}
-                    {c.relatos.length === 0 && (
-                      <p className="font-dm text-[11px] text-cream/25 mt-1.5">
-                        Ninguém escreveu sobre {c.nome.split(" ")[0]} ainda. Só notas.
-                      </p>
-                    )}
-                  </div>
-                ))}
-              </div>
-              {condutores.length > 5 && (
-                <button
-                  onClick={() => setVerTodosCondutores((v) => !v)}
-                  className="w-full mt-3 font-dm text-xs py-2 rounded-[10px] transition-colors hover:bg-white/[.03]"
-                  style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}
-                >
-                  {verTodosCondutores ? "Mostrar os cinco primeiros" : `Ver os ${condutores.length}`}
                 </button>
               )}
             </>
