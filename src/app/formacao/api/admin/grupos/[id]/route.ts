@@ -27,6 +27,88 @@ import { lerSala } from "@/lib/meet/quorum";
 
 export const dynamic = "force-dynamic";
 
+/**
+ * O cadastro do grupo, editável de dentro da página dele.
+ *
+ * Os quatro campos não são cosméticos. `carga_horaria` alimenta o cálculo de
+ * horas de certificado em cinco lugares (`api/ranking`, `api/my-sync-hours`,
+ * `lib/plataforma/ficha-aluno`, `PessoaModal`, `api/admin/email-suspeita`), e
+ * `ativo` controla o que aparece no formulário público de certificação e na
+ * grade pública. Mudar aqui muda o que o participante vê.
+ *
+ * Vai por rota de servidor com `exigirAdmin`, e não pelo cliente como a tela de
+ * Atividades faz, porque a policy de `certificado_atividades` é a antiga, que
+ * compara `role = 'admin'` direto. Desde a 078 os cargos são acumuláveis, então
+ * quem administra e também conduz um grupo seria barrado em silêncio.
+ */
+export async function PATCH(
+  req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) {
+    return NextResponse.json({ error: auth.erro }, { status: auth.status });
+  }
+
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ error: "id inválido" }, { status: 400 });
+  }
+
+  let body: Record<string, unknown>;
+  try {
+    body = await req.json();
+  } catch {
+    return NextResponse.json({ error: "corpo inválido" }, { status: 400 });
+  }
+
+  const mudanca: Record<string, unknown> = {};
+  if (typeof body.nome === "string") {
+    const nome = body.nome.trim();
+    if (!nome) return NextResponse.json({ error: "O nome não pode ficar vazio." }, { status: 400 });
+    mudanca.nome = nome;
+  }
+  if (typeof body.carga_horaria === "number" && body.carga_horaria > 0) {
+    mudanca.carga_horaria = Math.round(body.carga_horaria);
+  }
+  if (typeof body.descricao === "string") {
+    mudanca.descricao = body.descricao.trim() || null;
+  }
+  if (typeof body.ativo === "boolean") mudanca.ativo = body.ativo;
+  if (typeof body.arquivado === "boolean") {
+    mudanca.arquivado = body.arquivado;
+    // Arquivar tira do formulário junto: um grupo que sumiu da lista do painel
+    // e continua aceitando feedback é a receita de dado órfão.
+    if (body.arquivado === true) mudanca.ativo = false;
+  }
+
+  if (!Object.keys(mudanca).length) {
+    return NextResponse.json({ error: "nada para mudar" }, { status: 400 });
+  }
+
+  const sb = await createServiceRoleClient();
+  const { data, error } = await sb
+    .from("certificado_atividades")
+    .update(mudanca)
+    .eq("id", id)
+    .select()
+    .maybeSingle();
+
+  if (error) {
+    // 23505 é o índice único de nome normalizado que a migration 093 criou.
+    // A mensagem crua do Postgres não diz nada a quem está na tela.
+    if (error.code === "23505") {
+      return NextResponse.json(
+        { error: "Já existe um grupo com esse nome. Dois nomes iguais fazem o histórico dos dois se misturar." },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: error.message }, { status: 500 });
+  }
+
+  return NextResponse.json({ atividade: data });
+}
+
 interface SlotRow {
   id: string;
   dia_semana: number;

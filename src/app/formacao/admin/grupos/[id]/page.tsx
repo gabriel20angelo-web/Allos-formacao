@@ -29,6 +29,11 @@ import {
   AlertTriangle,
   ExternalLink,
   Folder,
+  UserMinus,
+  Settings,
+  Archive,
+  Eye,
+  EyeOff,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
@@ -42,12 +47,15 @@ const TEAL = "#2E9E8F";
 const DOURADO = "#D4854A";
 const ROXO = "#6C5CE7";
 
-type Aba = "geral" | "encontros" | "sala";
+type Aba = "geral" | "encontros" | "pessoas" | "feedbacks" | "sala" | "cadastro";
 
 const ABAS: { id: Aba; rotulo: string; icone: typeof Users }[] = [
   { id: "geral", rotulo: "Visão geral", icone: Users },
   { id: "encontros", rotulo: "Encontros", icone: CalendarDays },
+  { id: "pessoas", rotulo: "Pessoas", icone: UserMinus },
+  { id: "feedbacks", rotulo: "Feedbacks", icone: MessageSquare },
   { id: "sala", rotulo: "Sala", icone: Video },
+  { id: "cadastro", rotulo: "Cadastro", icone: Settings },
 ];
 
 interface Sala {
@@ -646,11 +654,271 @@ export default function GrupoPage() {
         </motion.div>
       )}
 
-      <p className="font-dm text-[11px] text-cream/20 leading-relaxed px-1 flex items-start gap-1.5">
-        <MessageSquare className="h-3 w-3 shrink-0 mt-0.5" />
-        As abas Pessoas, Feedbacks e Cadastro entram em seguida. Enquanto isso, os
-        relatos escritos continuam em Envios e o cadastro em Formação, aba Atividades.
-      </p>
+      {/* ── PESSOAS ── */}
+      {aba === "pessoas" && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <Card>
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-1">
+              Quem frequenta este grupo
+            </h2>
+            <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+              Contado pela sala do Meet, que mede quem entrou. Quem só preenche o
+              formulário e não é capturado na sala não aparece aqui.
+            </p>
+            {d.pessoas.length === 0 ? (
+              <p className="font-dm text-xs text-cream/30 py-2">
+                Nenhuma presença medida ainda neste grupo.
+              </p>
+            ) : (
+              <div className="space-y-1">
+                {d.pessoas.map((p) => {
+                  const sumiu =
+                    d.medido.ultimo !== null &&
+                    p.ultima < d.medido.ultimo &&
+                    Date.now() - new Date(p.ultima + "T12:00:00").getTime() > 21 * 86400000;
+                  const muda = p.comTranscricao > 0 && p.caladaEm === p.comTranscricao;
+                  return (
+                    <div
+                      key={p.chave}
+                      className="flex items-center gap-3 px-3 py-2 rounded-[10px]"
+                      style={{ background: "rgba(255,255,255,0.02)" }}
+                    >
+                      <span className="font-fraunces font-bold text-sm text-cream tabular-nums w-8 text-right shrink-0">
+                        {p.encontros}
+                      </span>
+                      <div className="min-w-0 flex-1">
+                        <p className="font-dm text-xs text-cream/75 truncate">{p.nome}</p>
+                        <div className="flex flex-wrap gap-x-3 gap-y-0.5">
+                          <span className="font-dm text-[10px] text-cream/25">
+                            {p.encontros === 1 ? "veio uma vez" : `veio ${p.encontros} vezes`} · última em {dataCurta(p.ultima)}
+                          </span>
+                          {muda && (
+                            <span className="font-dm text-[10px]" style={{ color: ROXO }}>
+                              nunca falou ({p.caladaEm} c/ transcrição)
+                            </span>
+                          )}
+                          {sumiu && (
+                            <span className="font-dm text-[10px]" style={{ color: "#E07A5F" }}>
+                              não vem há mais de 21 dias
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ── FEEDBACKS ── */}
+      {aba === "feedbacks" && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <Card>
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-1">
+              O que escreveram sobre este grupo
+            </h2>
+            <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+              Do mais recente para o mais antigo. Quem não escreveu nada aparece só
+              como nota, e as duas coisas contam a mesma quantidade de gente.
+            </p>
+            {d.feedbacks.length === 0 ? (
+              <p className="font-dm text-xs text-cream/30 py-2">Nenhum feedback ainda.</p>
+            ) : (
+              <div className="space-y-1.5">
+                {d.feedbacks.map((f) => (
+                  <div key={f.id} className="px-3 py-2.5 rounded-[10px]" style={{ background: "rgba(255,255,255,0.02)" }}>
+                    <div className="flex items-baseline gap-2 flex-wrap">
+                      <span className="font-dm text-xs text-cream/75">
+                        {f.nome_completo ?? "sem nome"}
+                      </span>
+                      <span className="font-dm text-[10px] text-cream/25 tabular-nums">
+                        {new Date(f.created_at).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+                        {f.nota_grupo != null && ` · grupo ${f.nota_grupo}`}
+                        {(f.condutores ?? []).filter(Boolean).length > 0 && f.nota_condutor != null && ` · condutor ${f.nota_condutor}`}
+                      </span>
+                      {(f.condutores ?? []).filter(Boolean).length > 0 && (
+                        <span className="font-dm text-[10px] text-cream/25">
+                          com {(f.condutores ?? []).filter(Boolean).join(", ")}
+                        </span>
+                      )}
+                    </div>
+                    {f.relato && f.relato.trim() && (
+                      <p className="font-dm text-xs text-cream/55 italic mt-1.5 leading-relaxed break-words">
+                        &ldquo;{f.relato.trim()}&rdquo;
+                      </p>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Card>
+        </motion.div>
+      )}
+
+      {/* ── CADASTRO ── */}
+      {aba === "cadastro" && (
+        <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }}>
+          <Cadastro
+            atividade={d.atividade}
+            aoSalvar={async (mudanca) => {
+              const r = await fetch(`/formacao/api/admin/grupos/${id}`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify(mudanca),
+              });
+              const j = await r.json().catch(() => ({}));
+              if (!r.ok) {
+                toast.error(j.error ?? "não consegui salvar");
+                return false;
+              }
+              await carregar();
+              toast.success("Salvo.");
+              return true;
+            }}
+          />
+        </motion.div>
+      )}
     </div>
+  );
+}
+
+/**
+ * O cadastro do grupo.
+ *
+ * Estes campos saíram da tela de Atividades para cá porque são propriedades de
+ * UM grupo, e a tela de Atividades era um catálogo onde eles ficavam escondidos
+ * atrás de um ícone que só aparecia no hover.
+ */
+function Cadastro({
+  atividade,
+  aoSalvar,
+}: {
+  atividade: Dossie["atividade"];
+  aoSalvar: (m: Record<string, unknown>) => Promise<boolean>;
+}) {
+  const [nome, setNome] = useState(atividade.nome);
+  const [carga, setCarga] = useState(String(atividade.carga_horaria ?? 2));
+  const [descricao, setDescricao] = useState(atividade.descricao ?? "");
+  const [salvando, setSalvando] = useState(false);
+
+  const mudou =
+    nome !== atividade.nome ||
+    Number(carga) !== (atividade.carga_horaria ?? 2) ||
+    descricao !== (atividade.descricao ?? "");
+
+  return (
+    <Card>
+      <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-4">
+        Cadastro
+      </h2>
+
+      <div className="space-y-3 max-w-lg">
+        <div>
+          <label className="font-dm text-[11px] text-cream/40 block mb-1">Nome</label>
+          <input
+            value={nome}
+            onChange={(e) => setNome(e.target.value)}
+            className="dark-input w-full rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm"
+          />
+          <p className="font-dm text-[10px] text-cream/25 mt-1 leading-relaxed">
+            Desde a migration 093 o grupo tem identidade própria, então renomear não
+            perde mais o histórico. Dois grupos não podem ter o mesmo nome.
+          </p>
+        </div>
+
+        <div>
+          <label className="font-dm text-[11px] text-cream/40 block mb-1">
+            Horas por encontro
+          </label>
+          <input
+            type="number"
+            min={1}
+            max={100}
+            value={carga}
+            onChange={(e) => setCarga(e.target.value)}
+            className="dark-input w-28 rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm"
+          />
+          <p className="font-dm text-[10px] text-cream/25 mt-1 leading-relaxed">
+            Este número vira carga horária no certificado de quem participa. Mudar
+            aqui muda o documento que sai daqui em diante.
+          </p>
+        </div>
+
+        <div>
+          <label className="font-dm text-[11px] text-cream/40 block mb-1">Descrição</label>
+          <textarea
+            value={descricao}
+            onChange={(e) => setDescricao(e.target.value)}
+            rows={3}
+            className="dark-input w-full rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm resize-y"
+          />
+        </div>
+
+        <Button
+          onClick={async () => {
+            setSalvando(true);
+            await aoSalvar({ nome, carga_horaria: Number(carga), descricao });
+            setSalvando(false);
+          }}
+          disabled={!mudou || salvando || !nome.trim()}
+          loading={salvando}
+        >
+          Salvar
+        </Button>
+      </div>
+
+      <div className="mt-6 pt-4 space-y-3" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-dm text-xs text-cream/70">
+              {atividade.ativo ? "Aparece no formulário de certificação" : "Fora do formulário de certificação"}
+            </p>
+            <p className="font-dm text-[10px] text-cream/25 leading-relaxed">
+              É por aqui que quem participou pede o certificado. Fora do formulário,
+              o grupo continua acontecendo e ninguém consegue registrar presença.
+            </p>
+          </div>
+          <button
+            onClick={() => aoSalvar({ ativo: !atividade.ativo })}
+            className="font-dm text-xs px-3 py-2 rounded-full flex items-center gap-1.5 transition-all min-h-[40px] shrink-0"
+            style={{
+              background: atividade.ativo ? "rgba(46,158,143,0.12)" : "rgba(255,255,255,0.03)",
+              color: atividade.ativo ? TEAL : "rgba(253,251,247,0.4)",
+              border: `1px solid ${atividade.ativo ? "rgba(46,158,143,0.3)" : "rgba(255,255,255,0.06)"}`,
+            }}
+          >
+            {atividade.ativo ? <Eye className="h-3.5 w-3.5" /> : <EyeOff className="h-3.5 w-3.5" />}
+            {atividade.ativo ? "Publicado" : "Despublicado"}
+          </button>
+        </div>
+
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <div className="min-w-0">
+            <p className="font-dm text-xs text-cream/70">
+              {atividade.arquivado ? "Arquivado" : "Em uso"}
+            </p>
+            <p className="font-dm text-[10px] text-cream/25 leading-relaxed">
+              Arquivar some da lista e não apaga nada. O histórico, os feedbacks e os
+              encontros continuam onde estão.
+            </p>
+          </div>
+          <button
+            onClick={() => aoSalvar({ arquivado: !atividade.arquivado })}
+            className="font-dm text-xs px-3 py-2 rounded-full flex items-center gap-1.5 transition-all min-h-[40px] shrink-0"
+            style={{
+              background: "rgba(255,255,255,0.03)",
+              color: "rgba(253,251,247,0.4)",
+              border: "1px solid rgba(255,255,255,0.06)",
+            }}
+          >
+            <Archive className="h-3.5 w-3.5" />
+            {atividade.arquivado ? "Desarquivar" : "Arquivar"}
+          </button>
+        </div>
+      </div>
+    </Card>
   );
 }
