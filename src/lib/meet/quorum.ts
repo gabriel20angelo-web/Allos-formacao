@@ -34,6 +34,7 @@
 
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { lerTudo } from "@/lib/supabase/paginar";
+import { ehContaDaCasa } from "@/lib/meet/nomes";
 
 /**
  * Sem acento, minúsculo, espaço colapsado. Renomear só o acento não parte o grupo.
@@ -65,6 +66,40 @@ export function separarCondutores(campo: string | null | undefined): string[] {
     .filter((n) => n.length > 0 && chaveTexto(n) !== "sem condutor");
 }
 
+/** Mediana. Existe porque a média de permanência mente, e por muito. */
+export function mediana(ns: number[]): number | null {
+  const v = ns.filter((n) => Number.isFinite(n)).sort((a, b) => a - b);
+  if (!v.length) return null;
+  const meio = Math.floor(v.length / 2);
+  const m = v.length % 2 ? v[meio] : (v[meio - 1] + v[meio]) / 2;
+  return Math.round(m * 10) / 10;
+}
+
+/**
+ * A identidade da pessoa na sala, em três degraus de força.
+ *
+ * ⚠️ Medido em 06/08/2026: acrescentar `google_user_id` **não muda nada hoje**,
+ * 134 entidades e 39 em mais de um grupo com ou sem ele. Ele está aqui porque a
+ * conta Google cobre 97% das participações contra 41% de `aluno_id`, e porque a
+ * regra da casa é que chave forte casa sozinha e nome nunca. O dia em que dois
+ * homônimos aparecerem sem conta da plataforma, o nome funde duas séries
+ * históricas em silêncio, sem erro e sem sintoma. Hoje 10 dos 137 nomes de tela
+ * têm uma palavra só.
+ *
+ * ⚠️ O contrário também é verdade e por isso `aluno_id` vem primeiro: existe uma
+ * pessoa com um `aluno_id` e DUAS contas Google, em três grupos. Nenhuma chave
+ * única basta, é a escada que resolve.
+ */
+export function chavePessoa(p: {
+  aluno_id: string | null;
+  google_user_id?: string | null;
+  display_name_norm: string;
+}): string {
+  if (p.aluno_id) return p.aluno_id;
+  if (p.google_user_id) return `google:${p.google_user_id}`;
+  return `nome:${p.display_name_norm}`;
+}
+
 export interface EncontroMedido {
   id: string;
   slotId: string | null;
@@ -81,7 +116,31 @@ export interface EncontroMedido {
   /** Quantos dos presentes falaram ao menos uma vez. Só faz sentido com transcrição. */
   falaram: number;
   temTranscricao: boolean;
+  /**
+   * ⭐ Minutos de fala de quem não é a conta institucional. É a "interação" do
+   * pedido: o tempo de microfone de quem não é a Associação Allos.
+   *
+   * ⚠️ `null` quando não houve transcrição, nunca zero. Sem transcrição, "ninguém
+   * falou" e "não medimos" são a mesma linha no banco, e só este campo separa.
+   *
+   * ⛔ Nunca divida isto pela duração do encontro para dizer "quanto do encontro
+   * foi falado". Medido: dá até 124%, porque as pessoas falam por cima umas das
+   * outras e a soma conta a sobreposição duas vezes. Como divisão entre pessoas
+   * a soma continua válida; como fração do encontro, não.
+   */
+  interacaoMin: number | null;
+  /**
+   * Segmentos de fala, não turnos.
+   *
+   * ⚠️ A API do Meet corta a transcrição em pedaços de no máximo 30 segundos.
+   * Medido: 1317 segmentos são 623 vezes que alguém abriu o microfone, ou seja,
+   * o número aqui é cerca de 2,5 vezes maior que a intuição de "turno". Serve
+   * para comparar grupos entre si; não serve para dizer "ela falou N vezes".
+   */
+  segmentosFala: number | null;
   permanenciaMediaPct: number | null;
+  /** Mediana da permanência dos presentes. A média mente em até 20 pontos. */
+  permanenciaMedianaPct: number | null;
   /** Minutos de saída antes do fim, média dos presentes. */
   saidaAntecipadaMediaMin: number | null;
   /** Entradas e saídas por pessoa, média. Acima de 1 é gente entrando e saindo. */
@@ -109,12 +168,14 @@ interface EncontroRow {
   duracao_prevista_min: number | null;
   vozes_ativas_pct: number | null;
   fala_condutor_pct: number | null;
+  falas_gravadas: number | null;
   descartado: boolean | null;
 }
 
 interface ParticipacaoRow {
   encontro_id: string;
   aluno_id: string | null;
+  google_user_id: string | null;
   display_name: string;
   display_name_norm: string;
   minutos_presentes: number;
@@ -122,6 +183,7 @@ interface ParticipacaoRow {
   saida_antecipada_min: number | null;
   n_sessoes: number | null;
   minutos_fala: number | null;
+  n_turnos_fala: number | null;
   eh_condutor: boolean;
 }
 
@@ -139,17 +201,83 @@ export interface PessoaNaSala {
   ultima: string;
 }
 
+/**
+ * A mesma pessoa, dentro de UM grupo.
+ *
+ * ⭐ É a peça que faltava. `PessoaNaSala` soma a pessoa na formação inteira e
+ * joga fora de qual grupo veio cada minuto, e sem esse recorte não existe
+ * "ela fala mais no grupo A que no grupo B", que é a pergunta que o painel
+ * nunca soube responder.
+ */
+export interface MetricaNoGrupo {
+  grupo: string;
+  nome: string;
+  encontros: number;
+  /** Presença somada, em minutos, só neste grupo. */
+  minutos: number;
+  minutosFala: number;
+  segmentosFala: number;
+  /** Encontros com transcrição em que esteve e não falou. */
+  caladaEm: number;
+  /** Denominador honesto de `caladaEm` e de `minutosFala`. */
+  comTranscricao: number;
+  /** Uma entrada por encontro. Guardado cru porque a mediana precisa da lista. */
+  permanencias: number[];
+  primeira: string;
+  ultima: string;
+}
+
 export interface DadosDaSala {
   encontros: EncontroMedido[];
   pessoas: PessoaNaSala[];
   /** Por encontro, as chaves de quem esteve. Serve a série semanal sem reler nada. */
   pessoasPorEncontro: Map<string, Set<string>>;
+  /**
+   * ⭐ Por pessoa, por grupo. Nenhuma consulta a mais: sai das mesmas linhas que
+   * já estão em memória. É a base de tudo que compara grupo com grupo e da
+   * comparação da mesma pessoa entre grupos.
+   */
+  pessoaPorGrupo: Map<string, Map<string, MetricaNoGrupo>>;
 }
 
 function media(ns: number[]): number | null {
   const validos = ns.filter((n) => Number.isFinite(n));
   if (!validos.length) return null;
   return Math.round((validos.reduce((a, b) => a + b, 0) / validos.length) * 10) / 10;
+}
+
+/**
+ * Quem sai da conta: a conta institucional e quem a ingestão marcou como condutor.
+ *
+ * ⭐ Medido em 06/08/2026, e é o contrário do que se supunha: **a conta
+ * "Associação Allos" é o microfone do condutor**. Nos quatro encontros válidos
+ * ela fala 35%, 41%, 80% e 82% do tempo, e Laura, Gabbie e Gabriel Felipe não
+ * aparecem falando pela conta própria nos grupos que conduzem. Então excluir a
+ * casa é exatamente o filtro que o pedido descreve, e não uma aproximação dele.
+ *
+ * ⚠️ `eh_condutor` responde outra pergunta e responde mal: a ingestão o define
+ * por igualdade exata de nome contra o cadastro, e isso falha para três dos
+ * quatro condutores ("Tácia" não é "Tácia Hellen"). Quem conduz é
+ * `formacao_alocacoes`, nunca esta coluna.
+ *
+ * O teste pelo nome é rede, não conserto: medido, ele pega **zero linhas** além
+ * do flag, porque a ingestão já marca a casa. Está aqui porque as duas perguntas
+ * dividem uma coluna, e o dia em que o flag mudar de sentido o filtro continua.
+ */
+function ehDaCasaOuConduz(p: { eh_condutor: boolean; display_name: string }): boolean {
+  return p.eh_condutor || ehContaDaCasa(p.display_name);
+}
+
+/**
+ * Houve transcrição neste encontro.
+ *
+ * `falas_gravadas` é a contagem de segmentos de fala efetivamente gravados, e é
+ * mais direto que `vozes_ativas_pct`, que a ingestão só preenche quando alguém
+ * falou acima do arredondamento. Os dois juntos porque o segundo é o que a base
+ * tinha antes da coluna existir.
+ */
+function temFala(e: EncontroRow): boolean {
+  return (e.falas_gravadas ?? 0) > 0 || e.vozes_ativas_pct !== null;
 }
 
 /**
@@ -167,13 +295,13 @@ export async function lerSala(
     lerTudo<EncontroRow>(
       sb,
       "formacao_meet_encontros",
-      "id,slot_id,atividade_nome,condutor_nome,data_reuniao,dia_semana,duracao_min,duracao_prevista_min,vozes_ativas_pct,fala_condutor_pct,descartado",
+      "id,slot_id,atividade_nome,condutor_nome,data_reuniao,dia_semana,duracao_min,duracao_prevista_min,vozes_ativas_pct,fala_condutor_pct,falas_gravadas,descartado",
       "id",
     ),
     lerTudo<ParticipacaoRow>(
       sb,
       "formacao_meet_participacoes",
-      "encontro_id,aluno_id,display_name,display_name_norm,minutos_presentes,permanencia_pct,saida_antecipada_min,n_sessoes,minutos_fala,eh_condutor",
+      "encontro_id,aluno_id,google_user_id,display_name,display_name_norm,minutos_presentes,permanencia_pct,saida_antecipada_min,n_sessoes,minutos_fala,n_turnos_fala,eh_condutor",
       "id",
     ),
     lerTudo<{ created_at: string; atividade_nome: string | null }>(
@@ -212,8 +340,14 @@ export async function lerSala(
   const encontros: EncontroMedido[] = validos.map((e) => {
     const todas = porEncontro.get(e.id) ?? [];
     // O único ponto onde o condutor sai. Vale para tudo que vem depois.
-    const presentes = todas.filter((p) => !p.eh_condutor);
-    const temTranscricao = e.vozes_ativas_pct !== null;
+    const presentes = todas.filter((p) => !ehDaCasaOuConduz(p));
+    const temTranscricao = temFala(e);
+    const falas = presentes
+      .map((p) => p.minutos_fala)
+      .filter((n): n is number => n !== null);
+    const segmentos = presentes
+      .map((p) => p.n_turnos_fala)
+      .filter((n): n is number => n !== null);
     return {
       id: e.id,
       slotId: e.slot_id,
@@ -227,7 +361,17 @@ export async function lerSala(
       quorum: presentes.length,
       falaram: presentes.filter((p) => (p.minutos_fala ?? 0) > 0).length,
       temTranscricao,
+      // Sem transcrição não é zero, é ausência de medida. Ver o comentário do campo.
+      interacaoMin: temTranscricao
+        ? Math.round(falas.reduce((a, b) => a + b, 0) * 10) / 10
+        : null,
+      segmentosFala: temTranscricao ? segmentos.reduce((a, b) => a + b, 0) : null,
       permanenciaMediaPct: media(presentes.map((p) => p.permanencia_pct ?? NaN)),
+      permanenciaMedianaPct: mediana(
+        presentes
+          .map((p) => p.permanencia_pct)
+          .filter((n): n is number => n !== null),
+      ),
       saidaAntecipadaMediaMin: media(
         presentes.map((p) => p.saida_antecipada_min ?? NaN),
       ),
@@ -245,18 +389,24 @@ export async function lerSala(
   // ── as pessoas ──
   const idsValidos = new Set(validos.map((e) => e.id));
   const dataDoEncontro = new Map(validos.map((e) => [e.id, e.data_reuniao]));
-  const comTranscricao = new Set(
-    validos.filter((e) => e.vozes_ativas_pct !== null).map((e) => e.id),
+  const comTranscricao = new Set(validos.filter(temFala).map((e) => e.id));
+  // O grupo de cada encontro, para o recorte por grupo sair no mesmo laço.
+  const grupoDoEncontro = new Map(
+    validos.map((e) => [
+      e.id,
+      {
+        chave: chaveTexto(e.atividade_nome) || "sem atividade",
+        nome: e.atividade_nome ?? "Sem atividade",
+      },
+    ]),
   );
 
   const acc = new Map<string, PessoaNaSala>();
   const pessoasPorEncontro = new Map<string, Set<string>>();
+  const pessoaPorGrupo = new Map<string, Map<string, MetricaNoGrupo>>();
   for (const p of partRows) {
-    if (!idsValidos.has(p.encontro_id) || p.eh_condutor) continue;
-    // Chave forte quando existe. O nome cru só quando não há conta, e aí a
-    // mesma pessoa que trocou a grafia do nome de tela vira duas: é limitação
-    // conhecida, e o conserto mora em `pessoa_identificadores`, não aqui.
-    const chave = p.aluno_id || `nome:${p.display_name_norm}`;
+    if (!idsValidos.has(p.encontro_id) || ehDaCasaOuConduz(p)) continue;
+    const chave = chavePessoa(p);
     const dataEnc = dataDoEncontro.get(p.encontro_id) ?? "";
     const houve = comTranscricao.has(p.encontro_id);
     const noEncontro = pessoasPorEncontro.get(p.encontro_id);
@@ -275,9 +425,43 @@ export async function lerSala(
       comTranscricao: (atual?.comTranscricao ?? 0) + (houve ? 1 : 0),
       ultima: atual && atual.ultima > dataEnc ? atual.ultima : dataEnc,
     });
+
+    // ── o mesmo, recortado por grupo ──
+    const g = grupoDoEncontro.get(p.encontro_id);
+    if (!g) continue;
+    let porGrupo = pessoaPorGrupo.get(chave);
+    if (!porGrupo) {
+      porGrupo = new Map<string, MetricaNoGrupo>();
+      pessoaPorGrupo.set(chave, porGrupo);
+    }
+    const noGrupo = porGrupo.get(g.chave);
+    porGrupo.set(g.chave, {
+      grupo: g.chave,
+      nome: g.nome,
+      encontros: (noGrupo?.encontros ?? 0) + 1,
+      minutos: (noGrupo?.minutos ?? 0) + p.minutos_presentes,
+      minutosFala:
+        Math.round(((noGrupo?.minutosFala ?? 0) + (p.minutos_fala ?? 0)) * 100) / 100,
+      segmentosFala: (noGrupo?.segmentosFala ?? 0) + (p.n_turnos_fala ?? 0),
+      caladaEm:
+        (noGrupo?.caladaEm ?? 0) + (houve && (p.minutos_fala ?? 0) === 0 ? 1 : 0),
+      comTranscricao: (noGrupo?.comTranscricao ?? 0) + (houve ? 1 : 0),
+      permanencias:
+        p.permanencia_pct === null
+          ? (noGrupo?.permanencias ?? [])
+          : [...(noGrupo?.permanencias ?? []), p.permanencia_pct],
+      primeira:
+        noGrupo && noGrupo.primeira < dataEnc ? noGrupo.primeira : dataEnc,
+      ultima: noGrupo && noGrupo.ultima > dataEnc ? noGrupo.ultima : dataEnc,
+    });
   }
 
-  return { encontros, pessoas: Array.from(acc.values()), pessoasPorEncontro };
+  return {
+    encontros,
+    pessoas: Array.from(acc.values()),
+    pessoasPorEncontro,
+    pessoaPorGrupo,
+  };
 }
 
 /**
@@ -302,6 +486,23 @@ export interface ResumoDeEncontros {
   tendencia: number | null;
   vozesAtivasPct: number | null;
   encontrosComTranscricao: number;
+  /**
+   * ⭐ Fala de quem não é a conta institucional, somada nos encontros com
+   * transcrição. É a interação do pedido.
+   */
+  interacaoMin: number | null;
+  /** A mesma, por encontro medido. Comparável entre grupos de tamanho diferente. */
+  interacaoPorEncontroMin: number | null;
+  /**
+   * A mesma, dividida pelas presenças.
+   *
+   * ⚠️ Existe porque o total sozinho premia grupo grande. Medido em 06/08 os dois
+   * deram a mesma ordem, o que foi sorte e não regra: sem este número, um grupo
+   * de 77 pessoas com pouca conversa passa na frente de um de 33 com muita.
+   */
+  interacaoPorPessoaMin: number | null;
+  /** Mediana das medianas de permanência. Ver `permanenciaDoGrupo` para a de pessoa. */
+  permanenciaMedianaPct: number | null;
   falaCondutorPct: number | null;
   /** Em quantos encontros o condutor foi reconhecido. Denominador de `falaCondutorPct`. */
   encontrosComCondutorReconhecido: number;
@@ -335,6 +536,26 @@ export function resumir(lista: EncontroMedido[]): ResumoDeEncontros {
       comTrans.map((e) => (e.quorum > 0 ? (e.falaram / e.quorum) * 100 : NaN)),
     ),
     encontrosComTranscricao: comTrans.length,
+    // Só os encontros com transcrição entram, no numerador e no denominador.
+    // Misturar encontro sem transcrição diluiria a interação por ausência de
+    // dado, exatamente como aconteceria com vozes ativas.
+    interacaoMin: comTrans.length
+      ? Math.round(comTrans.reduce((a, e) => a + (e.interacaoMin ?? 0), 0) * 10) / 10
+      : null,
+    interacaoPorEncontroMin: media(
+      comTrans.map((e) => e.interacaoMin ?? NaN),
+    ),
+    interacaoPorPessoaMin: (() => {
+      const presencas = comTrans.reduce((a, e) => a + e.quorum, 0);
+      if (!presencas) return null;
+      const min = comTrans.reduce((a, e) => a + (e.interacaoMin ?? 0), 0);
+      return Math.round((min / presencas) * 100) / 100;
+    })(),
+    permanenciaMedianaPct: mediana(
+      ordenados
+        .map((e) => e.permanenciaMedianaPct)
+        .filter((n): n is number => n !== null),
+    ),
     falaCondutorPct: media(comCondutor.map((e) => e.falaCondutorPct as number)),
     encontrosComCondutorReconhecido: comCondutor.length,
     duracaoMediaMin: media(ordenados.map((e) => e.duracaoMin ?? NaN)),
@@ -398,6 +619,193 @@ export function porAtividade(
     }
   }
   return acc;
+}
+
+export interface FluxoNoEncontro {
+  encontroId: string;
+  grupo: string;
+  data: string;
+  presentes: number;
+  /**
+   * ⛔ `null`, e nunca zero, no primeiro encontro medido do grupo.
+   *
+   * Não há encontro anterior contra o qual comparar, e "0 estrearam" leria como
+   * "ninguém novo apareceu", que é o oposto da verdade: todo mundo é novo.
+   */
+  estrearam: number | null;
+  /** Estavam no encontro imediatamente anterior deste grupo. */
+  voltaram: number | null;
+  /** Faltaram ao anterior e já tinham vindo antes dele. */
+  retomaram: number | null;
+  /** Estavam no anterior e não estão neste. */
+  sumiram: number | null;
+}
+
+/**
+ * Estreou, voltou, retomou e sumiu, encontro a encontro, DENTRO de cada grupo.
+ *
+ * ⚠️ A comparação é sempre com o encontro anterior **do mesmo grupo**, nunca com
+ * o anterior no calendário. Duas turmas diferentes na mesma quarta não têm nada
+ * a ver uma com a outra, e comparar as duas produziria uma debandada por semana.
+ *
+ * "Retomou" não foi pedido e sai da mesma conta. É o único dos quatro que separa
+ * o grupo que perde gente do grupo que tem gente indo e voltando, e essas duas
+ * coisas pedem providências opostas.
+ */
+export function fluxoDeEncontros(
+  lista: EncontroMedido[],
+  pessoasPorEncontro: Map<string, Set<string>>,
+): FluxoNoEncontro[] {
+  const saida: FluxoNoEncontro[] = [];
+  // `Array.from` e não `for...of` no Map: o alvo de compilação do projeto não
+  // aceita iterar o Map direto, e o erro só aparece no build.
+  for (const [chave, grupo] of Array.from(porAtividade(lista).entries())) {
+    const ordenados = [...grupo.encontros].sort((a, b) => a.data.localeCompare(b.data));
+    // Quem já apareceu neste grupo antes do encontro corrente. Acumula ao andar.
+    const jaVieram = new Set<string>();
+    let anterior: Set<string> | null = null;
+    for (const e of ordenados) {
+      const atual = pessoasPorEncontro.get(e.id) ?? new Set<string>();
+      const primeiro = anterior === null;
+      const antes: Set<string> = anterior ?? new Set<string>();
+      saida.push({
+        encontroId: e.id,
+        grupo: chave,
+        data: e.data,
+        presentes: atual.size,
+        estrearam: primeiro
+          ? null
+          : Array.from(atual).filter((k) => !jaVieram.has(k)).length,
+        voltaram: primeiro ? null : Array.from(atual).filter((k) => antes.has(k)).length,
+        retomaram: primeiro
+          ? null
+          : Array.from(atual).filter((k) => !antes.has(k) && jaVieram.has(k)).length,
+        sumiram: primeiro ? null : Array.from(antes).filter((k) => !atual.has(k)).length,
+      });
+      atual.forEach((k) => jaVieram.add(k));
+      anterior = atual;
+    }
+  }
+  return saida.sort((a, b) => b.data.localeCompare(a.data));
+}
+
+export interface InteracaoNoGrupo {
+  grupo: string;
+  nome: string;
+  /** Pessoas distintas que passaram pelo grupo na janela. */
+  pessoas: number;
+  /** Quantas delas falaram ao menos uma vez. */
+  falaram: number;
+  minutosFala: number;
+  /** Mediana da permanência, POR PESSOA, que é o que o pedido descreve. */
+  permanenciaMedianaPct: number | null;
+  permanenciaMediaPct: number | null;
+  /** Quantas nunca falaram em nenhum encontro com transcrição deste grupo. */
+  mudas: number;
+  /** Denominador honesto: pessoas que estiveram em ao menos um encontro medido. */
+  comTranscricao: number;
+}
+
+/**
+ * A interação e a permanência de um grupo, medidas POR PESSOA.
+ *
+ * Difere de `resumir` de propósito. `resumir` agrega encontros, e responde
+ * "como foram os encontros deste grupo". Esta responde "quanto as pessoas deste
+ * grupo falam e quanto tempo elas ficam", que é a pergunta do pedido, e por isso
+ * o denominador aqui é gente e não sessão.
+ */
+export function interacaoDoGrupo(
+  pessoaPorGrupo: Map<string, Map<string, MetricaNoGrupo>>,
+  chaveDoGrupo: string,
+): InteracaoNoGrupo | null {
+  const linhas: MetricaNoGrupo[] = [];
+  for (const porGrupo of Array.from(pessoaPorGrupo.values())) {
+    const m = porGrupo.get(chaveDoGrupo);
+    if (m) linhas.push(m);
+  }
+  if (!linhas.length) return null;
+  const permanencias = linhas.flatMap((l) => l.permanencias);
+  const comTrans = linhas.filter((l) => l.comTranscricao > 0);
+  return {
+    grupo: chaveDoGrupo,
+    nome: linhas[0].nome,
+    pessoas: linhas.length,
+    falaram: linhas.filter((l) => l.minutosFala > 0).length,
+    minutosFala: Math.round(linhas.reduce((a, l) => a + l.minutosFala, 0) * 10) / 10,
+    permanenciaMedianaPct: mediana(permanencias),
+    permanenciaMediaPct: media(permanencias),
+    // Muda é quem não falou em NENHUM encontro medido deste grupo. Derivado de
+    // `minutosFala` e não de `caladaEm === comTranscricao`, que diz o mesmo por
+    // outro caminho: um invariante a menos para manter de pé.
+    mudas: comTrans.filter((l) => l.minutosFala === 0).length,
+    comTranscricao: comTrans.length,
+  };
+}
+
+export interface LinhaEntreGrupos extends MetricaNoGrupo {
+  permanenciaMedianaPct: number | null;
+  /** Minutos de fala por encontro frequentado, que é o que compara os grupos. */
+  falaPorEncontroMin: number;
+}
+
+export interface ComparacaoEntreGrupos {
+  chave: string;
+  grupos: LinhaEntreGrupos[];
+  /** Diferença entre a maior e a menor fala por encontro. Zero quando só há um grupo. */
+  amplitudeFalaMin: number;
+  /** Idem, em pontos de permanência mediana. */
+  amplitudePermanenciaPct: number;
+  /** ⭐ Fala num grupo e é muda em outro. É o sinal mais forte que a base tem hoje. */
+  falaEmUmCalaEmOutro: boolean;
+}
+
+/**
+ * A mesma pessoa, grupo a grupo.
+ *
+ * ⭐ É o pedido 1.3, e é a única família de métricas legível hoje, porque não
+ * depende de série temporal. Medido em 06/08 com um encontro por grupo: 39
+ * pessoas já estão em mais de um grupo, e **15 delas falam num e ficam
+ * completamente mudas em outro**. Uma fala 25,1 minutos num grupo e 0,9 no
+ * outro, com permanência praticamente igual nos dois.
+ *
+ * O que isso mede é o grupo, não a pessoa. É esse o ponto.
+ */
+export function pessoaEntreGrupos(
+  pessoaPorGrupo: Map<string, Map<string, MetricaNoGrupo>>,
+  chave: string,
+): ComparacaoEntreGrupos | null {
+  const porGrupo = pessoaPorGrupo.get(chave);
+  if (!porGrupo) return null;
+  const grupos: LinhaEntreGrupos[] = Array.from(porGrupo.values())
+    .map((m) => ({
+      ...m,
+      permanenciaMedianaPct: mediana(m.permanencias),
+      falaPorEncontroMin:
+        m.comTranscricao > 0
+          ? Math.round((m.minutosFala / m.comTranscricao) * 100) / 100
+          : 0,
+    }))
+    .sort((a, b) => b.falaPorEncontroMin - a.falaPorEncontroMin || b.encontros - a.encontros);
+
+  // Só compara onde houve transcrição: sem ela, "não falou" e "não medimos" são
+  // a mesma linha, e a amplitude viraria artefato de cobertura.
+  const medidos = grupos.filter((g) => g.comTranscricao > 0);
+  const falas = medidos.map((g) => g.falaPorEncontroMin);
+  const perms = grupos
+    .map((g) => g.permanenciaMedianaPct)
+    .filter((n): n is number => n !== null);
+  return {
+    chave,
+    grupos,
+    amplitudeFalaMin:
+      falas.length > 1 ? Math.round((Math.max(...falas) - Math.min(...falas)) * 100) / 100 : 0,
+    amplitudePermanenciaPct:
+      perms.length > 1 ? Math.round((Math.max(...perms) - Math.min(...perms)) * 10) / 10 : 0,
+    falaEmUmCalaEmOutro:
+      medidos.length > 1 &&
+      medidos.some((g) => g.minutosFala > 0) &&
+      medidos.some((g) => g.minutosFala === 0),
+  };
 }
 
 /** Quórum médio por dia da semana. Separa efeito de horário de efeito de condução. */

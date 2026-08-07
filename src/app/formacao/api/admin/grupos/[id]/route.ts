@@ -22,7 +22,14 @@ import { NextResponse } from "next/server";
 import { exigirAdmin } from "@/lib/meet/auth";
 import { createServiceRoleClient } from "@/lib/supabase/server";
 import { lerTudo } from "@/lib/supabase/paginar";
-import { chaveTexto, resumir, type EncontroMedido } from "@/lib/meet/quorum";
+import {
+  chaveTexto,
+  resumir,
+  mediana,
+  interacaoDoGrupo,
+  fluxoDeEncontros,
+  type EncontroMedido,
+} from "@/lib/meet/quorum";
 import { lerSala } from "@/lib/meet/quorum";
 
 export const dynamic = "force-dynamic";
@@ -240,30 +247,45 @@ export async function GET(
     .sort((a, b) => b.created_at.localeCompare(a.created_at));
 
   // As pessoas deste grupo, recortadas da sala inteira.
+  //
+  // ⛔ Isto era um vazamento: a versão anterior copiava `minutos`, `caladaEm` e
+  // `comTranscricao` de `sala.pessoas`, que soma a pessoa na FORMAÇÃO INTEIRA.
+  // Medido em 06/08, metade das linhas sairia inflada e a soma exibida seria
+  // 16.812 minutos contra 9.360 reais, 79,6% a mais. Não aparecia porque a aba
+  // Pessoas ainda não renderizava o campo. Agora renderiza, e a fonte certa é
+  // `pessoaPorGrupo`, que já vem recortado de `lerSala`.
   const idsDosEncontros = new Set(encontros.map((e) => e.id));
-  const pessoas = new Map<
-    string,
-    { chave: string; nome: string; alunoId: string | null; encontros: number; minutos: number; caladaEm: number; comTranscricao: number; ultima: string }
-  >();
+  const chavesAqui = new Set<string>();
   sala.pessoasPorEncontro.forEach((set, encontroId) => {
     if (!idsDosEncontros.has(encontroId)) return;
-    const enc = encontros.find((e) => e.id === encontroId);
-    set.forEach((k) => {
+    set.forEach((k) => chavesAqui.add(k));
+  });
+
+  const pessoas = Array.from(chavesAqui)
+    .map((k) => {
       const base = sala.pessoas.find((p) => p.chave === k);
-      if (!base) return;
-      const atual = pessoas.get(k);
-      pessoas.set(k, {
+      const noGrupo = sala.pessoaPorGrupo.get(k)?.get(chave);
+      if (!base || !noGrupo) return null;
+      return {
         chave: k,
         nome: base.nome,
         alunoId: base.alunoId,
-        encontros: (atual?.encontros ?? 0) + 1,
-        minutos: atual?.minutos ?? base.minutos,
-        caladaEm: atual?.caladaEm ?? base.caladaEm,
-        comTranscricao: atual?.comTranscricao ?? base.comTranscricao,
-        ultima: atual && atual.ultima > (enc?.data ?? "") ? atual.ultima : (enc?.data ?? ""),
-      });
-    });
-  });
+        encontros: noGrupo.encontros,
+        minutos: noGrupo.minutos,
+        minutosFala: noGrupo.minutosFala,
+        segmentosFala: noGrupo.segmentosFala,
+        permanenciaMedianaPct: mediana(noGrupo.permanencias),
+        caladaEm: noGrupo.caladaEm,
+        comTranscricao: noGrupo.comTranscricao,
+        primeira: noGrupo.primeira,
+        ultima: noGrupo.ultima,
+        // O denominador que a aba nunca teve: "veio 4 vezes" sem "de 12 na vida"
+        // não diz se ela é desta casa ou se passou por aqui.
+        encontrosNaFormacao: base.encontros,
+        gruposNaFormacao: sala.pessoaPorGrupo.get(k)?.size ?? 1,
+      };
+    })
+    .filter((p): p is NonNullable<typeof p> => p !== null);
 
   // A nota do condutor só conta quando havia condutor a avaliar: evento sem
   // condutor grava 5 fixo no formulário, e sem este filtro a média cai por causa
@@ -281,8 +303,16 @@ export async function GET(
     chaveForte: meusSlots.some((s) => Boolean(s.atividade_id)),
     grade,
     medido: resumir(encontros),
+    // ⭐ A interação e a permanência medidas POR PESSOA, que é como o pedido as
+    // formula. `medido` agrega encontros e responde outra pergunta.
+    interacao: interacaoDoGrupo(sala.pessoaPorGrupo, chave),
+    // Estreou, voltou, retomou e sumiu, sempre contra o encontro anterior DESTE
+    // grupo. `null` no primeiro, porque não há anterior e zero mentiria.
+    fluxo: fluxoDeEncontros(encontros, sala.pessoasPorEncontro),
     encontros,
-    pessoas: Array.from(pessoas.values()).sort((a, b) => b.encontros - a.encontros),
+    pessoas: pessoas.sort(
+      (a, b) => b.encontros - a.encontros || b.minutosFala - a.minutosFala,
+    ),
     feedbacks,
     notas: {
       grupo: media(notasGrupo),

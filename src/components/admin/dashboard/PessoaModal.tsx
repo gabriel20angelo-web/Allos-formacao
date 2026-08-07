@@ -21,7 +21,7 @@ import {
   carregarEventosDeEncontros,
   type ResultadoEventosMeet,
 } from "@/lib/meet/eventos";
-import { AlertTriangle, Download, Lock, Mail, UserCircle } from "lucide-react";
+import { AlertTriangle, Download, ExternalLink, Lock, Mail, UserCircle } from "lucide-react";
 import { hourLabel } from "@/lib/utils/activity";
 import { TYPE_META } from "./ActivityTimeline";
 import AcoesPessoa from "./AcoesPessoa";
@@ -591,6 +591,20 @@ export default function PessoaModal({
               </span>
             )}
             <div className="flex-1" />
+            {/* ⭐ O modal é a espiada rápida; a página é onde cabe o que não cabe
+                aqui: a comparação da mesma pessoa entre os grupos que ela
+                frequenta, e o histórico dela com denominador. */}
+            {pessoa?.pessoaId && (
+              <a
+                href={`/formacao/admin/pessoas/${pessoa.pessoaId}`}
+                className="font-dm text-[11px] px-2.5 py-1.5 rounded-full flex items-center gap-1.5 transition-all hover:bg-white/[.05]"
+                style={{ color: "#C84B31", border: "1px solid rgba(200,75,49,0.3)" }}
+                title="Abrir a página dela, com a comparação entre grupos"
+              >
+                <ExternalLink className="h-3 w-3" />
+                Abrir a página
+              </a>
+            )}
             <AcoesPessoa
               userId={dossie.userId}
               nome={dossie.nome}

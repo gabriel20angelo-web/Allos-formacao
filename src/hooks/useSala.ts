@@ -19,6 +19,12 @@ export interface ResumoSala {
   tendencia: number | null;
   vozesAtivasPct: number | null;
   encontrosComTranscricao: number;
+  /** Fala de quem não é a conta institucional. `null` quando não houve transcrição. */
+  interacaoMin: number | null;
+  interacaoPorEncontroMin: number | null;
+  /** O número que impede o grupo grande de ganhar só por ser grande. */
+  interacaoPorPessoaMin: number | null;
+  permanenciaMedianaPct: number | null;
   falaCondutorPct: number | null;
   encontrosComCondutorReconhecido: number;
   duracaoMediaMin: number | null;
@@ -44,11 +50,27 @@ export interface EncontroSala {
   quorum: number;
   falaram: number;
   temTranscricao: boolean;
+  interacaoMin: number | null;
+  segmentosFala: number | null;
   permanenciaMediaPct: number | null;
+  permanenciaMedianaPct: number | null;
   saidaAntecipadaMediaMin: number | null;
   sessoesMedia: number | null;
   falaCondutorPct: number | null;
   declararam: number;
+}
+
+/** A interação de um grupo medida por pessoa, e não por encontro. */
+export interface InteracaoGrupo {
+  grupo: string;
+  nome: string;
+  pessoas: number;
+  falaram: number;
+  minutosFala: number;
+  permanenciaMedianaPct: number | null;
+  permanenciaMediaPct: number | null;
+  mudas: number;
+  comTranscricao: number;
 }
 
 export interface GrupoSala extends ResumoSala {
@@ -58,6 +80,47 @@ export interface GrupoSala extends ResumoSala {
   nome: string;
   slots: number;
   condutores: string[];
+  interacao: InteracaoGrupo | null;
+}
+
+/** Uma linha da comparação da mesma pessoa entre os grupos que ela frequenta. */
+export interface LinhaEntreGruposSala {
+  grupo: string;
+  nome: string;
+  encontros: number;
+  minutos: number;
+  minutosFala: number;
+  segmentosFala: number;
+  caladaEm: number;
+  comTranscricao: number;
+  permanencias: number[];
+  permanenciaMedianaPct: number | null;
+  falaPorEncontroMin: number;
+  primeira: string;
+  ultima: string;
+}
+
+export interface PessoaEntreGrupos {
+  chave: string;
+  nome: string;
+  alunoId: string | null;
+  grupos: LinhaEntreGruposSala[];
+  amplitudeFalaMin: number;
+  amplitudePermanenciaPct: number;
+  falaEmUmCalaEmOutro: boolean;
+}
+
+/** Estreou, voltou, retomou e sumiu, contra o encontro anterior do mesmo grupo. */
+export interface FluxoSala {
+  encontroId: string;
+  grupo: string;
+  data: string;
+  presentes: number;
+  /** `null` no primeiro encontro medido do grupo. Não é zero. */
+  estrearam: number | null;
+  voltaram: number | null;
+  retomaram: number | null;
+  sumiram: number | null;
 }
 
 export interface CondutorSala extends ResumoSala {
@@ -104,6 +167,10 @@ export interface Sala {
   condutores: CondutorSala[];
   diaSemana: { dia: number; encontros: number; quorumMedio: number | null }[];
   semanas: { semana: string; pessoas: number }[];
+  fluxo: FluxoSala[];
+  /** Quem frequenta mais de um grupo. Ordenado por quem mais varia entre eles. */
+  entreGrupos: PessoaEntreGrupos[];
+  entreGruposIdentificadas: number;
   maisPresentes: PessoaSala[];
   sumindo: PessoaSala[];
   calados: PessoaSala[];

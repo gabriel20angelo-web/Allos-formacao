@@ -1,6 +1,15 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  assetPrefix: 'https://allos-formacao-production.up.railway.app',
+  // ⛔ Só em produção. Com o prefixo ligado, `next dev` serve HTML que busca CSS
+  // e JS no domínio da Railway, onde os hashes de chunk são outros: tudo 404, a
+  // página aparece sem estilo nenhum e não hidrata, e nada disso vira erro no
+  // console. O sintoma parece bug da tela e é do ambiente, e custou uma
+  // verificação inteira em 06/08/2026. `next build` define NODE_ENV=production
+  // sozinho, então o deploy continua exatamente igual.
+  assetPrefix:
+    process.env.NODE_ENV === 'production'
+      ? 'https://allos-formacao-production.up.railway.app'
+      : undefined,
   // Proxy /_sb pra Supabase REST foi removido — expõe a API toda do
   // Supabase pra qualquer caller externo. Cliente vai direto pro
   // domínio Supabase (NEXT_PUBLIC_SUPABASE_URL).

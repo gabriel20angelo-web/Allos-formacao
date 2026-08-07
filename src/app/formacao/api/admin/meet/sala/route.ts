@@ -29,6 +29,9 @@ import {
   porCondutor,
   porDiaSemana,
   serieSemanal,
+  fluxoDeEncontros,
+  interacaoDoGrupo,
+  pessoaEntreGrupos,
   chaveTexto,
   type EncontroMedido,
 } from "@/lib/meet/quorum";
@@ -65,7 +68,7 @@ export async function GET(req: NextRequest) {
     );
   }
 
-  const { encontros, pessoas, pessoasPorEncontro } = sala;
+  const { encontros, pessoas, pessoasPorEncontro, pessoaPorGrupo } = sala;
 
   if (!encontros.length) {
     return NextResponse.json({ vazio: true, dias, encontros: [] });
@@ -99,6 +102,10 @@ export async function GET(req: NextRequest) {
         slots: g.slots.size,
         condutores: Array.from(nomes),
         ...resumir(g.encontros),
+        // A mesma coisa medida por pessoa, e não por encontro. As duas convivem
+        // porque respondem perguntas diferentes: `resumir` diz como foram os
+        // encontros, isto diz quanto as pessoas deste grupo falam e ficam.
+        interacao: interacaoDoGrupo(pessoaPorGrupo, chave),
       };
     })
     .sort((a, b) => (b.quorumMedio ?? 0) - (a.quorumMedio ?? 0));
@@ -136,6 +143,26 @@ export async function GET(req: NextRequest) {
     .sort((a, b) => b.encontros - a.encontros || b.minutos - a.minutos)
     .slice(0, 20);
 
+  // ── ⭐ a mesma pessoa entre grupos ──
+  //
+  // É a única família de métricas legível hoje, porque não depende de série
+  // temporal: já são 39 pessoas em mais de um grupo com um encontro capturado
+  // por grupo. Medido em 06/08, 15 delas falam num grupo e ficam completamente
+  // mudas em outro, com permanência parecida nos dois. Isso mede o grupo.
+  const entreGrupos = pessoas
+    .map((p) => {
+      const c = pessoaEntreGrupos(pessoaPorGrupo, p.chave);
+      if (!c || c.grupos.length < 2) return null;
+      return { nome: p.nome, alunoId: p.alunoId, ...c };
+    })
+    .filter((x): x is NonNullable<typeof x> => x !== null)
+    .sort(
+      (a, b) =>
+        Number(b.falaEmUmCalaEmOutro) - Number(a.falaEmUmCalaEmOutro) ||
+        b.amplitudeFalaMin - a.amplitudeFalaMin ||
+        b.amplitudePermanenciaPct - a.amplitudePermanenciaPct,
+    );
+
   return NextResponse.json({
     vazio: false,
     dias,
@@ -148,6 +175,10 @@ export async function GET(req: NextRequest) {
     condutores,
     diaSemana: porDiaSemana(encontros),
     semanas: serieSemanal(encontros, pessoasPorEncontro),
+    fluxo: fluxoDeEncontros(encontros, pessoasPorEncontro),
+    entreGrupos,
+    /** Quantas das pessoas em mais de um grupo têm chave forte. É a ressalva da tela. */
+    entreGruposIdentificadas: entreGrupos.filter((p) => p.alunoId).length,
     maisPresentes,
     sumindo,
     calados,
