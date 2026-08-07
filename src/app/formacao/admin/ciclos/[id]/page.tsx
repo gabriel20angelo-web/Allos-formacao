@@ -22,6 +22,7 @@ import {
   CalendarDays,
   Users,
   Mic,
+  Trash2,
 } from "lucide-react";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
@@ -151,6 +152,10 @@ export default function PaginaCiclo() {
   const [nota, setNota] = useState("");
   const [salvando, setSalvando] = useState(false);
   const [fecharAberto, setFecharAberto] = useState(false);
+  const [nomeEditado, setNomeEditado] = useState("");
+  const [inicioEditado, setInicioEditado] = useState("");
+  const [salvandoCadastro, setSalvandoCadastro] = useState(false);
+  const [apagarAberto, setApagarAberto] = useState(false);
 
   const carregar = useCallback(async () => {
     try {
@@ -159,6 +164,8 @@ export default function PaginaCiclo() {
       if (!r.ok) throw new Error(j.error ?? "falha ao ler o ciclo");
       setD(j);
       setNota(j.ciclo?.observacoes ?? "");
+      setNomeEditado(j.ciclo?.nome ?? "");
+      setInicioEditado(j.ciclo?.inicio ?? "");
       setErro(null);
     } catch (e) {
       setErro(e instanceof Error ? e.message : "falha ao ler");
@@ -186,6 +193,38 @@ export default function PaginaCiclo() {
       toast.error(e instanceof Error ? e.message : "não consegui salvar");
     } finally {
       setSalvando(false);
+    }
+  }
+
+  async function salvarCadastro() {
+    setSalvandoCadastro(true);
+    try {
+      const r = await fetch(`/formacao/api/admin/ciclos/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ nome: nomeEditado, inicio: inicioEditado }),
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "não consegui salvar");
+      await carregar();
+      toast.success("Cadastro do ciclo atualizado.");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "não consegui salvar");
+    } finally {
+      setSalvandoCadastro(false);
+    }
+  }
+
+  async function apagar() {
+    try {
+      const r = await fetch(`/formacao/api/admin/ciclos/${id}`, { method: "DELETE" });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j.error ?? "não consegui apagar");
+      toast.success(`Ciclo "${j.nome}" apagado.`);
+      router.push("/formacao/admin/grupos");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "não consegui apagar");
+      setApagarAberto(false);
     }
   }
 
@@ -557,6 +596,77 @@ export default function PaginaCiclo() {
           </div>
         </Card>
       )}
+
+      {/* ── cadastro ──
+          Fica por último de propósito: mudar nome e data é raro, e apagar é
+          raríssimo. O que se usa toda semana está no topo. */}
+      <Card>
+        <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mb-4">
+          Cadastro do ciclo
+        </h2>
+        <div className="flex flex-col sm:flex-row gap-2">
+          <input
+            value={nomeEditado}
+            onChange={(e) => setNomeEditado(e.target.value)}
+            placeholder="Nome do ciclo"
+            className="dark-input flex-1 rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm"
+          />
+          <input
+            type="date"
+            value={inicioEditado}
+            onChange={(e) => setInicioEditado(e.target.value)}
+            className="dark-input rounded-[10px] px-3 py-2.5 font-dm text-base sm:text-sm"
+          />
+          <button
+            onClick={salvarCadastro}
+            disabled={
+              salvandoCadastro ||
+              !nomeEditado.trim() ||
+              (nomeEditado === c.nome && inicioEditado === c.inicio)
+            }
+            className="font-dm text-xs px-4 rounded-[10px] transition-all min-h-[40px] shrink-0 disabled:opacity-30"
+            style={{ background: "rgba(200,75,49,0.12)", color: TERRACOTA, border: "1px solid rgba(200,75,49,0.3)" }}
+          >
+            Salvar
+          </button>
+        </div>
+        <p className="font-dm text-[11px] text-cream/30 mt-3 leading-relaxed">
+          Mudar a data de início muda quais encontros pertencem a este ciclo, porque
+          a divisão é por data. Nada é reprocessado: a conta é refeita na hora.
+        </p>
+
+        <div className="mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+          <button
+            onClick={() => setApagarAberto(true)}
+            className="font-dm text-xs px-4 py-2 rounded-[10px] transition-all min-h-[40px]"
+            style={{ color: "#E0604F", border: "1px solid rgba(224,96,79,0.25)" }}
+          >
+            <Trash2 className="h-3.5 w-3.5 inline mr-1.5" />
+            Apagar este ciclo
+          </button>
+        </div>
+      </Card>
+
+      <ConfirmDialog
+        open={apagarAberto}
+        onClose={() => setApagarAberto(false)}
+        onConfirm={apagar}
+        title={`Apagar ${c.nome}?`}
+        description={
+          <div className="font-dm text-cream-70 space-y-2">
+            <p>
+              Nenhum encontro, presença ou fala é tocado: o ciclo é só um recorte de
+              período, e os encontros pertencem a ele pela data. Os retratos semanais
+              também sobrevivem, e apenas deixam de estar agrupados aqui.
+            </p>
+            <p>
+              O que se perde é <strong>a anotação que você escreveu</strong>
+              {c.status === "encerrado" && " e o retrato final da grade"}. Isso não sai
+              de conta nenhuma e não tem como recuperar.
+            </p>
+          </div>
+        }
+      />
 
       <ConfirmDialog
         open={fecharAberto}

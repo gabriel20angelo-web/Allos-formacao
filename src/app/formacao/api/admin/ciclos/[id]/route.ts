@@ -231,3 +231,42 @@ export async function PATCH(
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
   return NextResponse.json({ ciclo: data });
 }
+
+/**
+ * Apaga o ciclo.
+ *
+ * ⭐ É seguro, e vale saber por quê: o ciclo é só um recorte de período. Os
+ * encontros se ligam a ele **por data**, não por coluna, então nenhum encontro,
+ * participação ou fala é tocado. Os retratos semanais têm `ciclo_id` com
+ * ON DELETE SET NULL (migration 095), então eles perdem o agrupamento e
+ * sobrevivem inteiros.
+ *
+ * O que se perde de verdade é a **anotação** e, num ciclo encerrado, o
+ * `grade_final`. Esses dois não saem de conta nenhuma: foram escritos à mão. Por
+ * isso a tela pede confirmação e diz isso com todas as letras.
+ */
+export async function DELETE(
+  _req: Request,
+  { params }: { params: Promise<{ id: string }> },
+) {
+  const auth = await exigirAdmin();
+  if (!auth.ok) return NextResponse.json({ error: auth.erro }, { status: auth.status });
+
+  const { id } = await params;
+  if (!/^[0-9a-f-]{36}$/i.test(id)) {
+    return NextResponse.json({ error: "id inválido" }, { status: 400 });
+  }
+
+  const sb = await createServiceRoleClient();
+  const { data: ciclo } = await sb
+    .from("formacao_ciclos")
+    .select("id,nome,observacoes")
+    .eq("id", id)
+    .maybeSingle();
+  if (!ciclo) return NextResponse.json({ error: "ciclo não encontrado" }, { status: 404 });
+
+  const { error } = await sb.from("formacao_ciclos").delete().eq("id", id);
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+
+  return NextResponse.json({ apagado: true, nome: ciclo.nome });
+}
