@@ -208,28 +208,6 @@ function ScheduledCarousel({ courses }: { courses: SyncCourse[] }) {
             todas as gravações ficam guardadas no acervo. Dá pra acompanhar ao vivo, assistir depois,
             ou os dois.
           </p>
-
-          {/* Legenda dos atalhos que aparecem nos cards */}
-          <div className="flex flex-wrap items-center justify-center gap-x-5 gap-y-2 mt-4">
-            <span className="inline-flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.35)" }}>
-              <span
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
-                style={{ background: "rgba(37,211,102,0.9)", color: "#FFFFFF" }}
-              >
-                <MessageCircle size={10} />
-              </span>
-              Grupo do WhatsApp: link dos encontros, materiais e avisos
-            </span>
-            <span className="inline-flex items-center gap-1.5 font-dm text-[11px]" style={{ color: "rgba(253,251,247,0.35)" }}>
-              <span
-                className="inline-flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
-                style={{ background: "rgba(139,92,246,0.92)", color: "#FFFFFF" }}
-              >
-                <Video size={10} />
-              </span>
-              Sala do Meet onde acontecem os encontros
-            </span>
-          </div>
         </motion.div>
 
         {/* Setas (desktop) */}
@@ -261,17 +239,17 @@ function ScheduledCarousel({ courses }: { courses: SyncCourse[] }) {
         </div>
       </div>
 
-      {/* Carousel uniforme — contido no mesmo max-width do header */}
+      {/* Carousel uniforme, contido no mesmo max-width do header */}
       <div className="max-w-[1200px] mx-auto">
         <div
           ref={scrollRef}
-          className="flex gap-4 overflow-x-auto scrollbar-hide px-5 sm:px-6 md:px-10 pb-2"
+          className="flex gap-5 sm:gap-6 overflow-x-auto scrollbar-hide px-5 sm:px-6 md:px-10 scroll-pl-5 sm:scroll-pl-6 md:scroll-pl-10 pb-2"
           style={{ scrollSnapType: "x mandatory", scrollbarWidth: "none" }}
         >
           {courses.map((c) => (
             <div
               key={c.id}
-              className="flex-shrink-0 w-[160px] sm:w-[180px] md:w-[200px] lg:w-[220px]"
+              className="flex-shrink-0 w-[240px] sm:w-[280px] md:w-[300px] lg:w-[330px]"
               style={{ scrollSnapAlign: "start" }}
             >
               <ScheduledCard course={c} />
@@ -338,7 +316,7 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
             }}
           />
 
-          {/* Badge AGORA — top left */}
+          {/* Badge AGORA, top left */}
           <div className="absolute top-4 left-4 sm:top-6 sm:left-6 flex items-center gap-2 z-10">
             <span
               className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full font-dm text-[10px] sm:text-[11px] font-bold uppercase tracking-[0.18em]"
@@ -436,8 +414,14 @@ function LiveNowCard({ course }: { course: SyncCourse }) {
 }
 
 function ScheduledCard({ course }: { course: SyncCourse }) {
-  // Vertical, igual aos outros CourseCards porém um pouco maior
-  // (aspect 3/4 vs 9/13 dos regulares — mais quadrado, mais presença).
+  // A capa já traz título e professor impressos, então o card não repete nenhum
+  // dos dois: embaixo fica só o que a imagem não diz (quando é ao vivo, quantas
+  // gravações) e os dois atalhos. Título em texto só entra sem thumbnail.
+  const recordings =
+    course.total_recordings > 0
+      ? `${course.total_recordings} ${course.total_recordings === 1 ? "gravação" : "gravações"}`
+      : "Gravações depois";
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 12 }}
@@ -445,150 +429,120 @@ function ScheduledCard({ course }: { course: SyncCourse }) {
       transition={{ duration: 0.5 }}
       className="group relative rounded-2xl overflow-hidden"
       style={{
-        border: `1px solid rgba(139,92,246,0.3)`,
-        boxShadow: "0 12px 40px -16px rgba(139,92,246,0.3)",
+        border: `1px solid rgba(139,92,246,0.22)`,
+        boxShadow: "0 16px 48px -20px rgba(139,92,246,0.35)",
       }}
     >
-      <Link href={`/formacao/curso/${course.slug}`} className="block">
-        <div className="relative w-full aspect-[9/13] overflow-hidden">
-          {course.thumbnail_url ? (
-            <Image
-              src={course.thumbnail_url}
-              alt={course.title}
-              fill
-              sizes="(max-width: 640px) 45vw, (max-width: 1024px) 25vw, 220px"
-              className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
-            />
-          ) : (
-            <div
-              className="absolute inset-0"
-              style={{ background: "linear-gradient(135deg, #2a1a3a, #1a1424)" }}
-            />
-          )}
-
-          {/* Overlay degradê de baixo pra cima pro texto */}
+      <div className="relative w-full aspect-[9/13] overflow-hidden">
+        {course.thumbnail_url ? (
+          <Image
+            src={course.thumbnail_url}
+            alt={course.title}
+            fill
+            sizes="(max-width: 640px) 70vw, (max-width: 1024px) 35vw, 330px"
+            className="object-cover transition-transform duration-700 group-hover:scale-[1.04]"
+          />
+        ) : (
           <div
             className="absolute inset-0"
-            style={{
-              background:
-                "linear-gradient(180deg, rgba(8,5,15,0.05) 0%, rgba(8,5,15,0.25) 45%, rgba(8,5,15,0.95) 100%)",
-            }}
+            style={{ background: "linear-gradient(135deg, #2a1a3a, #1a1424)" }}
           />
-          {/* Glow roxo difuso */}
-          <div
-            className="absolute inset-0 pointer-events-none"
-            style={{
-              background: "radial-gradient(circle at 80% 100%, rgba(139,92,246,0.18) 0%, transparent 55%)",
-            }}
-          />
+        )}
 
-          {/* Badge top-left */}
-          <div className="absolute top-3 left-3 z-10">
-            <span
-              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full font-dm text-[10px] font-bold uppercase tracking-[0.12em]"
-              style={{
-                background: "rgba(139,92,246,0.88)",
-                color: "#FFFFFF",
-                backdropFilter: "blur(10px)",
-              }}
-            >
-              <Play size={8} fill="#FFFFFF" />
-              Ao vivo + Gravação
-            </span>
-          </div>
+        {/* Degradê só no rodapé, para o texto sentar sem escurecer a capa */}
+        <div
+          className="absolute inset-x-0 bottom-0 h-[45%]"
+          style={{
+            background:
+              "linear-gradient(180deg, rgba(8,5,15,0) 0%, rgba(8,5,15,0.6) 45%, rgba(8,5,15,0.96) 100%)",
+          }}
+        />
 
-          {/* Ícones quick-access top-right */}
-          <div className="absolute top-3 right-3 flex flex-col gap-1.5 z-10">
-            {course.whatsapp_group_url && (
-              <a
-                href={course.whatsapp_group_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-all hover:scale-110"
-                style={{
-                  background: "rgba(37,211,102,0.9)",
-                  color: "#FFFFFF",
-                  backdropFilter: "blur(10px)",
-                  boxShadow: "0 4px 14px rgba(37,211,102,0.4)",
-                }}
-                title="Grupo do WhatsApp: link dos encontros, materiais e avisos"
-                aria-label="Entrar no grupo do WhatsApp, onde chega o link dos encontros e os materiais"
-              >
-                <MessageCircle size={13} />
-              </a>
-            )}
-            {course.meet_url && (
-              <a
-                href={course.meet_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                onClick={(e) => e.stopPropagation()}
-                className="inline-flex items-center justify-center w-8 h-8 rounded-full transition-all hover:scale-110"
-                style={{
-                  background: "rgba(139,92,246,0.92)",
-                  color: "#FFFFFF",
-                  backdropFilter: "blur(10px)",
-                  boxShadow: "0 4px 14px rgba(139,92,246,0.45)",
-                }}
-                title="Sala do Meet onde acontecem os encontros ao vivo"
-                aria-label="Abrir a sala do Meet onde acontecem os encontros"
-              >
-                <Video size={13} />
-              </a>
-            )}
-          </div>
+        {/* Link cobre o card inteiro; os atalhos ficam por cima dele */}
+        <Link
+          href={`/formacao/curso/${course.slug}`}
+          className="absolute inset-0 z-10"
+          aria-label={course.title}
+        />
 
-          {/* Conteúdo bottom — sobreposto à imagem */}
-          <div className="absolute left-0 right-0 bottom-0 p-4 sm:p-5 z-10">
+        <div className="absolute inset-x-0 bottom-0 p-4 sm:p-5 z-20 pointer-events-none">
+          {!course.thumbnail_url && (
             <h3
-              className="font-fraunces font-bold text-[#FDFBF7] line-clamp-2 leading-tight mb-1.5 drop-shadow-lg"
-              style={{ fontSize: "clamp(15px,1.4vw,18px)" }}
+              className="font-fraunces font-bold text-[#FDFBF7] line-clamp-2 leading-tight mb-2"
+              style={{ fontSize: "clamp(17px,1.6vw,21px)" }}
             >
               {course.title}
             </h3>
-            {course.instructor && course.show_instructor && (
-              <p
-                className="font-dm text-[11px] mb-2"
-                style={{ color: "rgba(253,251,247,0.6)" }}
-              >
-                {course.instructor.full_name}
-              </p>
-            )}
+          )}
 
-            <div className="flex flex-col gap-1">
-              {course.next_meeting ? (
-                <div
-                  className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
-                  style={{ color: "#A78BFA" }}
-                >
-                  <Calendar size={11} />
-                  <span>Ao vivo {formatNextMeeting(course.next_meeting.starts_at)}</span>
-                </div>
-              ) : (
-                <div
-                  className="flex items-center gap-1.5 font-dm text-[11px] font-medium"
-                  style={{ color: "#A78BFA" }}
-                >
-                  <Radio size={11} />
-                  <span>Encontros ao vivo toda semana</span>
-                </div>
-              )}
-              <div
-                className="flex items-center gap-1.5 font-dm text-[10px]"
-                style={{ color: "rgba(253,251,247,0.5)" }}
-              >
-                <Play size={9} />
-                <span>
-                  {course.total_recordings > 0
-                    ? `${course.total_recordings} ${course.total_recordings === 1 ? "gravação no acervo" : "gravações no acervo"}`
-                    : "Gravações liberadas depois"}
+          <div
+            className="flex items-center gap-1.5 font-dm text-[12px] font-medium mb-1"
+            style={{ color: "#A78BFA" }}
+          >
+            {course.next_meeting ? (
+              <>
+                <Calendar size={12} className="flex-shrink-0" />
+                <span className="truncate">
+                  Ao vivo {formatNextMeeting(course.next_meeting.starts_at)}
                 </span>
-              </div>
-            </div>
+              </>
+            ) : (
+              <>
+                <Radio size={12} className="flex-shrink-0" />
+                <span className="truncate">Ao vivo toda semana</span>
+              </>
+            )}
           </div>
+          <div
+            className="flex items-center gap-1.5 font-dm text-[11px]"
+            style={{ color: "rgba(253,251,247,0.5)" }}
+          >
+            <Play size={10} className="flex-shrink-0" />
+            <span>{recordings} no acervo</span>
+          </div>
+
+          {(course.whatsapp_group_url || course.meet_url) && (
+            <div className="flex flex-wrap items-center gap-2 mt-3">
+              {course.whatsapp_group_url && (
+                <a
+                  href={course.whatsapp_group_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-dm text-[11px] font-medium transition-colors hover:bg-white/[0.14]"
+                  style={{
+                    background: "rgba(255,255,255,0.07)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "rgba(253,251,247,0.8)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  title="Grupo do WhatsApp: link dos encontros, materiais e avisos"
+                >
+                  <MessageCircle size={12} style={{ color: "#3DDB7C" }} />
+                  Grupo
+                </a>
+              )}
+              {course.meet_url && (
+                <a
+                  href={course.meet_url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="pointer-events-auto inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg font-dm text-[11px] font-medium transition-colors hover:bg-white/[0.14]"
+                  style={{
+                    background: "rgba(255,255,255,0.07)",
+                    border: "1px solid rgba(255,255,255,0.12)",
+                    color: "rgba(253,251,247,0.8)",
+                    backdropFilter: "blur(8px)",
+                  }}
+                  title="Sala do Meet onde acontecem os encontros ao vivo"
+                >
+                  <Video size={12} style={{ color: "#A78BFA" }} />
+                  Meet
+                </a>
+              )}
+            </div>
+          )}
         </div>
-      </Link>
+      </div>
     </motion.div>
   );
 }
