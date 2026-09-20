@@ -2,7 +2,7 @@
 //
 // Havia quatro lugares decidindo isso, e nenhum deles sabia dos outros: o menu
 // do site, a navegação do painel, o gate de rota no middleware e o `redirect`
-// no topo de cada página. Divergir custava caro nos dois sentidos — a área que
+// no topo de cada página. Divergir custava caro nos dois sentidos, a área que
 // existe, funciona e é inalcançável porque o link não aparece; e o link que
 // aparece para quem a página manda embora meio segundo depois.
 //
@@ -15,7 +15,7 @@
 // administra.
 //
 // O que este arquivo NÃO faz: proteger nada. Ele governa a tela e o gate de
-// rota, que são a mesma resposta dita duas vezes — a proteção de verdade está
+// rota, que são a mesma resposta dita duas vezes, a proteção de verdade está
 // nas policies do Postgres, e as duas precisam ser conferidas juntas quando um
 // cargo ganha ou perde uma área.
 
@@ -148,6 +148,19 @@ export const AREAS: Area[] = [
     grupo: "formacao",
   },
   {
+    // A tela existia e funcionava, e não tinha porta nenhuma: nenhum link no
+    // painel apontava para ela, então achar as horas de alguém dependia de
+    // saber o endereço de cor. É exatamente o caso do comentário no topo deste
+    // arquivo — a área que existe, funciona e é inalcançável.
+    id: "horas-formacao",
+    rotulo: "Horas de formação",
+    href: "/formacao/admin/certificados-formacao",
+    resumo: "Quanto cada pessoa acumulou nos grupos, e o certificado que sai disso.",
+    cargos: [],
+    onde: ["painel"],
+    grupo: "formacao",
+  },
+  {
     id: "moderacao",
     rotulo: "Moderação",
     href: "/formacao/admin/moderacao",
@@ -171,7 +184,7 @@ export const AREAS: Area[] = [
 // As três coisas que estavam em três cantos do sistema. É a mesma pessoa
 // usando: quem conduz um grupo procura uma dinâmica para levar nele, e às
 // vezes cuida de um evento. Cada uma aparece só para quem lhe cabe, e quem tem
-// um cargo só vê uma subseção — o que está certo, e continua sendo um lugar
+// um cargo só vê uma subseção, o que está certo, e continua sendo um lugar
 // que faz sentido.
 
 export interface Secao {
@@ -237,7 +250,7 @@ export function secoesDaPessoa(cargos: Set<string>): Secao[] {
 /**
  * Quem circula pelo painel inteiro.
  *
- * O painel é de quem administra. Condutor, eventos e associado não entram —
+ * O painel é de quem administra. Condutor, eventos e associado não entram,
  * eles têm a própria casa, no site.
  */
 export function circulaLivre(cargos: Set<string>): boolean {
@@ -261,7 +274,7 @@ export function caminhosDoPainel(cargos: Set<string>): string[] {
  * `circulaLivre` existe porque o painel tem dezenas de telas fora do catálogo
  * (alunos, cursos, categorias, atalhos) e prender o professor às poucas áreas
  * catalogadas fecharia todas elas. Só que "circula livre" acabou valendo também
- * para as áreas que o catálogo marca como exclusivas do administrador — o menu
+ * para as áreas que o catálogo marca como exclusivas do administrador, o menu
  * escondia Configurações do professor, e digitar o endereço abria a tela assim
  * mesmo, com a lista de contas e o botão de trocar cargo à vista.
  *
