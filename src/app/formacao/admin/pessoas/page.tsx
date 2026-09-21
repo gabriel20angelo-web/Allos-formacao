@@ -286,7 +286,7 @@ export default function AdminPessoasPage() {
     toast.success("Baixado com o recorte e a ordem que estão na tela.");
   };
 
-  /** Só o contato: nome completo e telefone, com o recorte que está na tela. */
+  /** Só o contato: nome completo, telefone e e-mail, com o recorte que está na tela. */
   const baixarContatos = () => {
     if (!retrato) return;
     const linhas = filtradas.map((p) => [p.nome, telefoneLegivel(p.telefone), p.email ?? ""]);
@@ -452,7 +452,7 @@ export default function AdminPessoasPage() {
               style={{ color: "rgba(253,251,247,0.62)", border: "1px solid rgba(255,255,255,0.1)" }}
             >
               <PhoneCall className="h-3.5 w-3.5" />
-              Nome e telefone (CSV)
+              Contatos: nome, telefone e e-mail (CSV)
             </button>
             <button
               onClick={baixarCSV}
