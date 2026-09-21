@@ -142,6 +142,8 @@ export interface PessoaLinha {
   id: string;
   nome: string;
   email: string | null;
+  /** Só dígitos, sem o 55. Hoje só o seletivo traz telefone. */
+  telefone: string | null;
   temConta: boolean;
   /** O estado de hoje. É o que dá a cor da linha e o recorte da tela. */
   estado: EstadoPessoa;
@@ -252,7 +254,34 @@ export interface RetratoPessoas {
   estados: ContagemPorEstado;
   destacadas: PessoaLinha[];
   sumidos: { semSinal: PessoaLinha[]; soFormulario: PessoaLinha[] };
-  coortes: { mes: string; rotulo: string; estreantes: number; voltaram: number }[];
+  coortes: {
+    mes: string;
+    rotulo: string;
+    estreantes: number;
+    voltaram: number;
+    /**
+     * Quantas pessoas da turma apareceram em cada mês de `mesesDeRetorno`.
+     * `null` nos meses até o da estreia, que ainda não aconteceram para ela.
+     *
+     * ⚠️ Não fecha com `voltaram`, e não deveria: quem estreou e voltou na mesma
+     * semana conta em `voltaram` e não aparece em célula nenhuma. São duas
+     * perguntas, "voltou alguma vez" e "apareceu naquele mês".
+     */
+    retornos: (number | null)[];
+  }[];
+  /** As colunas da tabela de coorte, do mês seguinte à turma mais antiga até hoje. */
+  mesesDeRetorno: { mes: string; rotulo: string }[];
+  /**
+   * A turma do mês em curso. Fica fora de `coortes` porque a taxa dela ainda
+   * não é comparável com a dos meses fechados, e mostrar as duas juntas
+   * convidaria a leitura de que a retenção despencou quando só faltou tempo.
+   */
+  coorteCorrente: { mes: string; rotulo: string; estreantes: number } | null;
+  /**
+   * Os três degraus da plataforma de cursos, em pessoas e não em matrículas.
+   * Ignora o seletor de período: é o estado acumulado, não o movimento do mês.
+   */
+  plataforma: { matriculados: number; comAula: number; concluiram: number };
   pessoas: PessoaLinha[];
   seletivo: RetratoSeletivo;
   totais: {
@@ -419,6 +448,7 @@ export async function montarRetrato(
   const pessoaPorEmail = new Map<string, string>();
   const pessoaPorPerfil = new Map<string, string>();
   const pessoaPorNomeMeet = new Map<string, string>();
+  const telefonePorPessoa = new Map<string, string>();
   const temConta = new Set<string>();
 
   for (const i of idents) {
@@ -427,6 +457,8 @@ export async function montarRetrato(
       pessoaPorPerfil.set(i.valor, i.pessoa_id);
       temConta.add(i.pessoa_id);
     } else if (i.tipo === "nome_exibicao") pessoaPorNomeMeet.set(i.valor, i.pessoa_id);
+    else if (i.tipo === "telefone" && !telefonePorPessoa.has(i.pessoa_id))
+      telefonePorPessoa.set(i.pessoa_id, i.valor);
   }
 
   const emailPorPerfil = new Map(profs.map((p) => [p.id, norm(p.email)]));
@@ -627,6 +659,7 @@ export async function montarRetrato(
       id: p.id,
       nome: p.nome_canonico,
       email: null as string | null,
+      telefone: telefonePorPessoa.get(p.id) ?? null,
       temConta: temConta.has(p.id),
       estado: "sem-sinal" as EstadoPessoa, // calculado logo abaixo
       encontros: a.encontrosSet.size,
@@ -745,24 +778,109 @@ export async function montarRetrato(
     !!iso && agora - new Date(iso).getTime() < DIAS_SUMIU * DIA;
 
   // ── Coortes ──────────────────────────────────────────────────
+  // Duas leituras da mesma turma, e elas respondem coisas diferentes.
+  // `voltaram` é "veio mais de uma vez na vida", que é a taxa que a formação
+  // acompanha desde abril. `retornos` é "apareceu no mês tal", que é o que
+  // deixa a tabela mostrar em que mês a turma inteira se mexeu: uma coluna
+  // inteira acesa é evento do calendário, não virtude de nenhuma turma.
   const coortes: RetratoPessoas["coortes"] = [];
-  const porMes = new Map<string, { estreantes: number; voltaram: number }>();
+  const rotuloDoMes = (k: string) => {
+    const [ano, mes] = k.split("-");
+    return `${MESES_PT[+mes - 1]}/${ano.slice(2)}`;
+  };
+  const chaveDoMes = (d: Date) =>
+    `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`;
+  const mesSeguinte = (k: string) => {
+    const [ano, mes] = k.split("-").map(Number);
+    return mes === 12 ? `${ano + 1}-01` : `${ano}-${String(mes + 1).padStart(2, "0")}`;
+  };
+  const mesCorrente = chaveDoMes(new Date(agora));
+
+  const porMes = new Map<
+    string,
+    { estreantes: number; voltaram: number; porMesDeRetorno: Map<string, number> }
+  >();
+  let estreantesDoMesCorrente = 0;
+
   for (const l of linhas) {
     if (!l.estreia || l.encontros === 0) continue;
-    const e = new Date(l.estreia);
+    const k = chaveDoMes(new Date(l.estreia));
     // O mês corrente fica de fora: quem estreou anteontem ainda não teve tempo
-    // de voltar, e incluí-lo derruba a taxa sem que nada tenha acontecido.
-    if (e.getFullYear() === new Date(agora).getFullYear() && e.getMonth() === new Date(agora).getMonth()) continue;
-    const k = `${e.getFullYear()}-${String(e.getMonth() + 1).padStart(2, "0")}`;
-    const c = porMes.get(k) ?? { estreantes: 0, voltaram: 0 };
+    // de voltar, e incluí-lo derruba a taxa sem que nada tenha acontecido. Ele
+    // volta adiante, em `coorteCorrente`, com o tamanho e sem taxa.
+    if (k === mesCorrente) {
+      estreantesDoMesCorrente++;
+      continue;
+    }
+    const c = porMes.get(k) ?? { estreantes: 0, voltaram: 0, porMesDeRetorno: new Map() };
     c.estreantes++;
     if (l.encontros >= 2) c.voltaram++;
+    // Os meses saem do mesmo conjunto que já conta encontro, e não de uma
+    // leitura nova do banco: a chave dele começa pela data, então o mês é um
+    // recorte dela. Contar por pessoa e não por encontro é o que faz a célula
+    // dizer "quantas voltaram" em vez de "quantas vezes vieram".
+    const meses: string[] = [];
+    acc.get(l.id)?.encontrosSet.forEach((chave) => meses.push(chave.slice(0, 7)));
+    // ⚠️ O piso é o primeiro mês DA PESSOA, e não `k`, que é a linha em que ela
+    // caiu. Os dois quase sempre coincidem e divergem na virada do mês: a
+    // coorte vem de `estreia`, que é instante e lê fuso local, e a chave do
+    // encontro é data já em texto. Quem estreou perto da meia-noite do dia 1º
+    // cairia na turma do mês anterior e apareceria como "voltou" no próprio mês
+    // de estreia, inventando um retorno que não houve.
+    const primeiroDaPessoa = meses.length > 0 ? meses.reduce((a, b) => (a < b ? a : b)) : k;
+    const piso = primeiroDaPessoa > k ? primeiroDaPessoa : k;
+    new Set(meses).forEach((m) => {
+      if (m <= piso) return;
+      c.porMesDeRetorno.set(m, (c.porMesDeRetorno.get(m) ?? 0) + 1);
+    });
     porMes.set(k, c);
   }
-  Array.from(porMes.entries()).sort().forEach(([k, v]) => {
-    const [ano, mes] = k.split("-");
-    coortes.push({ mes: k, rotulo: `${MESES_PT[+mes - 1]}/${ano.slice(2)}`, ...v });
+
+  // As colunas são meses de calendário seguidos, sem buraco: um mês sem
+  // ninguém precisa aparecer como coluna vazia, senão a tabela comprime o
+  // tempo e duas turmas distantes ficam lado a lado como se fossem vizinhas.
+  const chavesDeCoorte = Array.from(porMes.keys()).sort();
+  const mesesDeRetorno: RetratoPessoas["mesesDeRetorno"] = [];
+  if (chavesDeCoorte.length > 0) {
+    let cursor = mesSeguinte(chavesDeCoorte[0]);
+    while (cursor <= mesCorrente && mesesDeRetorno.length < 36) {
+      mesesDeRetorno.push({ mes: cursor, rotulo: rotuloDoMes(cursor) });
+      cursor = mesSeguinte(cursor);
+    }
+  }
+
+  chavesDeCoorte.forEach((k) => {
+    const v = porMes.get(k)!;
+    coortes.push({
+      mes: k,
+      rotulo: rotuloDoMes(k),
+      estreantes: v.estreantes,
+      voltaram: v.voltaram,
+      retornos: mesesDeRetorno.map((m) =>
+        m.mes <= k ? null : (v.porMesDeRetorno.get(m.mes) ?? 0),
+      ),
+    });
   });
+
+  const coorteCorrente =
+    estreantesDoMesCorrente > 0
+      ? {
+          mes: mesCorrente,
+          rotulo: rotuloDoMes(mesCorrente),
+          estreantes: estreantesDoMesCorrente,
+        }
+      : null;
+
+  // ── A plataforma de cursos ───────────────────────────────────
+  // Três degraus contados em PESSOAS, e não em matrículas: a mesma pessoa
+  // matriculada em três cursos é uma pessoa, e contar matrícula faria o topo do
+  // funil crescer sem que ninguém novo tivesse chegado. Não obedece ao seletor
+  // porque é estado acumulado: quem concluiu em maio continua tendo concluído.
+  const plataforma = {
+    matriculados: linhas.filter((l) => l.matriculas > 0).length,
+    comAula: linhas.filter((l) => l.aulas > 0).length,
+    concluiram: linhas.filter((l) => l.matriculasConcluidas > 0).length,
+  };
 
   // ── O retrato do seletivo ────────────────────────────────────
   // Quem foi aprovado e ainda não veio é a fila de convite mais óbvia que a
@@ -866,6 +984,9 @@ export async function montarRetrato(
       soFormulario: sumidos.filter((l) => recente(l.ultimoMeet)),
     },
     coortes,
+    mesesDeRetorno,
+    coorteCorrente,
+    plataforma,
     pessoas: validas
       .slice()
       .sort((a, b) => b.encontros - a.encontros || (a.diasSemAparecer ?? 9e9) - (b.diasSemAparecer ?? 9e9)),

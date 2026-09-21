@@ -19,8 +19,29 @@
 //   4. Cor significa estado, e um estado só por pessoa. Cor que decora em vez
 //      de informar treina o olho a ignorar cor.
 //
-// A série do núcleo é impressa como sete números, não como curva: com sete
-// pontos, uma linha suave desenha inflexões que os dados não têm.
+// ── A reorganização de 07/08/2026 ────────────────────────────────────────────
+//
+// Eram nove cartões antes de a lista aparecer, e dez parágrafos cinzas. Três
+// coisas mudaram, e nenhuma delas é número: nenhuma régua, nenhum denominador e
+// nenhuma ressalva foram tocados. O que mudou é que passam a ser vistos.
+//
+//   **A ordem virou a ordem da ação.** Primeiro o movimento do período, depois
+//   a fila de nomes com quem falar, e só então o que explica por que a fila tem
+//   esse tamanho. Três cartões que respondiam a mesma pergunta ("quem eu chamo")
+//   viraram um: destacadas, quem sumiu do núcleo e aprovados que nunca vieram
+//   estavam separados por acidente de origem do dado, não por assunto.
+//
+//   **Três degraus de número e nenhum a mais.** Destaque (o núcleo, e é o único
+//   da tela), faixa (`FaixaDeNumeros`, 19px) e linha (16px). Antes eram sete
+//   tamanhos para o mesmo papel, e a faixa estava reimplementada à mão em quatro
+//   lugares desta tela enquanto o componente que existe para isso não tinha uso.
+//
+//   **Duas séries que eram número solto viraram figura.** A série do núcleo é
+//   sete quinzenas e era impressa como sete números onde só a opacidade do
+//   texto dizia qual era o recente, em 3,14:1; e a coorte eram quatro blocos
+//   soltos que mostravam a última linha de uma tabela que tem quatro. O texto
+//   antigo dizia que sete pontos não sustentam curva suave, e continua certo:
+//   por isso é barra com valor escrito, e não linha interpolada.
 
 "use client";
 
@@ -29,12 +50,11 @@ import { motion } from "framer-motion";
 import { toast } from "sonner";
 import {
   Users,
-  UserMinus,
+  PhoneCall,
   Repeat,
   Search,
   Download,
   ChevronDown,
-
   Shield,
   AlertTriangle,
   Upload,
@@ -46,19 +66,22 @@ import { useAuth } from "@/hooks/useAuth";
 import Card from "@/components/ui/Card";
 import Skeleton from "@/components/ui/Skeleton";
 import HintButton from "@/components/admin/dashboard/HintButton";
+import StatStrip, { FaixaDeNumeros } from "@/components/admin/dashboard/StatStrip";
+import MiniBarChart from "@/components/admin/dashboard/MiniBarChart";
 import PessoaModal, { type PessoaRef } from "@/components/admin/dashboard/PessoaModal";
 import { SeletorJanela, JanelaPropria } from "@/components/admin/SeletorJanela";
 import Destaque, { CORES_DESTAQUE, type MudancaDestaque } from "@/components/admin/pessoas/Destaque";
-import BlocoClinica from "@/components/admin/pessoas/BlocoClinica";
-import { CORES, ROTULOS, ORDEM_ESTADOS, definicao } from "@/components/admin/pessoas/estados";
-import { REGUA, atende } from "@/lib/meet/regua";
+import { TabelaCoorte, FunilPlataforma, Ressalva } from "@/components/admin/pessoas/graficos";
+import {
+  CORES,
+  CORES_TEXTO,
+  ROTULOS,
+  ORDEM_ESTADOS,
+  definicao,
+} from "@/components/admin/pessoas/estados";
+import { PALETA } from "@/lib/design/paleta";
 import { RANGE_LABELS, type ActivityRange } from "@/lib/utils/activity";
 import type { EstadoPessoa, PessoaLinha, RetratoPessoas } from "@/lib/pessoas/agregar";
-
-const TERRACOTA = "#C84B31";
-const TEAL = "#2E9E8F";
-const DOURADO = "#D4854A";
-const ROXO = "#6C5CE7";
 
 interface ResumoImport {
   linhas: number;
@@ -116,6 +139,13 @@ const ORDENS: { chave: string; rotulo: string; ordenar: (a: PessoaLinha, b: Pess
 ];
 
 const PAGINA = 25;
+
+/** "81999998888" → "+55 (81) 99999-8888". Fora desse formato, devolve como está. */
+function telefoneLegivel(t: string | null): string {
+  if (!t) return "";
+  const m = t.match(/^(\d{2})(\d{4,5})(\d{4})$/);
+  return m ? `+55 (${m[1]}) ${m[2]}-${m[3]}` : t;
+}
 
 export default function AdminPessoasPage() {
   const { isAdmin } = useAuth();
@@ -230,14 +260,14 @@ export default function AdminPessoasPage() {
   const baixarCSV = () => {
     if (!retrato) return;
     const cab = [
-      "Nome", "E-mail", "Estado", "Destaque", "Anotacao", "Tem conta", "Encontros",
+      "Nome", "E-mail", "Telefone", "Estado", "Destaque", "Anotacao", "Tem conta", "Encontros",
       `Encontros em ${retrato.regras.janelaNucleoDias}d`, "Encontros no periodo",
       "Atividades", "Relatos escritos", "Aulas", "Horas na plataforma",
       "Encontros na sala", "Minutos na sala", "Turnos de fala",
       "Dias sem aparecer", "Ultimo encontro", "Estreia", "Seletivo status", "Seletivo nota",
     ];
     const linhas = filtradas.map((p) => [
-      p.nome, p.email ?? "", ROTULOS[p.estado], p.destaque?.cor ?? "", p.destaque?.nota ?? "",
+      p.nome, p.email ?? "", telefoneLegivel(p.telefone), ROTULOS[p.estado], p.destaque?.cor ?? "", p.destaque?.nota ?? "",
       p.temConta ? "sim" : "nao", p.encontros, p.encontrosRecentes, p.encontrosNoPeriodo,
       p.atividades, p.relatosLongos, p.aulas, p.horasPlataforma,
       p.encontrosNaSala, p.minutosNaSala, p.turnosFala,
@@ -254,6 +284,29 @@ export default function AdminPessoasPage() {
     a.click();
     URL.revokeObjectURL(url);
     toast.success("Baixado com o recorte e a ordem que estão na tela.");
+  };
+
+  /** Só o contato: nome completo e telefone, com o recorte que está na tela. */
+  const baixarContatos = () => {
+    if (!retrato) return;
+    const linhas = filtradas.map((p) => [p.nome, telefoneLegivel(p.telefone), p.email ?? ""]);
+    const semTelefone = filtradas.filter((p) => !p.telefone).length;
+    const texto =
+      "﻿" +
+      [["Nome completo", "Telefone", "E-mail"], ...linhas]
+        .map((l) => l.map((c) => `"${String(c).replace(/"/g, '""')}"`).join(","))
+        .join("\n");
+    const url = URL.createObjectURL(new Blob([texto], { type: "text/csv;charset=utf-8;" }));
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = `contatos_${recorte}_${janela}_${new Date().toISOString().slice(0, 10)}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+    toast.success(
+      semTelefone > 0
+        ? `${filtradas.length} contatos baixados; ${semTelefone} sem telefone (o telefone vem do seletivo).`
+        : `${filtradas.length} contatos baixados.`,
+    );
   };
 
   // A prévia e a gravação chamam a mesma rota e o mesmo cálculo. Se fossem dois
@@ -293,9 +346,9 @@ export default function AdminPessoasPage() {
   if (!isAdmin) {
     return (
       <div className="text-center py-20">
-        <Shield className="h-12 w-12 text-cream/20 mx-auto mb-4" />
+        <Shield className="h-12 w-12 text-cream/40 mx-auto mb-4" />
         <h2 className="font-fraunces font-bold text-xl text-cream mb-2">Acesso restrito</h2>
-        <p className="text-cream/40">Apenas administradores veem esta tela.</p>
+        <p className="text-cream/50">Apenas administradores veem esta tela.</p>
       </div>
     );
   }
@@ -315,14 +368,14 @@ export default function AdminPessoasPage() {
     return (
       <Card>
         <div className="flex items-start gap-3 py-4">
-          <AlertTriangle className="h-5 w-5 flex-shrink-0" style={{ color: DOURADO }} />
+          <AlertTriangle className="h-5 w-5 flex-shrink-0" style={{ color: PALETA.ressalva }} />
           <div>
             <p className="font-dm text-sm text-cream">Não consegui montar o retrato.</p>
-            <p className="font-dm text-xs text-cream/40 mt-1">{erro}</p>
+            <p className="font-dm text-xs text-cream/50 mt-1">{erro}</p>
             <button
               onClick={() => { setLoading(true); setErro(null); carregar(janela); }}
               className="mt-3 font-dm text-xs px-3 py-1.5 rounded-full"
-              style={{ color: TERRACOTA, border: `1px solid ${TERRACOTA}55` }}
+              style={{ color: PALETA.identidade, border: `1px solid ${PALETA.identidade}55` }}
             >
               Tentar de novo
             </button>
@@ -332,20 +385,15 @@ export default function AdminPessoasPage() {
     );
   }
 
-  const { nucleo, sumidos, coortes, totais, cobertura, fluxo, seletivo, estados, regras } = retrato;
+  const {
+    nucleo, sumidos, coortes, mesesDeRetorno, coorteCorrente, plataforma,
+    totais, cobertura, fluxo, seletivo, estados, regras,
+  } = retrato;
   const sumidosVisiveis = verTodosSumidos ? sumidos.semSinal : sumidos.semSinal.slice(0, 4);
   const periodoAberto = janela === "all";
   const rotuloPeriodo = RANGE_LABELS[janela].toLowerCase();
   const abrirPessoa = (p: PessoaLinha) =>
     setPessoaAberta({ nome: p.nome, email: p.email ?? undefined, pessoaId: p.id });
-
-  // A avaliação clínica casa por telefone e devolve o `pessoa_id`, não a linha
-  // inteira. Quem não estiver no recorte do período em vigor simplesmente não
-  // abre: é melhor o clique não fazer nada do que abrir a ficha de outra pessoa.
-  const abrirPessoaPorId = (pessoaId: string) => {
-    const p = retrato.pessoas.find((x) => x.id === pessoaId);
-    if (p) abrirPessoa(p);
-  };
 
   const chipsEstado: [Recorte, string, number][] = [
     ["todas", "Todas", totais.pessoas],
@@ -380,6 +428,12 @@ export default function AdminPessoasPage() {
                 ? "Fizeram o processo seletivo. O casamento é por e-mail ou WhatsApp, nunca por nome."
                 : "Passaram no seletivo e nunca apareceram em um grupo. É a fila de convite mais óbvia que existe.";
 
+  const nomesNaFila =
+    retrato.destacadas.length +
+    sumidos.semSinal.length +
+    sumidos.soFormulario.length +
+    seletivo.aprovadosQueNaoVieram.length;
+
   return (
     <div className={`space-y-6 transition-opacity ${recarregando ? "opacity-50" : ""}`}>
       {/* ── Cabeçalho ── */}
@@ -387,21 +441,31 @@ export default function AdminPessoasPage() {
         <div className="flex flex-col sm:flex-row sm:items-start justify-between gap-3">
           <div>
             <h1 className="font-fraunces font-bold text-2xl text-cream tracking-tight">Pessoas</h1>
-            <p className="text-sm text-cream/35 mt-1 font-dm">
+            <p className="text-sm text-cream/55 mt-1 font-dm">
               Quem volta, quem sumiu e com quem vale conversar.
             </p>
           </div>
-          <button
-            onClick={baixarCSV}
-            className="flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05] self-start"
-            style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
-          >
-            <Download className="h-3.5 w-3.5" />
-            Baixar CSV
-          </button>
+          <div className="flex flex-wrap gap-2 self-start">
+            <button
+              onClick={baixarContatos}
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05]"
+              style={{ color: "rgba(253,251,247,0.62)", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <PhoneCall className="h-3.5 w-3.5" />
+              Nome e telefone (CSV)
+            </button>
+            <button
+              onClick={baixarCSV}
+              className="flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05]"
+              style={{ color: "rgba(253,251,247,0.62)", border: "1px solid rgba(255,255,255,0.1)" }}
+            >
+              <Download className="h-3.5 w-3.5" />
+              Baixar CSV
+            </button>
+          </div>
         </div>
         <div className="flex items-center gap-1.5 mt-3">
-          <p className="font-dm text-[11px] text-cream/30">
+          <p className="font-dm text-[11px] text-cream/50">
             {cobertura.encontrosCapturados > 0 && cobertura.pct != null
               ? `O formulário registra cerca de ${cobertura.pct}% de quem esteve na sala.`
               : "O formulário registra cerca de metade de quem esteve na sala."}
@@ -413,71 +477,279 @@ export default function AdminPessoasPage() {
       {/* ── Período ── */}
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.03 }}>
         <SeletorJanela valor={janela} onChange={trocarJanela} desabilitado={recarregando} />
-        <p className="font-dm text-[11px] text-cream/25 mt-2 leading-relaxed">
+        <p className="font-dm text-[11px] text-cream/50 mt-2 leading-relaxed max-w-[74ch]">
           Este seletor decide quem entra na lista. O que cada pessoa é, quantas vezes veio na vida
           e se escreve relato, continua vindo da história inteira dela. Núcleo, sumiço e coorte
           têm prazo próprio e não obedecem a este seletor.
         </p>
       </motion.div>
 
-      {/* ── Movimento ── */}
-      <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.06 }}>
+      {/* ── Movimento ──
+          Vira faixa, e não cartão: são quatro números que se leem de relance, e
+          gastar um cartão inteiro com eles empurrava para baixo da dobra a fila
+          de nomes, que é a única parte da tela em que alguém faz alguma coisa. */}
+      <StatStrip
+        delay={0.06}
+        title={`Movimento ${periodoAberto ? "em toda a história" : `nos últimos ${rotuloPeriodo}`}`}
+        accent="rgba(253,251,247,0.85)"
+        // A ressalva continua visível, e não vira só pista: a regra desta tela
+        // é que rótulo cuja regra mora atrás de um ícone de ajuda é rótulo que
+        // ninguém confere. Ela aparece exatamente quando vale, como antes.
+        aoLadoDoTitulo={
+          fluxo.vezesPorPessoa != null && fluxo.vezesPorPessoa > fluxo.medianaVezes ? (
+            <span className="font-dm text-[10px] text-cream/60 normal-case tracking-normal">
+              a média está acima da mediana: leia a mediana
+            </span>
+          ) : undefined
+        }
+        items={[
+          { label: "encontros de grupo", value: String(fluxo.encontros) },
+          { label: "pessoas participaram", value: String(fluxo.pessoas), color: PALETA.identidade },
+          { label: "vieram pela primeira vez", value: String(fluxo.estreantes), color: PALETA.presenca },
+          {
+            label: "vezes, na mediana",
+            value: String(fluxo.medianaVezes),
+            sub: fluxo.vezesPorPessoa != null ? `média ${fluxo.vezesPorPessoa}` : undefined,
+            // O parágrafo que dizia isso só aparecia quando a média passava a
+            // mediana, ou seja, sumia justamente quando as duas concordavam e
+            // ninguém aprendia a diferença. Como pista fica sempre.
+            hint:
+              "A média fica acima da mediana porque um punhado de pessoas vem muitas vezes e a maioria vem uma só. Leia a mediana, não a média.",
+          },
+        ]}
+      />
+
+      {/* ── Com quem falar ──
+          Três filas que estavam em três cartões diferentes, separadas por
+          origem do dado e não por assunto. A pergunta das três é a mesma, e é a
+          única desta tela que termina em alguém mandando mensagem. */}
+      <motion.div id="sumiram" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
         <Card>
-          <div className="flex items-center gap-2 mb-4">
-            <Activity className="h-4 w-4" style={{ color: TEAL }} />
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-              Movimento {periodoAberto ? "em toda a história" : `nos últimos ${rotuloPeriodo}`}
-            </h2>
-          </div>
-          {/* Grade de duas colunas no celular e faixa livre a partir do tablet:
-              com gap-x-10 e quebra livre, os quatro números caíam em 2, depois
-              1, depois 1, e o último ficava órfão no meio do card. */}
-          <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-8 sm:gap-x-10 gap-y-5">
-            {[
-              { r: "encontros de grupo", v: fluxo.encontros, c: undefined as string | undefined },
-              { r: "pessoas participaram", v: fluxo.pessoas, c: TERRACOTA },
-              { r: "vieram pela primeira vez", v: fluxo.estreantes, c: TEAL },
-            ].map((x) => (
-              <div key={x.r}>
-                <p
-                  className="font-fraunces font-bold text-3xl tabular-nums leading-none"
-                  style={{ color: x.c ?? "rgba(253,251,247,0.85)" }}
-                >
-                  {x.v}
-                </p>
-                <p className="font-dm text-[11px] text-cream/30 mt-1.5">{x.r}</p>
-              </div>
-            ))}
-            <div>
-              <p className="font-fraunces font-bold text-3xl tabular-nums leading-none text-cream/85">
-                {fluxo.medianaVezes}
-              </p>
-              <p className="font-dm text-[11px] text-cream/30 mt-1.5">
-                vezes, na mediana
-                {fluxo.vezesPorPessoa != null && (
-                  <span className="text-cream/20"> · média {fluxo.vezesPorPessoa}</span>
-                )}
-              </p>
+          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
+              <PhoneCall className="h-4 w-4" style={{ color: PALETA.identidade }} />
+              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50">
+                Com quem falar
+              </h2>
+              <JanelaPropria motivo="cada fila tem prazo próprio" />
             </div>
+            <span className="font-dm text-xs text-cream/50 tabular-nums">
+              {nomesNaFila} {nomesNaFila === 1 ? "nome" : "nomes"}
+            </span>
           </div>
-          {fluxo.vezesPorPessoa != null && fluxo.vezesPorPessoa > fluxo.medianaVezes && (
-            <p className="font-dm text-[11px] text-cream/30 mt-4 leading-relaxed">
-              A média está acima da mediana porque um punhado de pessoas vem muitas vezes e a
-              maioria vem uma só. Leia a mediana, não a média.
-            </p>
+          <p className="font-dm text-xs text-cream/55 mb-5 leading-relaxed max-w-[74ch]">
+            Nenhuma destas filas é cálculo novo: são recortes que já existiam espalhados pela tela,
+            juntos porque respondem a mesma pergunta.
+          </p>
+
+          <div className="space-y-6">
+            {retrato.destacadas.length > 0 && (
+              <Fila
+                titulo="Você destacou"
+                quantos={retrato.destacadas.length}
+                cor={CORES_DESTAQUE.dourado}
+                prazo="sem prazo"
+                explicacao="As pessoas que você marcou com estrela, com a anotação que escreveu. Ficam aqui mesmo quando não aparecem no período escolhido acima."
+              >
+                <div className="space-y-1.5">
+                  {retrato.destacadas.map((p) => (
+                    <div
+                      key={p.id}
+                      className="flex items-start gap-2 px-3 py-2.5 rounded-[10px]"
+                      style={{
+                        background: `${CORES_DESTAQUE[p.destaque!.cor]}0F`,
+                        border: `1px solid ${CORES_DESTAQUE[p.destaque!.cor]}40`,
+                      }}
+                    >
+                      <button onClick={() => abrirPessoa(p)} className="flex-1 min-w-0 text-left">
+                        <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+                        {/* A anotação é texto livre de até 500 caracteres. Sem break-words, um
+                            link colado sem espaço não tem onde quebrar, estoura a largura da
+                            linha e faz a PÁGINA inteira rolar de lado, porque o main do painel
+                            é overflow-y-auto e overflow-y automático implica overflow-x
+                            automático. E sem limite de linhas os 500 caracteres viram umas
+                            catorze linhas: uma pessoa só ocuparia três quartos da tela do
+                            celular. No desktop a nota cabe inteira, então o corte só vale
+                            enquanto a largura é pouca. */}
+                        {p.destaque!.nota && (
+                          <p className="font-dm text-xs text-cream/60 mt-0.5 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
+                            {p.destaque!.nota}
+                          </p>
+                        )}
+                        <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
+                          <Selo cor={CORES_TEXTO[p.estado]}>{ROTULOS[p.estado]}</Selo>
+                          <Selo>{p.encontros} {p.encontros === 1 ? "encontro" : "encontros"}</Selo>
+                          {p.diasSemAparecer != null && (
+                            <Selo>{textoRecencia(p.diasSemAparecer)}</Selo>
+                          )}
+                        </div>
+                      </button>
+                      <Destaque
+                        pessoaId={p.id}
+                        nome={p.nome}
+                        destaque={p.destaque}
+                        onMudou={aplicarDestaque}
+                      />
+                    </div>
+                  ))}
+                </div>
+              </Fila>
+            )}
+
+            <Fila
+              titulo="Eram do núcleo e pararam de vir"
+              quantos={sumidos.semSinal.length + sumidos.soFormulario.length}
+              cor={PALETA.ressalva}
+              prazo={`${regras.diasSumiu} dias, por definição`}
+              explicacao={`Chegaram a ${regras.barraNucleo} encontros ou mais em toda a história e estão há ${regras.diasSumiu} dias sem dar sinal.`}
+            >
+              {sumidos.semSinal.length === 0 && sumidos.soFormulario.length === 0 ? (
+                <p className="font-dm text-xs text-cream/50 py-4">
+                  Ninguém nessa situação. Todas apareceram nos últimos {regras.diasSumiu} dias.
+                </p>
+              ) : (
+                <div className="space-y-5">
+                  {sumidos.semSinal.length > 0 && (
+                    <div>
+                      <p className="font-dm text-[11px] text-cream/60 mb-2">
+                        Não aparece em lugar nenhum
+                        <span className="text-cream/50"> · {sumidos.semSinal.length}</span>
+                      </p>
+                      <div className="space-y-1">
+                        {sumidosVisiveis.map((p) => (
+                          <LinhaSumido
+                            key={p.id}
+                            p={p}
+                            onClick={() => abrirPessoa(p)}
+                            onDestaque={aplicarDestaque}
+                          />
+                        ))}
+                      </div>
+                      {sumidos.semSinal.length > 4 && (
+                        <button
+                          onClick={() => setVerTodosSumidos((v) => !v)}
+                          className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
+                          style={{ color: PALETA.ressalva }}
+                        >
+                          {verTodosSumidos ? "Mostrar menos" : `Ver ${sumidos.semSinal.length - 4} restantes`}
+                        </button>
+                      )}
+                    </div>
+                  )}
+
+                  {sumidos.soFormulario.length > 0 && (
+                    <div>
+                      <p className="font-dm text-[11px] text-cream/60 mb-2">
+                        Esteve na sala, parou de preencher
+                        <span className="text-cream/50"> · {sumidos.soFormulario.length}</span>
+                      </p>
+                      <div className="space-y-1">
+                        {sumidos.soFormulario.map((p) => (
+                          <LinhaSumido
+                            key={p.id}
+                            p={p}
+                            onClick={() => abrirPessoa(p)}
+                            onDestaque={aplicarDestaque}
+                          />
+                        ))}
+                      </div>
+                      <Ressalva>
+                        Aqui o sumiço pode ser só do formulário. Confira antes de cobrar.
+                      </Ressalva>
+                    </div>
+                  )}
+                </div>
+              )}
+            </Fila>
+
+            {seletivo.aprovadosQueNaoVieram.length > 0 && (
+              <Fila
+                titulo="Passaram no seletivo e nunca vieram"
+                quantos={seletivo.aprovadosQueNaoVieram.length}
+                cor={PALETA.falaTexto}
+                prazo="o seletivo tem data própria"
+                explicacao="Aprovar não traz ninguém para dentro sozinho. É a fila de convite mais óbvia que existe, e ela estava enterrada no fim do bloco do processo seletivo."
+              >
+                <div className="space-y-1">
+                  {(verTodosAprovados
+                    ? seletivo.aprovadosQueNaoVieram
+                    : seletivo.aprovadosQueNaoVieram.slice(0, 6)
+                  ).map((p) => (
+                    <button
+                      key={p.id}
+                      onClick={() => abrirPessoa(p)}
+                      className="w-full text-left px-3 py-2 rounded-[10px] transition-colors hover:bg-white/[.03] flex items-center justify-between gap-3"
+                      style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
+                    >
+                      <div className="min-w-0">
+                        <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
+                        <p className="font-dm text-[11px] text-cream/50 truncate">{p.email ?? "sem e-mail"}</p>
+                      </div>
+                      {p.seletivo?.nota != null && (
+                        <span
+                          className="font-fraunces font-bold text-sm tabular-nums flex-shrink-0"
+                          style={{ color: PALETA.falaTexto }}
+                        >
+                          {p.seletivo.nota}
+                        </span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+                {seletivo.aprovadosQueNaoVieram.length > 6 && (
+                  <button
+                    onClick={() => setVerTodosAprovados((v) => !v)}
+                    className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
+                    style={{ color: PALETA.falaTexto }}
+                  >
+                    {verTodosAprovados
+                      ? "Mostrar menos"
+                      : `Ver ${seletivo.aprovadosQueNaoVieram.length - 6} restantes`}
+                  </button>
+                )}
+              </Fila>
+            )}
+          </div>
+
+          {/* Duas filas que já existem como recorte da lista e não precisam de
+              cartão próprio: quem esfriou e quem esteve na sala calada mudam de
+              tamanho com o período escolhido, então elas moram na lista, que é
+              o único lugar da tela que obedece ao seletor. O atalho leva até lá
+              com o recorte pronto, em vez de duplicar os nomes aqui. */}
+          {(estados.esfriando > 0 || totais.mudos > 0) && (
+            <div
+              className="mt-6 pt-4 flex flex-wrap items-center gap-2"
+              style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}
+            >
+              <span className="font-dm text-[11px] text-cream/55">Também vale conversar com</span>
+              {estados.esfriando > 0 && (
+                <Atalho
+                  onClick={() => setRecorte("esfriando")}
+                  cor={PALETA.ressalva}
+                  rotulo={`quem esfriou · ${estados.esfriando}`}
+                />
+              )}
+              {totais.mudos > 0 && (
+                <Atalho
+                  onClick={() => setRecorte("mudos")}
+                  cor={PALETA.falaTexto}
+                  rotulo={`quem vem e não fala · ${totais.mudos}`}
+                />
+              )}
+            </div>
           )}
         </Card>
       </motion.div>
 
       {/* ── Núcleo ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.14 }}>
         <Card>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <Users className="h-4 w-4" style={{ color: TERRACOTA }} />
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">Núcleo</h2>
+            <Users className="h-4 w-4" style={{ color: PALETA.identidade }} />
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50">Núcleo</h2>
             <JanelaPropria motivo={`${regras.janelaNucleoDias} dias, por definição`} />
           </div>
-          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+          <p className="font-dm text-xs text-cream/55 mb-4 leading-relaxed max-w-[74ch]">
             {definicao("nucleo", regras)}
           </p>
 
@@ -488,18 +760,21 @@ export default function AdminPessoasPage() {
               curta pedem sem apertar. */}
           <div className="grid grid-cols-1 sm:grid-cols-[170px_1fr] lg:grid-cols-[210px_1fr] gap-4 sm:gap-6">
             <div>
-              <p className="font-fraunces font-bold text-5xl tabular-nums leading-none" style={{ color: TERRACOTA }}>
+              {/* O único número de destaque da tela, e a regra é essa: um por
+                  tela, no que a tela existe para responder. Antes era o único
+                  `text-5xl` do painel inteiro sem nada dizendo por quê. */}
+              <p className="font-fraunces font-bold text-5xl tabular-nums leading-none" style={{ color: PALETA.identidade }}>
                 {nucleo.total}
               </p>
-              <p className="font-dm text-xs text-cream/40 mt-2 leading-snug">
+              <p className="font-dm text-xs text-cream/60 mt-2 leading-snug">
                 {nucleo.total === 1 ? "pessoa" : "pessoas"} com {regras.barraNucleo} encontros ou
                 mais em {regras.janelaNucleoDias} dias
               </p>
               {nucleo.aproximacao > 0 && (
                 <button
                   onClick={() => setRecorte("chegando")}
-                  className="font-dm text-[11px] mt-3 text-left leading-relaxed transition-colors hover:text-cream/60 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
-                  style={{ color: TEAL }}
+                  className="font-dm text-[11px] mt-3 text-left leading-relaxed transition-colors hover:text-cream/80 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
+                  style={{ color: PALETA.presenca }}
                 >
                   {nucleo.aproximacao} {nucleo.aproximacao === 1 ? "pessoa está" : "pessoas estão"} chegando perto.
                   É daí que o núcleo cresce.
@@ -517,43 +792,41 @@ export default function AdminPessoasPage() {
                       onClick={() => abrirPessoa(p)}
                       className="font-dm text-xs px-2.5 py-1.5 rounded-full transition-colors hover:bg-white/[.05]"
                       style={{
-                        color: "rgba(253,251,247,0.75)",
+                        color: "rgba(253,251,247,0.85)",
                         border: "1px solid rgba(200,75,49,0.25)",
                         background: "rgba(200,75,49,0.06)",
                       }}
                     >
                       {p.nome.split(" ").slice(0, 2).join(" ")}
-                      <span className="text-cream/30 tabular-nums"> · {p.encontrosRecentes}</span>
+                      <span className="text-cream/50 tabular-nums"> · {p.encontrosRecentes}</span>
                     </button>
                   ))}
                 </div>
               )}
 
-              {/* Os sete pontos somam uns 302px com gap-x-5, e um celular de 360px deixa
-                  280px úteis dentro do card. O flex-wrap então joga justo o sétimo para a
-                  linha de baixo, que é o mais recente e o único destacado. Série de sete
-                  que quebra 6 mais 1 deixa de ser série: vira seis números e um número
-                  solto, e a comparação entre quinzenas, que é a única leitura que a série
-                  oferece, morre. Grid de sete colunas cabe sempre porque divide o que
-                  existe em vez de exigir o que falta. Do sm para cima sobra largura e o
-                  flex volta, que respira melhor. */}
-              <div className="grid grid-cols-7 gap-x-1 items-end sm:flex sm:flex-wrap sm:gap-x-5 sm:gap-y-2">
-                {nucleo.serie.map((q, i) => (
-                  <div key={q.rotulo} className="text-center">
-                    <p
-                      className="font-fraunces font-bold text-xl tabular-nums"
-                      style={{ color: i >= nucleo.serie.length - 2 ? "rgba(253,251,247,0.85)" : "rgba(253,251,247,0.35)" }}
-                    >
-                      {q.valor}
-                    </p>
-                    <p className="font-dm text-[9px] text-cream/20 mt-0.5">{q.rotulo}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 mt-3">
-                as últimas sete quinzenas
+              {/* A série vira barra.
+                  Ela é uma série temporal de verdade, recalculada quinzena a
+                  quinzena com a régua de hoje, e vinha impressa como sete
+                  números soltos em que o "agora" era codificado só pela
+                  opacidade do texto: `.85` contra `.35`, e `.35` mede 3,14:1,
+                  ou seja o passado da série era ilegível. Barra com altura
+                  resolve os dois: a comparação entre quinzenas vira forma, e a
+                  recência ganha tom próprio em vez de apagamento.
+                  Continua sem curva suave, e o motivo é o de sempre: com sete
+                  pontos, uma linha interpolada desenha inflexões que os dados
+                  não têm. */}
+              <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50 mb-3">
+                o núcleo nas últimas sete quinzenas
               </p>
-              <p className="font-dm text-[11px] text-cream/30 mt-2 leading-relaxed">
+              <MiniBarChart
+                data={nucleo.serie.map((q) => ({ date: q.rotulo, count: q.valor, rotulo: q.rotulo }))}
+                color={PALETA.presenca}
+                height="h-28"
+                labelInterval={1}
+                mostrarValores
+                realceFinal={2}
+              />
+              <p className="font-dm text-[11px] text-cream/50 mt-4 leading-relaxed max-w-[74ch]">
                 A série conta só o formulário: a captura da sala começou em agosto, e somá-la agora
                 faria o último ponto subir por mudança de lente, não por mudança de vínculo.
               </p>
@@ -563,15 +836,15 @@ export default function AdminPessoasPage() {
           {nucleo.frios > 0 && (
             <div
               className="mt-5 flex flex-col sm:flex-row sm:items-center justify-between gap-2 px-4 py-3 rounded-[10px]"
-              style={{ background: "rgba(212,133,74,0.07)", border: "1px solid rgba(212,133,74,0.2)" }}
+              style={{ background: "rgba(217,169,63,0.07)", border: "1px solid rgba(217,169,63,0.2)" }}
             >
-              <p className="font-dm text-xs text-cream/70">
+              <p className="font-dm text-xs text-cream/85">
                 {nucleo.frios} {nucleo.frios === 1 ? "dessa pessoa não aparece" : `dessas ${nucleo.total} não aparecem`} há {regras.diasSumiu} dias ou mais.
               </p>
               <a
                 href="#sumiram"
                 className="font-dm text-xs whitespace-nowrap inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
-                style={{ color: DOURADO }}
+                style={{ color: PALETA.ressalva }}
               >
                 Ver os nomes
               </a>
@@ -580,258 +853,117 @@ export default function AdminPessoasPage() {
         </Card>
       </motion.div>
 
-      {/* ── Destacadas ── */}
-      {retrato.destacadas.length > 0 && (
-        <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.13 }}>
-          <Card>
-            <div className="flex items-center gap-2 mb-1 flex-wrap">
-              <Star className="h-4 w-4" style={{ color: CORES_DESTAQUE.dourado }} fill={CORES_DESTAQUE.dourado} />
-              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-                Você destacou
-              </h2>
-              <JanelaPropria motivo="sem prazo" />
-            </div>
-            <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
-              As pessoas que você marcou com estrela, com a anotação que escreveu. Elas ficam aqui
-              mesmo quando não aparecem no período escolhido acima.
-            </p>
-            <div className="space-y-1.5">
-              {retrato.destacadas.map((p) => (
-                <div
-                  key={p.id}
-                  className="flex items-start gap-2 px-3 py-2.5 rounded-[10px]"
-                  style={{
-                    background: `${CORES_DESTAQUE[p.destaque!.cor]}0F`,
-                    border: `1px solid ${CORES_DESTAQUE[p.destaque!.cor]}40`,
-                  }}
-                >
-                  <button onClick={() => abrirPessoa(p)} className="flex-1 min-w-0 text-left">
-                    <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
-                    {/* A anotação é texto livre de até 500 caracteres. Sem break-words, um
-                        link colado sem espaço não tem onde quebrar, estoura a largura da
-                        linha e faz a PÁGINA inteira rolar de lado, porque o main do painel
-                        é overflow-y-auto e overflow-y automático implica overflow-x
-                        automático. E sem limite de linhas os 500 caracteres viram umas
-                        catorze linhas: uma pessoa só ocuparia três quartos da tela do
-                        celular. No desktop a nota cabe inteira, então o corte só vale
-                        enquanto a largura é pouca. */}
-                    {p.destaque!.nota && (
-                      <p className="font-dm text-xs text-cream/50 mt-0.5 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
-                        {p.destaque!.nota}
-                      </p>
-                    )}
-                    <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1">
-                      <Selo cor={CORES[p.estado]}>{ROTULOS[p.estado]}</Selo>
-                      <Selo>{p.encontros} {p.encontros === 1 ? "encontro" : "encontros"}</Selo>
-                      {p.diasSemAparecer != null && (
-                        <Selo>{textoRecencia(p.diasSemAparecer)}</Selo>
-                      )}
-                    </div>
-                  </button>
-                  <Destaque
-                    pessoaId={p.id}
-                    nome={p.nome}
-                    destaque={p.destaque}
-                    onMudou={aplicarDestaque}
-                  />
-                </div>
-              ))}
-            </div>
-          </Card>
-        </motion.div>
-      )}
-
-      {/* ── Quem sumiu ── */}
-      <motion.div id="sumiram" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.16 }}>
-        <Card>
-          <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-            <div className="flex items-center gap-2 flex-wrap">
-              <UserMinus className="h-4 w-4" style={{ color: DOURADO }} />
-              <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-                Eram do núcleo e pararam de vir
-              </h2>
-              <JanelaPropria motivo={`${regras.diasSumiu} dias, por definição`} />
-            </div>
-            <span className="font-dm text-xs text-cream/30">
-              {sumidos.semSinal.length + sumidos.soFormulario.length} pessoas
-            </span>
-          </div>
-          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
-            Chegaram a {regras.barraNucleo} encontros ou mais em toda a história e estão há{" "}
-            {regras.diasSumiu} dias sem dar sinal.
-          </p>
-
-          {sumidos.semSinal.length === 0 && sumidos.soFormulario.length === 0 ? (
-            <p className="font-dm text-xs text-cream/30 py-6 text-center">
-              Ninguém nessa situação. Todas apareceram nos últimos {regras.diasSumiu} dias.
-            </p>
-          ) : (
-            <div className="space-y-5">
-              {sumidos.semSinal.length > 0 && (
-                <div>
-                  <p className="font-dm text-[11px] text-cream/40 mb-2">
-                    Não aparece em lugar nenhum
-                    <span className="text-cream/25"> · {sumidos.semSinal.length}</span>
-                  </p>
-                  <div className="space-y-1">
-                    {sumidosVisiveis.map((p) => (
-                      <LinhaSumido
-                        key={p.id}
-                        p={p}
-                        onClick={() => abrirPessoa(p)}
-                        onDestaque={aplicarDestaque}
-                      />
-                    ))}
-                  </div>
-                  {sumidos.semSinal.length > 4 && (
-                    <button
-                      onClick={() => setVerTodosSumidos((v) => !v)}
-                      className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
-                      style={{ color: DOURADO }}
-                    >
-                      {verTodosSumidos ? "Mostrar menos" : `Ver ${sumidos.semSinal.length - 4} restantes`}
-                    </button>
-                  )}
-                </div>
-              )}
-
-              {sumidos.soFormulario.length > 0 && (
-                <div>
-                  <p className="font-dm text-[11px] text-cream/40 mb-2">
-                    Esteve na sala, parou de preencher
-                    <span className="text-cream/25"> · {sumidos.soFormulario.length}</span>
-                  </p>
-                  <div className="space-y-1">
-                    {sumidos.soFormulario.map((p) => (
-                      <LinhaSumido
-                        key={p.id}
-                        p={p}
-                        onClick={() => abrirPessoa(p)}
-                        onDestaque={aplicarDestaque}
-                      />
-                    ))}
-                  </div>
-                  <p className="font-dm text-[11px] text-cream/30 mt-2 leading-relaxed">
-                    Aqui o sumiço pode ser só do formulário. Confira antes de cobrar.
-                  </p>
-                </div>
-              )}
-            </div>
-          )}
-        </Card>
-      </motion.div>
-
-      {/* ── Coorte ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
+      {/* ── Quem continua ──
+          Duas figuras de permanência que estavam em lugares diferentes por
+          origem do dado: a turma que estreia num mês e a matrícula que vira
+          aula. A pergunta é a mesma nas duas, "quantos seguem", e cada uma tem
+          a ressalva da sua fonte logo abaixo dela. */}
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.18 }}>
         <Card>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <Repeat className="h-4 w-4" style={{ color: TEAL }} />
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
-              Quem veio pela primeira vez e voltou
+            <Repeat className="h-4 w-4" style={{ color: PALETA.presenca }} />
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50">
+              Quem continua
             </h2>
             <JanelaPropria motivo="por mês de estreia" />
           </div>
-          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
-            De cada grupo que estreou num mês, quantas pessoas apareceram de novo depois. O mês
-            corrente fica de fora: quem estreou anteontem ainda não teve tempo de voltar.
+          <p className="font-dm text-xs text-cream/55 mb-5 leading-relaxed max-w-[74ch]">
+            De cada grupo que estreou num mês, quantas pessoas apareceram de novo, e em qual mês.
+            O mês corrente não vira turma: quem estreou anteontem ainda não teve tempo de voltar.
           </p>
 
           {coortes.length === 0 ? (
-            <p className="font-dm text-xs text-cream/30 py-6 text-center">
+            <p className="font-dm text-xs text-cream/50 py-6 text-center">
               Ainda não há mês fechado com gente nova o suficiente para contar.
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-                {coortes.slice(-4).map((c) => {
-                  const pct = c.estreantes > 0 ? (c.voltaram / c.estreantes) * 100 : 0;
-                  return (
-                    <div key={c.mes}>
-                      <p className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">{c.rotulo}</p>
-                      <p className="font-fraunces font-bold text-xl text-cream mt-1 tabular-nums">
-                        {c.voltaram} <span className="text-cream/35 font-dm text-sm font-normal">de {c.estreantes}</span>
-                      </p>
-                      {/* O piso do percentual vem da régua, e não de um 30 solto
-                          aqui: era o sétimo limiar espalhado pelo painel. */}
-                      {atende(c.estreantes, REGUA.percentual) && (
-                        <p className="font-dm text-xs text-cream/40 tabular-nums">{Math.round(pct)}%</p>
-                      )}
-                      {/* Escala fixa de 0 a 60: normalizar pelo maior faria 43% parecer o dobro de 32%. */}
-                      <div className="h-1.5 rounded-full overflow-hidden mt-2" style={{ background: "rgba(255,255,255,0.05)" }}>
-                        <div
-                          className="h-full rounded-full"
-                          style={{ width: `${Math.min((pct / 60) * 100, 100)}%`, background: TEAL, opacity: 0.7 }}
-                        />
-                      </div>
-                      <p className="font-dm text-[10px] text-cream/25 mt-1.5">
-                        {c.estreantes - c.voltaram} não voltaram
-                      </p>
-                    </div>
-                  );
-                })}
-              </div>
-              <p className="font-dm text-[11px] text-cream/30 mt-4 leading-relaxed">
-                A diferença entre um mês e outro cabe dentro do erro: leia os quatro como iguais.
+              <TabelaCoorte
+                coortes={coortes}
+                meses={mesesDeRetorno}
+                corrente={coorteCorrente}
+              />
+              <p className="font-dm text-[11px] text-cream/50 mt-4 leading-relaxed max-w-[74ch]">
+                A diferença entre um mês e outro cabe dentro do erro: leia as turmas como iguais.
                 O que interessa é que o patamar não se mexeu.
               </p>
+              <div className="mt-3">
+                <Ressalva>
+                  A turma e o retorno saem do formulário de certificado, e não estar no formulário
+                  não é não estar na associação: ele registra cerca de metade de quem passa pela
+                  sala. Uma coluna inteira acesa costuma ser mês em que muita gente passou a
+                  preencher, não mês em que muita gente voltou.
+                </Ressalva>
+              </div>
             </>
+          )}
+
+          {plataforma.matriculados > 0 && (
+            <div className="mt-6 pt-5" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="flex items-center gap-2 mb-1 flex-wrap">
+                <Activity className="h-4 w-4" style={{ color: PALETA.presenca }} />
+                <h3 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50">
+                  Na plataforma de cursos
+                </h3>
+                <JanelaPropria motivo="tudo que já aconteceu" />
+              </div>
+              <p className="font-dm text-xs text-cream/55 mb-5 leading-relaxed max-w-[74ch]">
+                Contado em pessoas, e não em matrículas: quem se matriculou em três cursos é uma
+                pessoa. Este é o dado mais limpo da tela, porque matrícula e aula concluída são
+                registro do próprio sistema e não dependem de ninguém preencher nada.
+              </p>
+              <FunilPlataforma
+                matriculados={plataforma.matriculados}
+                comAula={plataforma.comAula}
+                concluiram={plataforma.concluiram}
+              />
+            </div>
           )}
         </Card>
       </motion.div>
 
       {/* ── Processo seletivo ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.26 }}>
+      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.22 }}>
         <Card>
           <div className="flex items-center gap-2 mb-1 flex-wrap">
-            <GraduationCap className="h-4 w-4" style={{ color: ROXO }} />
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25">
+            <GraduationCap className="h-4 w-4" style={{ color: PALETA.fala }} />
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50">
               Processo seletivo
             </h2>
             <JanelaPropria motivo="tem data própria" />
           </div>
-          <p className="font-dm text-xs text-cream/40 mb-4 leading-relaxed">
+          <p className="font-dm text-xs text-cream/55 mb-4 leading-relaxed max-w-[74ch]">
             Cada candidato é ligado a uma pessoa pelo e-mail ou pelo WhatsApp, nunca pelo nome.
+            A fila de quem passou e nunca veio está lá em cima, junto com as outras filas de nome.
           </p>
 
           {seletivo.candidatos === 0 ? (
-            <p className="font-dm text-xs text-cream/30 py-4 leading-relaxed">
+            <p className="font-dm text-xs text-cream/50 py-4 leading-relaxed max-w-[74ch]">
               Nenhum candidato importado ainda. Solte abaixo o CSV completo do AvaliAllos e o
               seletivo passa a aparecer aqui e ao lado de cada pessoa.
             </p>
           ) : (
             <>
-              <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-x-6 sm:gap-x-8 gap-y-5 mb-5">
-                {[
-                  { r: "candidatos", v: seletivo.candidatos, c: undefined as string | undefined },
-                  { r: "aprovados", v: seletivo.aprovados, c: TEAL },
-                  { r: "não aprovados", v: seletivo.rejeitados, c: undefined },
-                  { r: "já eram pessoa conhecida", v: seletivo.jaEramPessoa, c: undefined },
-                ].map((x) => (
-                  <div key={x.r}>
-                    <p
-                      className="font-fraunces font-bold text-2xl tabular-nums leading-none"
-                      style={{ color: x.c ?? "rgba(253,251,247,0.85)" }}
-                    >
-                      {x.v}
-                    </p>
-                    <p className="font-dm text-[11px] text-cream/30 mt-1.5">{x.r}</p>
-                  </div>
-                ))}
-                {seletivo.corte != null && (
-                  <div>
-                    <p className="font-fraunces font-bold text-2xl tabular-nums leading-none text-cream/85">
-                      {seletivo.corte}
-                    </p>
-                    <p className="font-dm text-[11px] text-cream/30 mt-1.5">nota de corte observada</p>
-                  </div>
-                )}
+              <div className="mb-5">
+                <FaixaDeNumeros
+                  accent="rgba(253,251,247,0.85)"
+                  items={[
+                    { label: "candidatos", value: String(seletivo.candidatos) },
+                    { label: "aprovados", value: String(seletivo.aprovados), color: PALETA.presenca },
+                    { label: "não aprovados", value: String(seletivo.rejeitados) },
+                    { label: "já eram pessoa conhecida", value: String(seletivo.jaEramPessoa) },
+                    ...(seletivo.corte != null
+                      ? [{ label: "nota de corte observada", value: String(seletivo.corte) }]
+                      : []),
+                  ]}
+                />
               </div>
 
               <div
                 className="px-4 py-3 rounded-[10px] mb-4"
                 style={{ background: "rgba(108,92,231,0.06)", border: "1px solid rgba(108,92,231,0.2)" }}
               >
-                <p className="font-dm text-sm text-cream/80">
+                <p className="font-dm text-sm text-cream/85">
                   {seletivo.aprovadosQueVieram.length} de {seletivo.aprovados} aprovados
                   {seletivo.aprovadosQueVieram.length === 1 ? " apareceu" : " apareceram"} em algum grupo.
                 </p>
@@ -842,64 +974,21 @@ export default function AdminPessoasPage() {
                         key={p.id}
                         onClick={() => abrirPessoa(p)}
                         className="font-dm text-[11px] transition-colors hover:text-cream inline-flex items-center min-h-[44px] sm:min-h-0 px-2 py-1.5 rounded-full"
-                        style={{ color: TEAL }}
+                        style={{ color: PALETA.presenca }}
                       >
-                        {p.nome} <span className="text-cream/25">({p.encontros}x)</span>
+                        {p.nome} <span className="text-cream/50">({p.encontros}x)</span>
                       </button>
                     ))}
                   </div>
                 )}
-                <p className="font-dm text-[11px] text-cream/35 mt-2 leading-relaxed">
+                <p className="font-dm text-[11px] text-cream/55 mt-2 leading-relaxed max-w-[74ch]">
                   Aprovar não traz ninguém para dentro sozinho. Os outros{" "}
                   {seletivo.aprovadosQueNaoVieram.length} passaram e nunca vieram.
                 </p>
               </div>
 
-              {seletivo.aprovadosQueNaoVieram.length > 0 && (
-                <div>
-                  <p className="font-dm text-[11px] text-cream/40 mb-2">
-                    Aprovados que nunca apareceram
-                    <span className="text-cream/25"> · {seletivo.aprovadosQueNaoVieram.length}</span>
-                  </p>
-                  <div className="space-y-1">
-                    {(verTodosAprovados
-                      ? seletivo.aprovadosQueNaoVieram
-                      : seletivo.aprovadosQueNaoVieram.slice(0, 6)
-                    ).map((p) => (
-                      <button
-                        key={p.id}
-                        onClick={() => abrirPessoa(p)}
-                        className="w-full text-left px-3 py-2 rounded-[10px] transition-colors hover:bg-white/[.03] flex items-center justify-between gap-3"
-                        style={{ background: "rgba(255,255,255,0.02)", border: "1px solid rgba(255,255,255,0.05)" }}
-                      >
-                        <div className="min-w-0">
-                          <p className="font-dm text-sm text-cream/80 truncate">{p.nome}</p>
-                          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
-                        </div>
-                        {p.seletivo?.nota != null && (
-                          <span className="font-fraunces font-bold text-sm tabular-nums flex-shrink-0" style={{ color: ROXO }}>
-                            {p.seletivo.nota}
-                          </span>
-                        )}
-                      </button>
-                    ))}
-                  </div>
-                  {seletivo.aprovadosQueNaoVieram.length > 6 && (
-                    <button
-                      onClick={() => setVerTodosAprovados((v) => !v)}
-                      className="font-dm text-xs mt-2 inline-flex items-center min-h-[44px] sm:min-h-0 px-2 -mx-2"
-                      style={{ color: ROXO }}
-                    >
-                      {verTodosAprovados
-                        ? "Mostrar menos"
-                        : `Ver ${seletivo.aprovadosQueNaoVieram.length - 6} restantes`}
-                    </button>
-                  )}
-                </div>
-              )}
-
               {seletivo.rejeitadosQueVieram.length > 0 && (
-                <p className="font-dm text-[11px] text-cream/30 mt-4 leading-relaxed">
+                <p className="font-dm text-[11px] text-cream/50 mt-4 leading-relaxed max-w-[74ch]">
                   {seletivo.rejeitadosQueVieram.length}{" "}
                   {seletivo.rejeitadosQueVieram.length === 1
                     ? "pessoa não aprovada veio"
@@ -913,7 +1002,7 @@ export default function AdminPessoasPage() {
 
           <div className="mt-5 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-              <p className="font-dm text-[11px] text-cream/35 leading-relaxed">
+              <p className="font-dm text-[11px] text-cream/55 leading-relaxed max-w-[74ch]">
                 Solte aqui o CSV completo do AvaliAllos. Quem não existe ainda vira pessoa nova.
                 Importar o mesmo arquivo duas vezes não duplica nada.
               </p>
@@ -933,7 +1022,7 @@ export default function AdminPessoasPage() {
                 onClick={() => fileRef.current?.click()}
                 disabled={importando}
                 className="flex items-center gap-1.5 font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05] self-start whitespace-nowrap disabled:opacity-50"
-                style={{ color: ROXO, border: "1px solid rgba(108,92,231,0.35)" }}
+                style={{ color: PALETA.falaTexto, border: "1px solid rgba(108,92,231,0.35)" }}
               >
                 <Upload className="h-3.5 w-3.5" />
                 {importando ? "Lendo..." : "Escolher arquivo"}
@@ -942,27 +1031,30 @@ export default function AdminPessoasPage() {
 
             {previa && csv && (
               <div className="mt-4 pt-4" style={{ borderTop: "1px solid rgba(255,255,255,0.06)" }}>
-                <p className="font-dm text-[11px] text-cream/30 mb-3">{csv.nome}</p>
-                <div className="grid grid-cols-2 gap-x-4 gap-y-4 mb-4 sm:flex sm:flex-wrap sm:gap-x-6 sm:gap-y-2">
-                  {[
-                    { r: "candidatos no arquivo", v: previa.linhas, c: undefined as string | undefined },
-                    { r: "já são pessoas conhecidas", v: previa.casamPorEmail + previa.casamPorTelefone, c: TEAL },
-                    { r: "viram pessoas novas", v: previa.pessoasNovas, c: DOURADO },
-                    { r: "já importados antes", v: previa.jaImportados, c: undefined },
-                  ].map((x) => (
-                    <div key={x.r}>
-                      <p className="font-fraunces font-bold text-xl tabular-nums" style={{ color: x.c ?? "rgba(253,251,247,0.8)" }}>
-                        {x.v}
-                      </p>
-                      <p className="font-dm text-[10px] text-cream/30">{x.r}</p>
-                    </div>
-                  ))}
+                <p className="font-dm text-[11px] text-cream/50 mb-3">{csv.nome}</p>
+                <div className="mb-4">
+                  <FaixaDeNumeros
+                    accent="rgba(253,251,247,0.85)"
+                    items={[
+                      { label: "candidatos no arquivo", value: String(previa.linhas) },
+                      {
+                        label: "já são pessoas conhecidas",
+                        value: String(previa.casamPorEmail + previa.casamPorTelefone),
+                        color: PALETA.presenca,
+                      },
+                      { label: "viram pessoas novas", value: String(previa.pessoasNovas), color: PALETA.ressalva },
+                      { label: "já importados antes", value: String(previa.jaImportados) },
+                    ]}
+                  />
                 </div>
                 {(previa.semEmail > 0 || previa.semTelefone > 0) && (
-                  <p className="font-dm text-[11px] mb-3" style={{ color: DOURADO }}>
-                    {previa.semEmail} sem e-mail e {previa.semTelefone} sem WhatsApp. Esses só podem virar
-                    pessoa nova, porque sem chave forte não dá para afirmar que já são alguém.
-                  </p>
+                  <div className="mb-3">
+                    <Ressalva>
+                      {previa.semEmail} sem e-mail e {previa.semTelefone} sem WhatsApp. Esses só
+                      podem virar pessoa nova, porque sem chave forte não dá para afirmar que já
+                      são alguém.
+                    </Ressalva>
+                  </div>
                 )}
                 <div className="flex flex-wrap gap-2">
                   <button
@@ -976,42 +1068,43 @@ export default function AdminPessoasPage() {
                   <button
                     onClick={() => { setPrevia(null); setCsv(null); }}
                     className="font-dm text-xs px-3 py-2 rounded-full transition-all hover:bg-white/[.05]"
-                    style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.08)" }}
+                    style={{ color: "rgba(253,251,247,0.62)", border: "1px solid rgba(255,255,255,0.1)" }}
                   >
                     Cancelar
                   </button>
                 </div>
-                <p className="font-dm text-[10px] text-cream/25 mt-3">Nada foi gravado ainda.</p>
+                <p className="font-dm text-[10px] text-cream/50 mt-3">Nada foi gravado ainda.</p>
               </div>
             )}
           </div>
         </Card>
       </motion.div>
 
-      {/* ── A avaliação clínica ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28 }}>
-        <BlocoClinica aoAbrirPessoa={abrirPessoaPorId} />
-      </motion.div>
+      {/* A avaliação clínica saiu do sistema em 07/08/2026, e não mudou de
+          endereço: foi removida. Das quarenta pessoas avaliadas no AvaliAllos,
+          vinte e três não tinham candidato nenhum nesta base. Com as duas
+          populações quase disjuntas, o painel da formação não tinha o que
+          fazer com aquele dado. */}
 
       {/* ── A lista ── */}
-      <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+      <motion.div id="lista" initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
         <Card>
           <div className="flex items-center justify-between gap-2 mb-1">
-            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/25 min-w-0">
+            <h2 className="font-dm text-[10px] uppercase tracking-[.14em] text-cream/50 min-w-0">
               {periodoAberto ? "Todas as pessoas" : `Quem deu sinal nos últimos ${rotuloPeriodo}`}
             </h2>
-            <span className="font-dm text-xs text-cream/30 tabular-nums flex-shrink-0 whitespace-nowrap">
+            <span className="font-dm text-xs text-cream/50 tabular-nums flex-shrink-0 whitespace-nowrap">
               {filtradas.length === totais.pessoas ? totais.pessoas : `${filtradas.length} de ${totais.pessoas}`}
             </span>
           </div>
           {!periodoAberto && (
-            <p className="font-dm text-[11px] text-cream/25 mb-3">
+            <p className="font-dm text-[11px] text-cream/50 mb-3">
               {totais.pessoas} de {totais.pessoasNaBase} pessoas que a base conhece.
             </p>
           )}
 
           <div className="relative mb-4 mt-3">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/25" />
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-cream/50" />
             <input
               value={busca}
               onChange={(e) => setBusca(e.target.value)}
@@ -1023,7 +1116,7 @@ export default function AdminPessoasPage() {
           {/* Ordenação: botões, e não um seletor escondido. É a pergunta que muda,
               e perguntar "quem vem mais" precisa custar um clique. */}
           <div className="flex items-center gap-2 mb-3 flex-wrap">
-            <span className="font-dm text-[11px] text-cream/25">Ordenar por</span>
+            <span className="font-dm text-[11px] text-cream/50">Ordenar por</span>
             {ORDENS.map((o) => {
               const ativo = ordem === o.chave;
               return (
@@ -1033,7 +1126,7 @@ export default function AdminPessoasPage() {
                   className="font-dm text-[11px] px-2.5 py-1.5 rounded-full transition-all min-h-[40px] sm:min-h-0"
                   style={{
                     backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
-                    color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.35)",
+                    color: ativo ? "rgba(253,251,247,0.85)" : "rgba(253,251,247,0.5)",
                     border: `1px solid ${ativo ? "rgba(253,251,247,0.15)" : "rgba(255,255,255,0.05)"}`,
                   }}
                 >
@@ -1052,7 +1145,12 @@ export default function AdminPessoasPage() {
               .filter(([k, , n]) => n > 0 || recorte === k || k === "todas")
               .map(([k, label, n]) => {
                 const ativo = recorte === k;
-                const cor = k === "todas" ? TERRACOTA : CORES[k as EstadoPessoa];
+                const cor = k === "todas" ? PALETA.identidade : CORES[k as EstadoPessoa];
+                // O ponto continua na cor do estado, inclusive nos dois estados
+                // que moram de propósito no quase invisível; a palavra usa a
+                // versão legível dela. Ponto apagado é escolha de salência,
+                // rótulo apagado é defeito.
+                const corDoTexto = k === "todas" ? PALETA.identidade : CORES_TEXTO[k as EstadoPessoa];
                 return (
                   <button
                     key={k}
@@ -1060,7 +1158,7 @@ export default function AdminPessoasPage() {
                     className="font-dm text-xs px-3 py-2 rounded-full whitespace-nowrap transition-all min-h-[36px] flex items-center gap-1.5"
                     style={{
                       backgroundColor: ativo ? `${cor}22` : "rgba(255,255,255,0.03)",
-                      color: ativo ? cor : "rgba(253,251,247,0.4)",
+                      color: ativo ? corDoTexto : "rgba(253,251,247,0.55)",
                       border: `1px solid ${ativo ? `${cor}55` : "rgba(255,255,255,0.06)"}`,
                     }}
                   >
@@ -1069,7 +1167,7 @@ export default function AdminPessoasPage() {
                       style={{ background: cor, opacity: ativo ? 1 : 0.5 }}
                     />
                     {label}
-                    <span className="opacity-60 tabular-nums">{n}</span>
+                    <span className="opacity-70 tabular-nums">{n}</span>
                   </button>
                 );
               })}
@@ -1088,7 +1186,7 @@ export default function AdminPessoasPage() {
                     className="font-dm text-xs px-3 py-1.5 rounded-full whitespace-nowrap transition-all flex items-center gap-1.5 min-h-[40px] sm:min-h-0"
                     style={{
                       backgroundColor: ativo ? "rgba(253,251,247,0.08)" : "transparent",
-                      color: ativo ? "rgba(253,251,247,0.8)" : "rgba(253,251,247,0.33)",
+                      color: ativo ? "rgba(253,251,247,0.85)" : "rgba(253,251,247,0.5)",
                       border: `1px solid ${ativo ? "rgba(253,251,247,0.18)" : "rgba(255,255,255,0.05)"}`,
                     }}
                   >
@@ -1096,20 +1194,20 @@ export default function AdminPessoasPage() {
                       <Star className="h-3 w-3" style={{ color: CORES_DESTAQUE.dourado }} fill={CORES_DESTAQUE.dourado} />
                     )}
                     {label}
-                    <span className="opacity-60 tabular-nums">{n}</span>
+                    <span className="opacity-70 tabular-nums">{n}</span>
                   </button>
                 );
               })}
           </div>
 
           {explicacaoDoRecorte && (
-            <p className="font-dm text-[11px] text-cream/35 mb-4 leading-relaxed">
+            <p className="font-dm text-[11px] text-cream/55 mb-4 leading-relaxed max-w-[74ch]">
               {explicacaoDoRecorte}
             </p>
           )}
 
           {filtradas.length === 0 ? (
-            <p className="font-dm text-xs text-cream/30 py-8 text-center">
+            <p className="font-dm text-xs text-cream/50 py-8 text-center">
               {busca ? "Nenhuma pessoa com esse nome ou e-mail." : "Nenhuma pessoa nesse recorte."}
             </p>
           ) : (
@@ -1128,10 +1226,10 @@ export default function AdminPessoasPage() {
                 <button
                   onClick={() => setMostrando((m) => m + PAGINA)}
                   className="w-full mt-3 font-dm text-xs py-2.5 rounded-[10px] transition-colors hover:bg-white/[.03]"
-                  style={{ color: "rgba(253,251,247,0.5)", border: "1px solid rgba(255,255,255,0.06)" }}
+                  style={{ color: "rgba(253,251,247,0.62)", border: "1px solid rgba(255,255,255,0.06)" }}
                 >
                   Carregar mais {Math.min(PAGINA, filtradas.length - mostrando)}
-                  <span className="text-cream/25"> · {filtradas.length - mostrando} restantes</span>
+                  <span className="text-cream/50"> · {filtradas.length - mostrando} restantes</span>
                 </button>
               )}
             </>
@@ -1142,47 +1240,46 @@ export default function AdminPessoasPage() {
       {/* ── Glossário ── */}
       <button
         onClick={() => setGlossarioAberto((v) => !v)}
-        className="flex items-center gap-1.5 font-dm text-[11px] text-cream/30 hover:text-cream/50 transition-colors min-h-[44px] sm:min-h-0"
+        className="flex items-center gap-1.5 font-dm text-[11px] text-cream/50 hover:text-cream/80 transition-colors min-h-[44px] sm:min-h-0"
       >
         <ChevronDown className={`h-3.5 w-3.5 transition-transform ${glossarioAberto ? "rotate-180" : ""}`} />
         O que cada palavra desta tela quer dizer
       </button>
       {glossarioAberto && (
         <div className="space-y-2 pl-5 pb-4">
-          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
-            <strong className="text-cream/70">Encontro</strong>: uma vez que a pessoa participou de
+          <p className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+            <strong className="text-cream/85">Encontro</strong>: uma vez que a pessoa participou de
             um grupo. Vale tanto o formulário que ela preencheu quanto o nome dela capturado na
             sala do Meet. Se os dois acontecem no mesmo dia e no mesmo grupo, contam um.
           </p>
           {ORDEM_ESTADOS.map((e) => (
-            <p key={e} className="font-dm text-[11px] text-cream/45 leading-relaxed">
-              <strong style={{ color: CORES[e] }}>{ROTULOS[e]}</strong>: {definicao(e, regras)}
+            <p key={e} className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+              <strong style={{ color: CORES_TEXTO[e] }}>{ROTULOS[e]}</strong>: {definicao(e, regras)}
             </p>
           ))}
-          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
-            <strong className="text-cream/70">Relato escrito</strong>: texto com mais de 200
+          <p className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+            <strong className="text-cream/85">Relato escrito</strong>: texto com mais de 200
             caracteres no formulário. Abaixo disso costuma ser um elogio de uma palavra.
           </p>
-          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
-            <strong className="text-cream/70">Estrela</strong>: marca que você põe à mão. Não é
+          <p className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+            <strong className="text-cream/85">Estrela</strong>: marca que você põe à mão. Não é
             calculada e não expira. A cor é sua para significar o que quiser.
           </p>
-          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
-            <strong className="text-cream/70">De onde vem o que a tela diz</strong>: os selos de
+          <p className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+            <strong className="text-cream/85">De onde vem o que a tela diz</strong>: os selos de
             cada pessoa são a procedência dela, e cada um aponta uma fonte diferente. Relato escrito
             e nota vêm do formulário de certificado. Falou na sala e nunca preencheu o formulário
             vêm da captura do Meet, que começou em 3 de agosto. Aulas e horas estudando vêm da
-            plataforma de cursos. Seletivo vem do CSV importado ali em cima. E a nota clínica vem do
-            AvaliAllos, que é outro sistema e casa por telefone. Quanto mais selos, mais fontes
-            conhecem aquela pessoa; onde ela participa mais é onde o número do selo é maior.
+            plataforma de cursos. Seletivo vem do CSV importado ali em cima. Quanto mais selos, mais
+            fontes conhecem aquela pessoa; onde ela participa mais é onde o número do selo é maior.
           </p>
-          <p className="font-dm text-[11px] text-cream/45 leading-relaxed">
-            <strong className="text-cream/70">Nunca preencheu o formulário</strong>: a sala do Meet
+          <p className="font-dm text-[11px] text-cream/60 leading-relaxed max-w-[74ch]">
+            <strong className="text-cream/85">Nunca preencheu o formulário</strong>: a sala do Meet
             viu essa pessoa e o formulário nunca. Ela existe, vem, e não entra em nenhuma média
             tirada do formulário. O formulário pega cerca de metade de quem esteve na sala, e não
             por sorteio: preencher é hábito de pessoa.
           </p>
-          <p className="font-dm text-[11px] text-cream/25 leading-relaxed pt-1">
+          <p className="font-dm text-[11px] text-cream/50 leading-relaxed pt-1">
             Retrato montado em {new Date(retrato.geradoEm).toLocaleString("pt-BR")}.
           </p>
         </div>
@@ -1204,9 +1301,68 @@ function textoRecencia(dias: number): string {
   return "veio há mais de um ano";
 }
 
+/**
+ * Uma fila de nomes dentro do cartão "com quem falar".
+ *
+ * O cabeçalho carrega o prazo próprio de cada fila, e isso não é enfeite: as
+ * três obedecem a réguas diferentes (nenhuma, quarenta e cinco dias, a data do
+ * seletivo), e juntá-las num cartão só criaria a impressão de que todas leem o
+ * mesmo período se cada uma não dissesse o seu.
+ */
+function Fila({
+  titulo,
+  quantos,
+  cor,
+  prazo,
+  explicacao,
+  children,
+}: {
+  titulo: string;
+  quantos: number;
+  cor: string;
+  prazo: string;
+  explicacao: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <section>
+      <div className="flex items-center gap-2 flex-wrap mb-1">
+        <span className="h-1.5 w-1.5 rounded-full flex-shrink-0" style={{ background: cor }} />
+        <h3 className="font-dm text-xs text-cream/85">{titulo}</h3>
+        <span className="font-fraunces font-bold text-sm tabular-nums" style={{ color: cor }}>
+          {quantos}
+        </span>
+        <JanelaPropria motivo={prazo} />
+      </div>
+      <p className="font-dm text-[11px] text-cream/55 mb-3 leading-relaxed max-w-[74ch]">{explicacao}</p>
+      {children}
+    </section>
+  );
+}
+
+/**
+ * Atalho para um recorte da lista.
+ *
+ * É âncora e não botão porque escolher o recorte sem ir até a lista não faz
+ * nada visível: a lista fica sete telas abaixo, e o clique parecia não ter
+ * funcionado.
+ */
+function Atalho({ onClick, cor, rotulo }: { onClick: () => void; cor: string; rotulo: string }) {
+  return (
+    <a
+      href="#lista"
+      onClick={onClick}
+      className="font-dm text-[11px] px-3 py-1.5 rounded-full transition-colors hover:bg-white/[.05] inline-flex items-center min-h-[36px]"
+      style={{ color: cor, border: `1px solid ${cor}33` }}
+    >
+      {rotulo}
+    </a>
+  );
+}
+
 function Selo({ children, cor }: { children: React.ReactNode; cor?: string }) {
   return (
-    <span className="font-dm text-[10px] tabular-nums" style={{ color: cor ?? "rgba(253,251,247,0.3)" }}>
+    <span className="font-dm text-[10px] tabular-nums" style={{ color: cor ?? "rgba(253,251,247,0.5)" }}>
       {children}
     </span>
   );
@@ -1245,30 +1401,30 @@ function LinhaPessoa({
           uma linha com a outra, que é a única razão de o número ser coluna. */}
       <button onClick={onClick} className="flex items-start gap-3 flex-1 min-w-0 text-left">
         <div className="flex-shrink-0 w-11 text-right pt-0.5">
-          <p className="font-fraunces font-bold text-base tabular-nums leading-none" style={{ color: corEstado }}>
+          <p className="font-fraunces font-bold text-base tabular-nums leading-none" style={{ color: CORES_TEXTO[p.estado] }}>
             {p.encontros}
           </p>
-          <p className="font-dm text-[9px] text-cream/25 leading-tight mt-0.5">
+          <p className="font-dm text-[9px] text-cream/50 leading-tight mt-0.5">
             {p.encontros === 1 ? "encontro" : "encontros"}
           </p>
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
-          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+          <p className="font-dm text-[11px] text-cream/50 truncate">{p.email ?? "sem e-mail"}</p>
         {/* Mesma razão da nota em "Você destacou": texto livre de 500 caracteres quebra
             dentro da palavra para não empurrar a página de lado, e para de crescer em três
             linhas enquanto a tela é estreita. */}
         {p.destaque?.nota && (
-          <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
+          <p className="font-dm text-xs text-cream/60 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
             {p.destaque.nota}
           </p>
         )}
         <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-          <Selo cor={corEstado}>{ROTULOS[p.estado]}</Selo>
+          <Selo cor={CORES_TEXTO[p.estado]}>{ROTULOS[p.estado]}</Selo>
           {p.diasSemAparecer != null && <Selo>{textoRecencia(p.diasSemAparecer)}</Selo>}
           {p.atividades > 1 && <Selo>{p.atividades} grupos diferentes</Selo>}
           {p.relatosLongos > 0 && (
-            <Selo cor={DOURADO}>
+            <Selo cor={PALETA.ressalva}>
               {p.relatosLongos} {p.relatosLongos > 1 ? "relatos escritos" : "relato escrito"}
             </Selo>
           )}
@@ -1282,14 +1438,14 @@ function LinhaPessoa({
               alunos nunca concluíram uma aula. Por isso o selo destaca esse
               estado em vez de só contar matrícula. */}
           {p.matriculas > 0 && (
-            <Selo cor={p.aulas === 0 ? DOURADO : undefined}>
+            <Selo cor={p.aulas === 0 ? PALETA.ressalva : undefined}>
               {p.matriculas} {p.matriculas === 1 ? "matrícula" : "matrículas"}
               {p.matriculasConcluidas > 0 && `, ${p.matriculasConcluidas} concluída${p.matriculasConcluidas > 1 ? "s" : ""}`}
               {p.aulas === 0 && " · nunca abriu"}
             </Selo>
           )}
           {p.encontrosNaSala > 0 && (
-            <Selo cor={ROXO}>
+            <Selo cor={PALETA.falaTexto}>
               {p.turnosFala > 0 ? `falou ${p.turnosFala}x na sala` : "esteve na sala e não falou"}
             </Selo>
           )}
@@ -1299,10 +1455,10 @@ function LinhaPessoa({
               a sala ver, não vira selo porque a captura só começou em agosto e
               quase toda a base antiga cairia nele sem significar nada. */}
           {p.encontrosNaSala > 0 && p.ultimoFormulario == null && (
-            <Selo cor={ROXO}>nunca preencheu o formulário</Selo>
+            <Selo cor={PALETA.falaTexto}>nunca preencheu o formulário</Selo>
           )}
           {p.seletivo && (
-            <Selo cor={p.seletivo.aprovado ? TEAL : "rgba(253,251,247,0.3)"}>
+            <Selo cor={p.seletivo.aprovado ? PALETA.presenca : "rgba(253,251,247,0.5)"}>
               seletivo {p.seletivo.nota ?? ""}
               {p.seletivo.aprovado ? ", aprovada" : p.seletivo.status ? `, ${p.seletivo.status.toLowerCase()}` : ""}
             </Selo>
@@ -1336,26 +1492,26 @@ function LinhaSumido({
     >
       <button onClick={onClick} className="flex items-start gap-3 flex-1 min-w-0 text-left">
         <div className="flex-shrink-0 w-11 text-right pt-0.5">
-          <p className="font-fraunces font-bold text-base tabular-nums leading-none text-cream/70">
+          <p className="font-fraunces font-bold text-base tabular-nums leading-none text-cream/85">
             {p.encontros}
           </p>
-          <p className="font-dm text-[9px] text-cream/25 leading-tight mt-0.5">encontros</p>
+          <p className="font-dm text-[9px] text-cream/50 leading-tight mt-0.5">encontros</p>
         </div>
         <div className="min-w-0 flex-1">
           <p className="font-dm text-sm text-cream/85 truncate">{p.nome}</p>
-          <p className="font-dm text-[11px] text-cream/25 truncate">{p.email ?? "sem e-mail"}</p>
+          <p className="font-dm text-[11px] text-cream/50 truncate">{p.email ?? "sem e-mail"}</p>
           {/* Mesma razão da nota em "Você destacou": texto livre de 500 caracteres quebra
               dentro da palavra para não empurrar a página de lado, e para de crescer em três
               linhas enquanto a tela é estreita. */}
           {p.destaque?.nota && (
-            <p className="font-dm text-xs text-cream/55 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
+            <p className="font-dm text-xs text-cream/60 mt-1 leading-relaxed break-words line-clamp-3 sm:line-clamp-none">
               {p.destaque.nota}
             </p>
           )}
           <div className="flex flex-wrap gap-x-3 gap-y-1 mt-1.5">
-            <Selo cor={DOURADO}>{textoRecencia(p.diasSemAparecer ?? 0)}</Selo>
+            <Selo cor={PALETA.ressalva}>{textoRecencia(p.diasSemAparecer ?? 0)}</Selo>
             {p.ultimoMeet && (
-              <Selo cor={ROXO}>
+              <Selo cor={PALETA.falaTexto}>
                 visto na sala em{" "}
                 {new Date(p.ultimoMeet).toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
               </Selo>
